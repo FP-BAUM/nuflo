@@ -1,5 +1,10 @@
 import Test.HUnit
 
-test_01 = TestCase (assertEqual "number del assert" True True)
+import Lexer
 
-tests = TestList [TestLabel "test01" test_01]
+tokenize_test :: String -> String -> [[Token]] -> Test
+tokenize_test description program tokens = TestCase (assertEqual description (tokenizeProgram program)  tokens)
+
+tests = TestList [
+  tokenize_test "Empty program" "" [[]],
+  tokenize_test "Only a number" "42" [[NToken 42]]]
