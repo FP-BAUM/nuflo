@@ -20,10 +20,7 @@ data KeyWord = Where | Let | In | Import | Backslash | -- where | let | in | imp
 type TokenLine = [Token]
 
 tokenizeProgram :: String -> [TokenLine]
-tokenizeProgram = tokenizeLines . lines
-
-tokenizeLines :: [String] -> [TokenLine]
-tokenizeLines = map tokenizeLine
+tokenizeProgram = (map tokenizeLine) . lines
 
 tokenizeLine :: String -> TokenLine
 tokenizeLine = (map tokenize) . words
