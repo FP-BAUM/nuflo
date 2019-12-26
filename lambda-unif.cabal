@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3215f7863fe45bac5787e9b3cdbc75c8ba86ccaf976dbf9b5ce139eb04ebe693
+-- hash: 5e0688aaa2c8980cb9f07311903ff99dc1b0e56476e1c04d228622d592795b51
 
 name:           lambda-unif
 version:        0.1.0.0
@@ -26,8 +26,6 @@ source-repository head
   location: https://github.com/githubuser/lambda-unif
 
 library
-  exposed-modules:
-      Lib
   other-modules:
       Paths_lambda_unif
   hs-source-dirs:
