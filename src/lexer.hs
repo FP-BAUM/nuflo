@@ -1,4 +1,4 @@
-module Lexer ( tokenizeProgram, Token(..) ) where
+module Lexer ( tokenizeProgram, Token(..), Puntuation(..), KeyWord(..), TokenLine) where
 
 import Text.Read
 
@@ -27,4 +27,4 @@ tokenizeLine = (map tokenize) . words
 
 tokenize :: String -> Token
 -- TODO: missing implementation
-tokenize = IDToken 
+tokenize = IDToken
