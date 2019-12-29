@@ -1,21 +1,21 @@
-module Lexer ( tokenizeProgram, Token ) where
+module Lexer ( tokenizeProgram, Token(..) ) where
 
 import Text.Read
 
 data Token =  PToken Puntuation |
               NToken Int        |
               IDToken String    |
-              KToken KeyWord deriving (Show, Eq)
+              KToken KeyWord deriving (Eq, Show)
 
 data Puntuation = LeftParen | RightParen | -- ( | )
                   LeftBrace | RightBrace | -- { | }
                   SemiColon | Colon      | -- ; | :
                   Equal     | Arrow        -- = | =>
-                  deriving (Show, Eq)
+                  deriving (Eq, Show)
 
 data KeyWord = Where | Let | In | Import | Backslash | -- where | let | in | import | \
                Data | Underscore | Class | Type | Instance -- data | _ | class | type | instance
-               deriving (Show, Eq)
+               deriving (Eq, Show)
 
 type TokenLine = [Token]
 

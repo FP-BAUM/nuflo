@@ -1,3 +1,4 @@
--- module Main where
+module Main where
 
--- main :: IO ()
+main :: IO ()
+main = putStrLn "BLA"
