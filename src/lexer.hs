@@ -13,8 +13,8 @@ data Puntuation = LeftParen | RightParen | -- ( | )
                   Equal     | Arrow        -- = | =>
                   deriving (Eq, Show)
 
-data KeyWord = Where | Let | In | Import | Backslash | -- where | let | in | import | \
-               Data | Underscore | Class | Type | Instance -- data | _ | class | type | instance
+data KeyWord = Where | Let | In | Import | Backslash |              -- where | let | in | import | \
+               Data | Underscore | Class | Type | Instance | Module -- data | _ | class | type | instance | module
                deriving (Eq, Show)
 
 type TokenLine = [Token]
@@ -34,6 +34,7 @@ tokenize s
 
 tokenizeKeyword :: String -> KeyWord
 tokenizeKeyword "where" = Where
+tokenizeKeyword "module" = Module
 tokenizeKeyword "let" = Let
 tokenizeKeyword "in" = In
 tokenizeKeyword "import" = Import

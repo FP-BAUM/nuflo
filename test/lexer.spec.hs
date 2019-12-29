@@ -17,6 +17,7 @@ tests = TestList [
   tokenize_test "function" "function" [[IDToken "function"]],
   -- Keywords
   tokenize_test "Where" "where" [[KToken Where]],
+  tokenize_test "Module" "module" [[KToken Module]],
   tokenize_test "Let" "let" [[KToken Let]],
   tokenize_test "In" "in" [[KToken In]],
   tokenize_test "Import" "import" [[KToken Import]],

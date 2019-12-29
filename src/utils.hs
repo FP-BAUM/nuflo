@@ -1,6 +1,6 @@
 module Utils ( isNumeric, isKeyword, isPuntuation ) where
 
-keywords = ["where", "let", "in", "import", "\\", "data", "_", "class", "type", "instance"]
+keywords = ["where", "let", "in", "import", "\\", "data", "_", "class", "type", "instance", "module"]
 
 puntuations = ["(", ")", "{", "}", ";", ":", "=", "=>"]
 
