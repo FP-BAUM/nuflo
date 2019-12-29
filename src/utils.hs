@@ -16,7 +16,7 @@ isNumeric :: String -> Bool
 isNumeric s = isInteger s || isDouble s
 
 isKeyword :: String -> Bool
-isKeyword s = elem s keywords
+isKeyword = flip elem keywords
 
 isPuntuation :: String -> Bool
-isPuntuation s = elem s puntuations
+isPuntuation = flip elem puntuations
