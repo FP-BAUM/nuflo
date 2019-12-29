@@ -34,7 +34,7 @@ tests = TestList [
   tokenize_test "SemiColon" ";" [[PToken SemiColon]],
   tokenize_test "Colon" ":" [[PToken Colon]],
   tokenize_test "Equal" "=" [[PToken Equal]],
-  tokenize_test "Arrow" "=>" [[PToken Arrow]]]
+  tokenize_test "Arrow" "=>" [[PToken Arrow]],
   -- Complex programs
-  -- tokenize_test "numbers and identifiers" "42 if \n then else def 44" [[NToken 42, IDToken "if"], [IDToken "then", IDToken "else", IDToken "def", NToken 44]],
--- ]
+  tokenize_test "numbers and identifiers" "42 if \n then else def 44" [[NToken 42, IDToken "if"], [IDToken "then", IDToken "else", IDToken "def", NToken 44]]
+  ]

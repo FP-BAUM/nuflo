@@ -1,6 +1,6 @@
 module Lexer ( tokenizeProgram, Token(..), Puntuation(..), KeyWord(..), TokenLine) where
 
-import Text.Read
+import Utils
 
 data Token =  PToken Puntuation |
               NToken Int        |
@@ -26,5 +26,30 @@ tokenizeLine :: String -> TokenLine
 tokenizeLine = (map tokenize) . words
 
 tokenize :: String -> Token
--- TODO: missing implementation
-tokenize = IDToken
+tokenize s
+  | isNumeric s = NToken (read s :: Int)
+  | isKeyword s = KToken (tokenizeKeyword s)
+  | isPuntuation s = PToken (tokenizePuntuation s)
+  | otherwise = IDToken s
+
+tokenizeKeyword :: String -> KeyWord
+tokenizeKeyword "where" = Where
+tokenizeKeyword "let" = Let
+tokenizeKeyword "in" = In
+tokenizeKeyword "import" = Import
+tokenizeKeyword "\\" = Backslash
+tokenizeKeyword "data" = Data
+tokenizeKeyword "_" = Underscore
+tokenizeKeyword "class" = Class
+tokenizeKeyword "type" = Type
+tokenizeKeyword "instance" = Instance
+
+tokenizePuntuation :: String -> Puntuation
+tokenizePuntuation "(" = LeftParen
+tokenizePuntuation ")" = RightParen
+tokenizePuntuation "{" = LeftBrace
+tokenizePuntuation "}" = RightBrace
+tokenizePuntuation ";" = SemiColon
+tokenizePuntuation ":" = Colon
+tokenizePuntuation "=" = Equal
+tokenizePuntuation "=>" = Arrow
