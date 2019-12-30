@@ -4,10 +4,12 @@ keywords = ["where", "let", "in", "import", "\\", "data", "_", "class", "type", 
 
 puntuations = ["(", ")", "{", "}", ";", ":", "=", "=>"]
 
+isInteger :: String -> Bool
 isInteger s = case reads s :: [(Integer, String)] of
   [(_, "")] -> True
   _         -> False
-  
+
+isDouble :: String -> Bool
 isDouble s = case reads s :: [(Double, String)] of
   [(_, "")] -> True
   _         -> False
