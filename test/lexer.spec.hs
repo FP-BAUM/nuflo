@@ -36,6 +36,10 @@ tests = TestList [
   tokenize_test "Colon" ":" [[PToken Colon]],
   tokenize_test "Equal" "=" [[PToken Equal]],
   tokenize_test "Arrow" "=>" [[PToken Arrow]],
+  -- Ignore comments
+  tokenize_test "Comment" "--this is a comment" [],
+  tokenize_test "Comment between lines" "a b\n--c d e f\ng" [[IDToken "a", IDToken "b"], [IDToken "g"]],
+  tokenize_test "Comments" "module Lexer where --where\n--this is a comment\nid a = a --identity" (tokenizeProgram "module Lexer where\nid a = a"),
   -- Complex programs
   tokenize_test "numbers and identifiers" "42 if \n then else def 44" [[NToken 42, IDToken "if"], [IDToken "then", IDToken "else", IDToken "def", NToken 44]]
   ]

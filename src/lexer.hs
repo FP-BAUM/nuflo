@@ -1,5 +1,6 @@
 module Lexer ( tokenizeProgram, Token(..), Puntuation(..), KeyWord(..), TokenLine) where
 
+import Data.List.Split
 import Utils
 
 data Token =  PToken Puntuation |
@@ -20,10 +21,13 @@ data KeyWord = Where | Let | In | Import | Backslash |              -- where | l
 type TokenLine = [Token]
 
 tokenizeProgram :: String -> [TokenLine]
-tokenizeProgram = (map tokenizeLine) . lines
+tokenizeProgram = filter (not . null) . (map tokenizeLine) . lines
 
 tokenizeLine :: String -> TokenLine
-tokenizeLine = (map tokenize) . words
+tokenizeLine = (map tokenize) . words . removeComments
+
+removeComments :: String -> String
+removeComments = head . splitOneOf "--"
 
 tokenize :: String -> Token
 tokenize s
