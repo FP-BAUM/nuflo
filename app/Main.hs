@@ -2,9 +2,9 @@ module Main where
 
 import System.Environment
 
-import Lexer
+import Lexer(tokenizeProgram)
 
-import qualified TestMain
+import TestMain(runAllTests)
 
 main :: IO ()
 main = do
@@ -12,17 +12,23 @@ main = do
   run args
 
 run :: [String] -> IO ()
-run ["-t"] = runTests
-run _      = usage
+run ["-t"]        = runTests
+run ["-T", input] = runTokenizer input
+run _             = usage
 
 runTests :: IO ()
 runTests = do
   putStrLn "----------------------------------------"
-  TestMain.runAllTests 
+  runAllTests 
+
+runTokenizer :: String -> IO ()
+runTokenizer filename = do
+  source <- readFile filename
+  putStrLn $ show (tokenizeProgram source)
 
 usage :: IO ()
 usage = do
   putStrLn "Usage:"
   putStrLn "  ./lambda-unif -t              Run tests."
-  putStrLn "  ./lambda-unif --tok foo.lu    Tokenize file."
+  putStrLn "  ./lambda-unif -T foo.lu       Tokenize file."
 

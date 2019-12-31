@@ -1,4 +1,7 @@
-module Lexer ( tokenizeProgram, Token(..), Puntuation(..), KeyWord(..), TokenLine) where
+module Lexer (
+         Token(..), Puntuation(..), KeyWord(..), TokenLine,
+         tokenizeProgram
+       ) where
 
 import Utils
 
