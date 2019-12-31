@@ -1,11 +1,16 @@
-import Test.HUnit
+
+module TestLexer(tests) where
+
+import Test(TestSuite(..), Test(..))
 
 import Lexer
 
 tokenize_test :: String -> String -> [[Token]] -> Test
-tokenize_test description program expectedTokens = TestCase (assertEqual description expectedTokens (tokenizeProgram program))
+tokenize_test description source expectedTokens =
+  TestCase description expectedTokens (tokenizeProgram source)
 
-tests = TestList [
+tests :: TestSuite
+tests = TestSuite "Lexer" [
   tokenize_test "Empty program" "" [],
   -- Numbers
   tokenize_test "number" "42" [[NToken 42]],

@@ -1,6 +1,5 @@
 module Lexer ( tokenizeProgram, Token(..), Puntuation(..), KeyWord(..), TokenLine) where
 
-import Data.List.Split
 import Utils
 
 data Token =  PToken Puntuation |
@@ -27,7 +26,8 @@ tokenizeLine :: String -> TokenLine
 tokenizeLine = (map tokenize) . words . removeComments
 
 removeComments :: String -> String
-removeComments = head . splitOneOf "--"
+--removeComments = head . splitOneOf "--"
+removeComments x = x ---- XXX
 
 tokenize :: String -> Token
 tokenize s
