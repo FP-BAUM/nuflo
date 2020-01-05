@@ -10,41 +10,41 @@ tokenize_test description source expectedTokens =
   TestCase description expectedTokens (tokenizeProgram source)
 
 tests :: TestSuite
-tests = TestSuite "Lexer" [
+tests = TestSuite "LEXER" [
   tokenize_test "Empty program" "" [],
   -- Numbers
-  tokenize_test "number" "42" [[NToken 42]],
-  tokenize_test "number" "01" [[NToken 01]],
-  tokenize_test "number" "10" [[NToken 10]],
+  tokenize_test "Number 42 to a NToken" "42" [[NToken 42]],
+  tokenize_test "Number 01 to a NToken" "01" [[NToken 01]],
+  tokenize_test "Number 10 to a NToken" "10" [[NToken 10]],
   -- Identifiers
-  tokenize_test "if" "if" [[IDToken "if"]],
-  tokenize_test "then" "then" [[IDToken "then"]],
-  tokenize_test "function" "function" [[IDToken "function"]],
+  tokenize_test "ID if to IDToken" "if" [[IDToken "if"]],
+  tokenize_test "ID then to IDToken" "then" [[IDToken "then"]],
+  tokenize_test "ID function to IDToken" "function" [[IDToken "function"]],
   -- Keywords
-  tokenize_test "Where" "where" [[KToken Where]],
-  tokenize_test "Module" "module" [[KToken Module]],
-  tokenize_test "Let" "let" [[KToken Let]],
-  tokenize_test "In" "in" [[KToken In]],
-  tokenize_test "Import" "import" [[KToken Import]],
-  tokenize_test "Backslash" "\\" [[KToken Backslash]],
-  tokenize_test "Data" "data" [[KToken Data]],
-  tokenize_test "Underscore" "_" [[KToken Underscore]],
-  tokenize_test "Class" "class" [[KToken Class]],
-  tokenize_test "Type" "type" [[KToken Type]],
-  tokenize_test "Instance" "instance" [[KToken Instance]],
+  tokenize_test "Keyword Where to KToken" "where" [[KToken Where]],
+  tokenize_test "Keyword Module to KToken" "module" [[KToken Module]],
+  tokenize_test "Keyword Let to KToken" "let" [[KToken Let]],
+  tokenize_test "Keyword In to KToken" "in" [[KToken In]],
+  tokenize_test "Keyword Import to KToken" "import" [[KToken Import]],
+  tokenize_test "Keyword Backslash to KToken" "\\" [[KToken Backslash]],
+  tokenize_test "Keyword Data to KToken" "data" [[KToken Data]],
+  tokenize_test "Keyword Underscore to KToken" "_" [[KToken Underscore]],
+  tokenize_test "Keyword Class to KToken" "class" [[KToken Class]],
+  tokenize_test "Keyword Type to KToken" "type" [[KToken Type]],
+  tokenize_test "Keyword Instance to KToken" "instance" [[KToken Instance]],
   -- Puntuation
-  tokenize_test "LeftParen" "(" [[PToken LeftParen]],
-  tokenize_test "RightParen" ")" [[PToken RightParen]],
-  tokenize_test "LeftBrace" "{" [[PToken LeftBrace]],
-  tokenize_test "RightBrace" "}" [[PToken RightBrace]],
-  tokenize_test "SemiColon" ";" [[PToken SemiColon]],
-  tokenize_test "Colon" ":" [[PToken Colon]],
-  tokenize_test "Equal" "=" [[PToken Equal]],
-  tokenize_test "Arrow" "=>" [[PToken Arrow]],
+  tokenize_test "Puntuation LeftParen to a PToken" "(" [[PToken LeftParen]],
+  tokenize_test "Puntuation RightParen to a PToken" ")" [[PToken RightParen]],
+  tokenize_test "Puntuation LeftBrace to a PToken" "{" [[PToken LeftBrace]],
+  tokenize_test "Puntuation RightBrace to a PToken" "}" [[PToken RightBrace]],
+  tokenize_test "Puntuation SemiColon to a PToken" ";" [[PToken SemiColon]],
+  tokenize_test "Puntuation Colon to a PToken" ":" [[PToken Colon]],
+  tokenize_test "Puntuation Equal to a PToken" "=" [[PToken Equal]],
+  tokenize_test "Puntuation Arrow to a PToken" "=>" [[PToken Arrow]],
   -- Ignore comments
-  tokenize_test "Comment" "--this is a comment" [],
-  tokenize_test "Comment between lines" "a b\n--c d e f\ng" [[IDToken "a", IDToken "b"], [IDToken "g"]],
-  tokenize_test "Comments" "module Lexer where --where\n--this is a comment\nid a = a --identity" (tokenizeProgram "module Lexer where\nid a = a"),
+  tokenize_test "Ignoring single comment" "--this is a comment" [],
+  tokenize_test "Ignoring comment between lines" "a b\n--c d e f\ng" [[IDToken "a", IDToken "b"], [IDToken "g"]],
+  tokenize_test "Ignoring complex comments" "module Lexer where --where\n--this is a comment\nid a = a --identity" (tokenizeProgram "module Lexer where\nid a = a"),
   -- Complex programs
-  tokenize_test "numbers and identifiers" "42 if \n then else def 44" [[NToken 42, IDToken "if"], [IDToken "then", IDToken "else", IDToken "def", NToken 44]]
+  tokenize_test "Tokenize a complex program with numbers and identifiers" "42 if \n then else def 44" [[NToken 42, IDToken "if"], [IDToken "then", IDToken "else", IDToken "def", NToken 44]]
   ]

@@ -29,7 +29,7 @@ tokenizeLine :: String -> TokenLine
 tokenizeLine = (map tokenize) . words . removeComments
 
 removeComments :: String -> String
---removeComments = head . splitOneOf "--"
+-- removeComments = head . splitOneOf "--"
 removeComments x = x ---- XXX
 
 tokenize :: String -> Token
