@@ -1,0 +1,8 @@
+language: haskell
+os: osx
+ghc:
+  - "8.4.1"
+
+script:
+  - make
+  - make test
