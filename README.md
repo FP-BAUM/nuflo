@@ -1,5 +1,6 @@
 # Lambda-unif
 
+[![Build Status](https://travis-ci.org/FP-BAUM/lambda-unif.svg?branch=master)](https://travis-ci.org/FP-BAUM/lambda-unif)
 
 ## Setup
 First you need have `ghc` installed:

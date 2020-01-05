@@ -2,6 +2,8 @@
 
 module Test(TestSuite(..), Test(..), runTestSuites) where
 
+import System.Exit(exitFailure)
+
 data TestSuite = TestSuite {
                    testSuite_name  :: String
                  , testSuite_tests :: [Test]
@@ -53,6 +55,6 @@ runTestSuites testSuites = do
   putStrLn (" FAILED: " ++ show (total - ok))
   if total == ok
    then putStrLn "All tests OK."
-   else return ()
+   else exitFailure
   putStrLn ("-------------------")
 
