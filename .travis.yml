@@ -1,7 +1,6 @@
 language: haskell
-os: osx
-
-before_install: brew install ghc
+ghc:
+  - "8.8.1"
 
 script:
   - make
