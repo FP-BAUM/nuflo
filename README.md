@@ -1,25 +1,38 @@
 # Lambda-unif
 
-### How to use
 
-For more information, see the [Stack guide](https://docs.haskellstack.org/en/stable/install_and_upgrade/)
+## Setup
+First you need have `ghc` installed:
 
-#### Install
-  - install stack from your OS
-  - run `stack setup`
-  - run `stack install`
-  - run `stack build`
+### Mac OS
+```bash
+brew install ghc
+``` 
 
-#### Add new depedencies
-  - run `stack install depedency_name`
+## Build
+To generates a binary `lambda-unif`:
+```bash
+cd .../lambda-unif/
 
-#### Load a single file
-  - run `stack ghci`
-  - run `:set -package necessary_package_name` for example `:set -package HUnit`
-  - run `:l path`
+make
+```
 
-#### Run tests
-  - run `stack ghci`
-  - run `:set -package HUnit`
-  - run `:l test/spec_name.spec.hs `
-  - run `runTestTT tests`
+## Run tests
+```bash
+make test
+```
+
+## Clean
+To remove auxiliary and binary files:
+```bash
+make clean
+```
+
+
+## Development guide
+
+### Add new test cases:
+  To do this, you need:
+  - Go to `.../test/TestMain.hs`
+  - Import your new test file
+  - Add it to `runAllTests` definition
