@@ -40,7 +40,7 @@ runTests tests = do
 
 runTestSuite :: TestSuite -> IO TestSummary
 runTestSuite (TestSuite name tests) = do
-  putStrLn ("[========] " ++ name)
+  putStrLn ("[Test Suite] " ++ name)
   summary <- runTests tests
   return summary
 
