@@ -11,5 +11,3 @@ test : build
 
 clean :
 	rm -f app/*.o app/*.hi src/*.o src/*.hi test/*.o test/*.hi
-
-
