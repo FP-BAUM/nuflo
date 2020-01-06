@@ -1,14 +1,14 @@
 module Lexer (
-         Token(..), Puntuation(..), KeyWord(..), TokenLine,
+         TokenType(..), Puntuation(..), KeyWord(..), TokenLine,
          tokenizeProgram
        ) where
 
 import Utils
 
-data Token =  PToken Puntuation |
-              NToken Int        |
-              IDToken String    |
-              KToken KeyWord deriving (Eq, Show)
+data TokenType =  PToken Puntuation |
+                  NToken Int        |
+                  IDToken String    |
+                  KToken KeyWord deriving (Eq, Show)
 
 data Puntuation = LeftParen | RightParen | -- ( | )
                   LeftBrace | RightBrace | -- { | }
@@ -20,7 +20,7 @@ data KeyWord = Where | Let | In | Import | Backslash |              -- where | l
                Data | Underscore | Class | Type | Instance | Module -- data | _ | class | type | instance | module
                deriving (Eq, Show)
 
-type TokenLine = [Token]
+type TokenLine = [TokenType]
 
 tokenizeProgram :: String -> [TokenLine]
 tokenizeProgram = filter (not . null) . (map tokenizeLine) . lines
@@ -32,7 +32,7 @@ removeComments :: String -> String
 -- removeComments = head . splitOneOf "--"
 removeComments x = x ---- XXX
 
-tokenize :: String -> Token
+tokenize :: String -> TokenType
 tokenize s
   | isNumeric s = NToken (read s :: Int)
   | isKeyword s = KToken (tokenizeKeyword s)
