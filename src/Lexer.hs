@@ -1,9 +1,21 @@
 module Lexer (
-         TokenType(..), Puntuation(..), KeyWord(..), TokenLine,
-         tokenizeProgram
-       ) where
+  Token(..),
+  TokenType(..),
+  Puntuation(..),
+  KeyWord(..),
+  TokenLine,
+  tokenizeProgram
+) where
 
 import Utils
+
+data Token = Token { position :: TPosition , tokenType :: TokenType } deriving (Eq, Show)
+
+data TPosition = TPosition { start :: Point, end :: Point } deriving (Eq, Show)
+
+data Point = Point { row :: Integer, column :: Integer, index :: Integer } deriving (Eq, Show) -- index is the number of the current character respect the complete file
+
+data TContext = TContext { filename :: String , source :: String , index :: Point } deriving (Eq, Show)
 
 data TokenType =  PToken Puntuation |
                   NToken Int        |
@@ -22,15 +34,24 @@ data KeyWord = Where | Let | In | Import | Backslash |              -- where | l
 
 type TokenLine = [TokenType]
 
-tokenizeProgram :: String -> [TokenLine]
-tokenizeProgram = filter (not . null) . (map tokenizeLine) . lines
+-- Structure aux functions
+-- TODO: this functions should be splited in differents files, one for each data structure
+emptyPoint :: Point
+emptyPoint = Point 0 0 0
 
-tokenizeLine :: String -> TokenLine
-tokenizeLine = (map tokenize) . words . removeComments
+context :: String -> String -> TContext
+context name source = TContext name source emptyPoint
 
-removeComments :: String -> String
--- removeComments = head . splitOneOf "--"
-removeComments x = x ---- XXX
+-----------------------------
+
+tokenizeProgram :: String -> String -> [Token]
+tokenizeProgram fileName source = tokenizeProgramWithContext (context fileName source) source
+  -- filter (not . null) . (map (tokenizeLine fileName)) . lines
+
+tokenizeProgramWithContext :: TContext -> String -> [Token]
+tokenizeProgramWithContext context [] = []
+tokenizeProgramWithContext context (x:xs) =  
+
 
 tokenize :: String -> TokenType
 tokenize s
