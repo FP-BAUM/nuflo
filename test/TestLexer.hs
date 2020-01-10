@@ -7,7 +7,7 @@ import Lexer
 
 tokenize_test :: String -> String -> [[TokenType]] -> Test
 tokenize_test description source expectedTokens =
-  TestCase description expectedTokens (tokenizeProgram source)
+  TestCase description expectedTokens (tokenizeProgram "test" source)
 
 tests :: TestSuite
 tests = TestSuite "LEXER" [
