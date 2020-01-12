@@ -108,22 +108,21 @@ tokenizeProgramWithContext :: TContext -> String -> [Token]
 tokenizeProgramWithContext context ""           = []
 tokenizeProgramWithContext context (' ':xs)     = tokenizeProgramWithContext (incrementColumn 1 context) xs
 tokenizeProgramWithContext context ('\n':xs)    = tokenizeProgramWithContext (incrementRow context) xs
-tokenizeProgramWithContext context ('-':'-':xs) = tokenizeProgramWithContext ((incrementRow . incrementColumn 2) context) (removeLine xs)
+tokenizeProgramWithContext context ('-':'-':xs) = tokenizeProgramWithContext (incrementRow context) (removeLine xs)
 tokenizeProgramWithContext context source       = let (word, context') = consumeWord context source
                                                   in let l = toInteger (length word)
-                                                     in tokenizeWordWithContext word l context context' source
+                                                     in tokenizeWordWithContext word context (incrementIndex l context') source
 
-tokenizeWordWithContext :: String -> Integer -> TContext -> TContext -> String -> [Token]
-tokenizeWordWithContext word l previousContext context source =  let nextContext = incrementIndex l context
-                                                                 in let recursiveResult = tokenizeProgramWithContext nextContext (drop (length word) source)
-                                                                    in let t =  if isKeyword word
+tokenizeWordWithContext :: String -> TContext -> TContext -> String -> [Token]
+tokenizeWordWithContext word previousContext nextContext source =  let recursiveResult = tokenizeProgramWithContext nextContext (drop (length word) source)
+                                                                   in let t =  if isKeyword word
                                                                                 then token previousContext nextContext (KToken (tokenizeKeyword word))
                                                                                 else  if isPuntuation word
                                                                                       then token previousContext nextContext (PToken (tokenizePuntuation word))
                                                                                       else  if isNumeric word
                                                                                             then token previousContext nextContext (NToken (read word :: Int))
                                                                                             else token previousContext nextContext (IDToken word)
-                                                                        in t : recursiveResult
+                                                                      in t : recursiveResult
 
 tokenizeKeyword :: String -> KeyWord
 tokenizeKeyword "where"    = Where
