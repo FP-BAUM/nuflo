@@ -43,8 +43,36 @@ tests = TestSuite "LEXER" [
   tokenize_test "Puntuation Arrow to a PToken" "=>" [Token (TPosition (Point 0 0 0) (Point 0 2 2)) (PToken Arrow) ],
   -- Ignore comments
   tokenize_test "Ignoring single comment" "--this is a comment" [],
-  tokenize_test "Ignoring comment between lines" "a b\n--c d e f\ng"  [Token (TPosition (Point 0 0 0) (Point 0 1 1)) (IDToken "a"), Token (TPosition (Point 0 2 1) (Point 0 3 2)) (IDToken "b"), Token (TPosition (Point 2 0 2) (Point 2 1 3)) (IDToken "g")  ],
+  tokenize_test "Ignoring comment between lines" "a b\n--c d e f\ng"  [
+    Token (TPosition (Point 0 0 0) (Point 0 1 1)) (IDToken "a"),
+    Token (TPosition (Point 0 2 1) (Point 0 3 2)) (IDToken "b"),
+    Token (TPosition (Point 2 0 2) (Point 2 1 3)) (IDToken "g")
+  ],
   tokenize_test "Ignoring complex comments" "module Lexer where --where\n--this is a comment\nid a = a --identity" (tokenizeProgram "Test" "module Lexer where\n\nid a = a"),
   -- Complex programs
-  tokenize_test "Tokenize a program with two tokens" "42 if" [Token (TPosition (Point 0 0 0) (Point 0 2 2)) (NToken 42), Token (TPosition (Point 0 3 2) (Point 0 5 4)) (IDToken "if")]
+  tokenize_test "Tokenize a program with two tokens" "42 if" [
+    Token (TPosition (Point 0 0 0) (Point 0 2 2)) (NToken 42),
+    Token (TPosition (Point 0 3 2) (Point 0 5 4)) (IDToken "if")
+  ],
+  tokenize_test "Tokenize a program with puntuation and indentifiers" " tokenize (x:xs) = let word = (tokenize x) \n in word : tokenize xs" [
+    Token (TPosition (Point 0 1 0) (Point 0 9 8)) (IDToken "tokenize"),
+    Token (TPosition (Point 0 10 8) (Point 0 11 9)) (PToken LeftParen),
+    Token (TPosition (Point 0 11 9) (Point 0 12 10)) (IDToken "x"),
+    Token (TPosition (Point 0 12 10) (Point 0 13 11)) (PToken Colon),
+    Token (TPosition (Point 0 13 11) (Point 0 15 13)) (IDToken "xs"),
+    Token (TPosition (Point 0 15 13) (Point 0 16 14)) (PToken RightParen),
+    Token (TPosition (Point 0 17 14) (Point 0 18 15)) (PToken Equal),
+    Token (TPosition (Point 0 19 15) (Point 0 22 18)) (KToken Let),
+    Token (TPosition (Point 0 23 18) (Point 0 27 22)) (IDToken "word"),
+    Token (TPosition (Point 0 28 22) (Point 0 29 23)) (PToken Equal),
+    Token (TPosition (Point 0 30 23) (Point 0 31 24)) (PToken LeftParen),
+    Token (TPosition (Point 0 31 24) (Point 0 39 32)) (IDToken "tokenize"),
+    Token (TPosition (Point 0 40 32) (Point 0 41 33)) (IDToken "x"),
+    Token (TPosition (Point 0 41 33) (Point 0 42 34)) (PToken RightParen),
+    Token (TPosition (Point 1 1 34) (Point 1 3 36)) (KToken In),
+    Token (TPosition (Point 1 4 36) (Point 1 8 40)) (IDToken "word"),
+    Token (TPosition (Point 1 9 40) (Point 1 10 41)) (PToken Colon),
+    Token (TPosition (Point 1 11 41) (Point 1 19 49)) (IDToken "tokenize"),
+    Token (TPosition (Point 1 20 49) (Point 1 22 51)) (IDToken "xs")
+    ]
   ]
