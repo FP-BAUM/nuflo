@@ -41,6 +41,17 @@ tests = TestSuite "LEXER" [
   tokenize_test "Puntuation Colon to a PToken" ":" [Token (TPosition (Point 0 0 0) (Point 0 1 1)) (PToken Colon) ],
   tokenize_test "Puntuation Equal to a PToken" "=" [Token (TPosition (Point 0 0 0) (Point 0 1 1)) (PToken Equal) ],
   tokenize_test "Puntuation Arrow to a PToken" "=>" [Token (TPosition (Point 0 0 0) (Point 0 2 2)) (PToken Arrow) ],
+  tokenize_test "Chaining identifiers and some puntuations" "a=>b:c;d=e" [
+    Token (TPosition (Point 0 0 0) (Point 0 1 1)) (IDToken "a"),
+    Token (TPosition (Point 0 1 1) (Point 0 3 3)) (PToken Arrow),
+    Token (TPosition (Point 0 3 3) (Point 0 4 4)) (IDToken "b"),
+    Token (TPosition (Point 0 4 4) (Point 0 5 5)) (PToken Colon),
+    Token (TPosition (Point 0 5 5) (Point 0 6 6)) (IDToken "c"),
+    Token (TPosition (Point 0 6 6) (Point 0 7 7)) (PToken SemiColon),
+    Token (TPosition (Point 0 7 7) (Point 0 8 8)) (IDToken "d"),
+    Token (TPosition (Point 0 8 8) (Point 0 9 9)) (PToken Equal),
+    Token (TPosition (Point 0 9 9) (Point 0 10 10)) (IDToken "e")
+  ],
   -- Ignore comments
   tokenize_test "Ignoring single comment" "--this is a comment" [],
   tokenize_test "Ignoring comment between lines" "a b\n--c d e f\ng"  [
