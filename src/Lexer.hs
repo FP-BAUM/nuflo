@@ -6,7 +6,7 @@ module Lexer (
   TPosition(..),
   Point(..),
   TokenLine,
-  tokenizeProgram
+  tokenizeProgram,
 ) where
 
 import Utils
@@ -64,51 +64,71 @@ removeLine "" = ""
 removeLine ('\n':xs) = xs
 removeLine (_:xs) = removeLine xs
 
+pointFromContext :: TContext -> Point
+pointFromContext TContext {fileName = name, source = s, tIndex = point} = point
+
+positionFromContext :: TContext -> TContext -> TPosition
+positionFromContext context nextContext = TPosition (pointFromContext context) (pointFromContext nextContext)
+
+token :: TContext -> TContext -> TokenType -> Token
+token context nextContext tokenType = Token (positionFromContext context nextContext) tokenType
+
 -----------------------------
 
 tokenizeProgram :: String -> String -> [Token]
 tokenizeProgram fileName source = tokenizeProgramWithContext (context fileName source) source
 
 tokenizeProgramWithContext :: TContext -> String -> [Token]
-tokenizeProgramWithContext context "" = []
-tokenizeProgramWithContext context ('\n':xs) = tokenizeProgramWithContext (incrementLine context) xs
+tokenizeProgramWithContext context ""           = []
+tokenizeProgramWithContext context (' ':xs)     = tokenizeProgramWithContext context xs
+tokenizeProgramWithContext context ('\n':xs)    = tokenizeProgramWithContext (incrementLine context) xs
 tokenizeProgramWithContext context ('-':'-':xs) = tokenizeProgramWithContext ((incrementLine . incrementIndex 2) context) (removeLine xs)
--- tokenizeProgramWithContext context source = let word = nextWord source
---                                         in let l = length word
---                                           in if isKeyword word
---                                              then token context (KToken (tokenizeKeyword word)) : tokenizeProgramWithContext (incrementIndex l context) (drop l source)
---                                              else if isNumeric word
---                                                   then token context (NToken (read word :: Int)) : tokenizeProgramWithContext (incrementIndex l context) (drop l source)
---                                                   else 
+tokenizeProgramWithContext context source       = let word = consumeWord source
+                                                  in let l = toInteger (length word)
+                                                     in tokenizeWordWithContext word l context source
 
+consumeWord :: String -> String
+consumeWord ""                             = ""
+consumeWord ('=':'>':xs)                   = "=>"
+consumeWord w@(x:xs) | isPuntuation (x:"") = x:""
+                     | otherwise           = nextWord w
 
+nextWord :: String -> String
+nextWord ""                                                      = ""
+nextWord (x:xs) | (x == ' ' || x == '\n' || isPuntuation (x:"")) = ""
+                | otherwise                                      = x : nextWord xs
 
--- tokenize :: String -> TokenType
--- tokenize s
---   | isNumeric s = NToken (read s :: Int)
---   | isKeyword s = KToken (tokenizeKeyword s)
---   | isPuntuation s = PToken (tokenizePuntuation s)
---   | otherwise = IDToken s
+tokenizeWordWithContext :: String -> Integer -> TContext -> String -> [Token]
+tokenizeWordWithContext word l context source =  let nextContext = incrementIndex l context
+                                                      in let recursiveResult = tokenizeProgramWithContext nextContext (drop (length word) source)
+                                                          in let t =  if isKeyword word
+                                                                      then token context nextContext (KToken (tokenizeKeyword word))
+                                                                      else  if isPuntuation word
+                                                                            then token context nextContext (PToken (tokenizePuntuation word))
+                                                                            else  if isNumeric word
+                                                                                  then token context nextContext (NToken (read word :: Int))
+                                                                                  else token context nextContext (IDToken word)
+                                                              in t : recursiveResult
 
 tokenizeKeyword :: String -> KeyWord
-tokenizeKeyword "where" = Where
-tokenizeKeyword "module" = Module
-tokenizeKeyword "let" = Let
-tokenizeKeyword "in" = In
-tokenizeKeyword "import" = Import
-tokenizeKeyword "\\" = Backslash
-tokenizeKeyword "data" = Data
-tokenizeKeyword "_" = Underscore
-tokenizeKeyword "class" = Class
-tokenizeKeyword "type" = Type
+tokenizeKeyword "where"    = Where
+tokenizeKeyword "module"   = Module
+tokenizeKeyword "let"      = Let
+tokenizeKeyword "in"       = In
+tokenizeKeyword "import"   = Import
+tokenizeKeyword "\\"       = Backslash
+tokenizeKeyword "data"     = Data
+tokenizeKeyword "_"        = Underscore
+tokenizeKeyword "class"    = Class
+tokenizeKeyword "type"     = Type
 tokenizeKeyword "instance" = Instance
 
 tokenizePuntuation :: String -> Puntuation
-tokenizePuntuation "(" = LeftParen
-tokenizePuntuation ")" = RightParen
-tokenizePuntuation "{" = LeftBrace
-tokenizePuntuation "}" = RightBrace
-tokenizePuntuation ";" = SemiColon
-tokenizePuntuation ":" = Colon
-tokenizePuntuation "=" = Equal
+tokenizePuntuation "("  = LeftParen
+tokenizePuntuation ")"  = RightParen
+tokenizePuntuation "{"  = LeftBrace
+tokenizePuntuation "}"  = RightBrace
+tokenizePuntuation ";"  = SemiColon
+tokenizePuntuation ":"  = Colon
+tokenizePuntuation "="  = Equal
 tokenizePuntuation "=>" = Arrow
