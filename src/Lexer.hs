@@ -3,6 +3,8 @@ module Lexer (
   TokenType(..),
   Puntuation(..),
   KeyWord(..),
+  TPosition(..),
+  Point(..),
   TokenLine,
   tokenizeProgram
 ) where
@@ -48,13 +50,13 @@ updateIndex n Point { row = r, column = c, index = i } = Point r c (i + n)
 context :: String -> String -> TContext
 context name source = TContext name source emptyPoint
 
-applyIndexContext :: Point -> Point -> TContext -> TContext
+applyIndexContext :: (Point -> Point) -> TContext -> TContext
 applyIndexContext f (TContext {fileName = name, source = s, tIndex = point}) = TContext name s (f point)
 
 incrementLine :: TContext -> TContext
 incrementLine = applyIndexContext newLine
 
-incrementIndex :: TContext -> TContext
+incrementIndex :: Integer -> TContext -> TContext
 incrementIndex n = applyIndexContext (updateIndex n)
 
 removeLine :: String -> String
@@ -70,7 +72,7 @@ tokenizeProgram fileName source = tokenizeProgramWithContext (context fileName s
 tokenizeProgramWithContext :: TContext -> String -> [Token]
 tokenizeProgramWithContext context "" = []
 tokenizeProgramWithContext context ('\n':xs) = tokenizeProgramWithContext (incrementLine context) xs
-tokenizeProgramWithContext context ('-':'-':xs) = tokenizeProgramWithContext (incrementLine . (incrementIndex 2) context) (removeLine xs)
+tokenizeProgramWithContext context ('-':'-':xs) = tokenizeProgramWithContext ((incrementLine . incrementIndex 2) context) (removeLine xs)
 -- tokenizeProgramWithContext context source = let word = nextWord source
 --                                         in let l = length word
 --                                           in if isKeyword word
