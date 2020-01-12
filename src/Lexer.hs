@@ -36,8 +36,9 @@ data KeyWord = Where | Let | In | Import | Backslash |              -- where | l
 
 type TokenLine = [TokenType]
 
--- Structure aux functions
--- TODO: this functions should be splited in differents files, one for each data structure
+------------------------------
+-- Data structure functions --
+
 emptyPoint :: Point
 emptyPoint = Point 0 0 0
 
@@ -65,11 +66,6 @@ incrementColumn n = applyIndexContext (updateColumn n)
 incrementIndex :: Integer -> TContext -> TContext
 incrementIndex n = applyIndexContext (updateIndex n)
 
-removeLine :: String -> String
-removeLine "" = ""
-removeLine ('\n':xs) = xs
-removeLine (_:xs) = removeLine xs
-
 pointFromContext :: TContext -> Point
 pointFromContext TContext {fileName = name, source = s, tIndex = point} = point
 
@@ -79,7 +75,31 @@ positionFromContext context nextContext = TPosition (pointFromContext context) (
 token :: TContext -> TContext -> TokenType -> Token
 token context nextContext tokenType = Token (positionFromContext context nextContext) tokenType
 
------------------------------
+------------------------------
+
+-- String aux functions
+
+removeLine :: String -> String
+removeLine "" = ""
+removeLine ('\n':xs) = xs
+removeLine (_:xs) = removeLine xs
+
+nextWord :: String -> String
+nextWord ""                                                      = ""
+nextWord ('-':'-':xs)                                            = ""
+nextWord (' ':xs)                                                = ""
+nextWord ('\n':xs)                                               = "" 
+nextWord (x:xs) | isPuntuation (x:"")                            = ""
+                | otherwise                                      = x : nextWord xs
+
+consumeWord :: TContext -> String -> (String, TContext)
+consumeWord c ""                                 = ("", c)
+consumeWord c ('=':'>':xs)                       = ("=>", incrementColumn 2 c)
+consumeWord c w@(x:xs) | isPuntuation (x:"")     = (x:"", incrementColumn 1 c)
+                       | otherwise               =  let word = nextWord w
+                                                    in (word, incrementColumn (toInteger (length word)) c)
+
+------------------------------
 
 tokenizeProgram :: String -> String -> [Token]
 tokenizeProgram fileName source = tokenizeProgramWithContext (context fileName source) source
@@ -92,21 +112,6 @@ tokenizeProgramWithContext context ('-':'-':xs) = tokenizeProgramWithContext ((i
 tokenizeProgramWithContext context source       = let (word, context') = consumeWord context source
                                                   in let l = toInteger (length word)
                                                      in tokenizeWordWithContext word l context context' source
-
-consumeWord :: TContext -> String -> (String, TContext)
-consumeWord c ""                                 = ("", c)
-consumeWord c ('=':'>':xs)                       = ("=>", incrementColumn 2 c)
-consumeWord c w@(x:xs) | isPuntuation (x:"")     = (x:"", incrementColumn 1 c)
-                       | otherwise               =  let word = nextWord w
-                                                    in (word, incrementColumn (toInteger (length word)) c)
-
-nextWord :: String -> String
-nextWord ""                                                      = ""
-nextWord ('-':'-':xs)                                            = ""
-nextWord (' ':xs)                                                = ""
-nextWord ('\n':xs)                                               = "" 
-nextWord (x:xs) | isPuntuation (x:"")                            = ""
-                | otherwise                                      = x : nextWord xs
 
 tokenizeWordWithContext :: String -> Integer -> TContext -> TContext -> String -> [Token]
 tokenizeWordWithContext word l previousContext context source =  let nextContext = incrementIndex l context
