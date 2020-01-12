@@ -24,7 +24,7 @@ runTests = do
 runTokenizer :: String -> IO ()
 runTokenizer filename = do
   source <- readFile filename
-  putStrLn $ show (tokenizeProgram source)
+  putStrLn $ show (tokenizeProgram filename source)
 
 usage :: IO ()
 usage = do
