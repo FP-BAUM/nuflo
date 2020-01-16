@@ -1,7 +1,9 @@
 module Utils (
   isNumeric,
   isKeyword,
-  isPuntuation
+  isPuntuation,
+  removeLine,
+  nextWord
 ) where
 
 keywords = ["where", "let", "in", "import", "\\", "data", "_", "class", "type", "instance", "module"]
@@ -26,3 +28,16 @@ isKeyword = flip elem keywords
 
 isPuntuation :: String -> Bool
 isPuntuation = flip elem puntuations
+
+removeLine :: String -> String
+removeLine "" = ""
+removeLine ('\n':xs) = xs
+removeLine (_:xs) = removeLine xs
+
+nextWord :: String -> String
+nextWord ""                                                      = ""
+nextWord ('-':'-':xs)                                            = ""
+nextWord (' ':xs)                                                = ""
+nextWord ('\n':xs)                                               = "" 
+nextWord (x:xs) | isPuntuation (x:"")                            = ""
+                | otherwise                                      = x : nextWord xs
