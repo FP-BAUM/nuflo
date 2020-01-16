@@ -45,8 +45,15 @@ consumeWord c ""                                 = Right ("", c)
 consumeWord c ('=':'>':xs)                       = Right ("=>", incrementColumn 2 c)
 consumeWord c w@(x:xs) | isPuntuation (x:"")     = Right (x:"", incrementColumn 1 c)
                        | otherwise               =  let word = nextWord w
-                                                    in Right (word, incrementColumn (toInteger (length word)) c)
+                                                    in checkWordlexicographically c w (word, incrementColumn (toInteger (length word)) c)
 
+checkWordlexicographically :: TContext -> String -> (String, TContext) -> Either Error (String, TContext)
+checkWordlexicographically c s tuple@(word, _)  | validWord word = Right tuple
+                                                | otherwise      = Left (Error LexicographicalError (word ++ " is not a valid word") (pointFromContext c) s) 
+
+validWord :: String -> Bool
+validWord "__" = False
+validWord _    = True
 ------------------------------
 
 tokenizeProgram :: String -> String -> Either Error [Token]

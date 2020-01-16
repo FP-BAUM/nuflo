@@ -12,4 +12,3 @@ data ErrorType = LexicographicalError | GrammaticalError | SemanticError derivin
 type Message = String
 
 type Source = String
-

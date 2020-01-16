@@ -13,6 +13,9 @@ tokenize_test description source expectedTokens =
 right_tokenize_test :: String -> String -> [Token] -> Test
 right_tokenize_test description source expectedTokens = tokenize_test description source (Right expectedTokens)
 
+left_tokenize_test :: String -> String -> Error -> Test
+left_tokenize_test description source expectedError = tokenize_test description source (Left expectedError)
+
 tests :: TestSuite
 tests = TestSuite "LEXER" [
   right_tokenize_test "Empty program" "" [],
@@ -89,5 +92,6 @@ tests = TestSuite "LEXER" [
     Token (TPosition (Point 1 9 40) (Point 1 10 41)) (PToken Colon),
     Token (TPosition (Point 1 11 41) (Point 1 19 49)) (IDToken "tokenize"),
     Token (TPosition (Point 1 20 49) (Point 1 22 51)) (IDToken "xs")
-    ]
+    ],
+    left_tokenize_test "Try tokenize a program with a lexicographical error" "tokenize (x:xs) = case (tokenize x) \n word -> word : tokenize xs \n __ -> _" (Error LexicographicalError "__ is not a valid word" (Point 2 1 51) "__ -> _") 
   ]
