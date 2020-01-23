@@ -53,7 +53,9 @@ applyOffsideRules (t:ts) (m:ms)                       | m /= 0    = case (applyO
                                                                                                         Right tokens -> Right ((Token (TPosition emptyPoint emptyPoint) (PToken RightBrace)) : tokens)
                                                                                                         Left error   -> Left error
 
-                                                      | otherwise = case (applyOffsideRules ts ms)  of
+                                                      | otherwise = Left (Error LexicographicalError ("offside rules error") (startPointFromPosition (TPosition emptyPoint emptyPoint)) "")
+
+applyOffsideRules (t:ts) ms                                       = case (applyOffsideRules ts ms)  of
                                                                                                     Right tokens -> Right (t : tokens)
                                                                                                     Left error   -> Left error
 -- Bases cases [] TODO: FIX THE POINTS
