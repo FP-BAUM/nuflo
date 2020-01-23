@@ -37,7 +37,6 @@ tokenizeProgramWithContext context source       =
   case consumeWord context source of  Right (word, context') -> let l = toInteger (length word)
                                                                 in tokenizeWordWithContext word context (incrementIndex l context') source
                                       Left error -> Left error
-                                                                                     
 
 tokenizeWordWithContext :: String -> TContext -> TContext -> String -> Either Error [Token]
 tokenizeWordWithContext word previousContext nextContext source =
