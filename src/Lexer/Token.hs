@@ -1,4 +1,4 @@
-module Token (
+module Lexer.Token (
   Token(..),
   TokenType(..),
   OffsideType(..),
@@ -10,8 +10,8 @@ module Token (
   positionFromContext,
 ) where
 
-import Point
-import TContext
+import Lexer.Point
+import Lexer.TContext
 
 data Token = Token { position :: TPosition , tokenType :: TokenType } | OffsideToken OffsideType Int deriving (Eq, Show)
 

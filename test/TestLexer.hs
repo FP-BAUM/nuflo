@@ -3,9 +3,9 @@ module TestLexer(tests) where
 
 import Test(TestSuite(..), Test(..))
 
-import Lexer
-import Token
-import Error
+import Lexer.Lexer
+import Lexer.Token
+import Lexer.Error
 
 tokenize_test :: String -> String -> Either Error [Token] -> Test
 tokenize_test description source expectedTokens =

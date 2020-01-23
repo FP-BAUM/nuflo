@@ -1,9 +1,9 @@
-module Error (
+module Lexer.Error (
   Error(..),
   ErrorType(..),
 ) where
 
-import Point
+import Lexer.Point
 
 data Error = Error ErrorType Message Point Source deriving (Eq, Show)
 

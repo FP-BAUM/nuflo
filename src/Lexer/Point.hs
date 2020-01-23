@@ -1,4 +1,4 @@
-module Point (
+module Lexer.Point (
   Point(..),
   emptyPoint,
   updateRow,

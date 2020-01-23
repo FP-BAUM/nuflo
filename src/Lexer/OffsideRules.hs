@@ -1,13 +1,13 @@
-module OffsideRules (
+module Lexer.OffsideRules (
   offsideRules,
   applyOffsideRules,
 ) where
 
-import Utils
-import Point
-import Token
-import TContext
-import Error
+import Lexer.Utils
+import Lexer.Point
+import Lexer.Token
+import Lexer.TContext
+import Lexer.Error
 
 startPointFromPosition :: TPosition -> Point
 startPointFromPosition TPosition { start = s, end = e } = s

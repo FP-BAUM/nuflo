@@ -1,13 +1,13 @@
-module Lexer (
+module Lexer.Lexer (
   tokenizeProgram,
 ) where
 
-import Utils
-import Point
-import TContext
-import Token
-import OffsideRules
-import Error
+import Lexer.Utils
+import Lexer.Point
+import Lexer.TContext
+import Lexer.Token
+import Lexer.OffsideRules
+import Lexer.Error
 
 consumeWord :: TContext -> String -> Either Error (String, TContext)
 consumeWord c ""                                 = Right ("", c)

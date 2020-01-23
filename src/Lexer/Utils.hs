@@ -1,4 +1,4 @@
-module Utils (
+module Lexer.Utils (
   isNumeric,
   isKeyword,
   isPuntuation,

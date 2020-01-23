@@ -1,4 +1,4 @@
-module TContext (
+module Lexer.TContext (
   TContext(..),
   context,
   applyIndexContext,
@@ -8,7 +8,7 @@ module TContext (
   pointFromContext,
 ) where
 
-import Point
+import Lexer.Point
 
 data TContext = TContext { fileName :: String , source :: String , tIndex :: Point } deriving (Eq, Show)
 

@@ -2,7 +2,7 @@ module Main where
 
 import System.Environment
 
-import Lexer(tokenizeProgram)
+import Lexer.Lexer(tokenizeProgram)
 
 import TestMain(runAllTests)
 
