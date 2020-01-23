@@ -4,6 +4,7 @@ module TestLexer(tests) where
 import Test(TestSuite(..), Test(..))
 
 import Lexer
+import Token
 import Error
 
 tokenize_test :: String -> String -> Either Error [Token] -> Test
