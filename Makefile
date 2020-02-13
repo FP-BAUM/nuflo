@@ -7,7 +7,11 @@ build :
 	ghc -isrc/ -itest/ --make app/Main.hs -o ${BINARY}
 
 test : build
-	./${BINARY} -t
+	./${BINARY} -T
 
 clean :
-	rm -f app/*.o app/*.hi src/*.o src/*.hi test/*.o test/*.hi
+	rm -f app/*.o app/*.hi \
+          src/*.o src/*.hi \
+          src/Lexer/*.o src/Lexer/*.hi \
+          test/*.o test/*.hi
+

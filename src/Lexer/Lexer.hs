@@ -1,74 +1,107 @@
-module Lexer.Lexer (
-  tokenizeProgram,
-) where
+module Lexer.Lexer (tokenize) where
 
-import Lexer.Utils
-import Lexer.Point
-import Lexer.TContext
-import Lexer.Token
-import Lexer.OffsideRules
-import Lexer.Error
+import FailState(FailState, getFS, modifyFS, failFS, evalFS)
+import Error(Error(..), ErrorType(..))
+import Position(Position, initialPosition, updatePosition)
 
-consumeWord :: TContext -> String -> Either Error (String, TContext)
-consumeWord c ""                                 = Right ("", c)
-consumeWord c ('=':'>':xs)                       = Right ("=>", incrementColumn 2 c)
-consumeWord c w@(x:xs) | isPuntuation (x:"")     = Right (x:"", incrementColumn 1 c)
-                       | otherwise               =  let word = nextWord w
-                                                    in checkWordlexicographically c w (word, incrementColumn (toInteger (length word)) c)
+import Lexer.Token(Token(..), TokenType(..))
+import Lexer.Categories(
+         isDigit, isInteger, isWhitespace,
+         isPunctuation, punctuationType,
+         isKeyword, keywordType, isIdent
+       )
+import Lexer.Layout(layout)
 
-checkWordlexicographically :: TContext -> String -> (String, TContext) -> Either Error (String, TContext)
-checkWordlexicographically c s tuple@(word, _)  | validWord word = Right tuple
-                                                | otherwise      = Left (Error LexicographicalError (word ++ " is not a valid word") (pointFromContext c) s) 
+tokenize :: FilePath -> String -> Either Error [Token]
+tokenize filename source = do
+    tokens <- evalFS (tokenizeM source) initialState
+    layout tokens
+  where initialState = LexerState { pos = initialPosition filename source }
 
-validWord :: String -> Bool
-validWord "__" = False
-validWord _    = True
-------------------------------
+---- Lexer monad
 
-tokenizeProgram :: String -> String -> Either Error [Token]
-tokenizeProgram fileName source = offsideRules $ tokenizeProgramWithContext (context fileName source) source
+data LexerState = LexerState { pos :: Position }
+type M = FailState LexerState
 
-tokenizeProgramWithContext :: TContext -> String -> Either Error [Token]
-tokenizeProgramWithContext context ""           = Right []
-tokenizeProgramWithContext context (' ':xs)     = tokenizeProgramWithContext (incrementColumn 1 context) xs
-tokenizeProgramWithContext context ('\n':xs)    = tokenizeProgramWithContext (incrementRow context) xs
-tokenizeProgramWithContext context ('-':'-':xs) = tokenizeProgramWithContext (incrementRow context) (removeLine xs)
-tokenizeProgramWithContext context source       =
-  case consumeWord context source of  Right (word, context') -> let l = toInteger (length word)
-                                                                in tokenizeWordWithContext word context (incrementIndex l context') source
-                                      Left error -> Left error
+consumeString :: String -> M ()
+consumeString s = modifyFS (\ state -> state {
+                     pos = updatePosition s (pos state)
+                   })
 
-tokenizeWordWithContext :: String -> TContext -> TContext -> String -> Either Error [Token]
-tokenizeWordWithContext word previousContext nextContext source =
-  case tokenizeProgramWithContext nextContext (drop (length word) source) of Right recursiveResult -> let t = if isKeyword word
-                                                                                                              then token previousContext nextContext (KToken (tokenizeKeyword word))
-                                                                                                              else  if isPuntuation word
-                                                                                                                    then token previousContext nextContext (PToken (tokenizePuntuation word))
-                                                                                                                    else  if isNumeric word
-                                                                                                                          then token previousContext nextContext (NToken (read word :: Int))
-                                                                                                                          else token previousContext nextContext (IDToken word)
-                                                                                                      in Right (t : recursiveResult)
-                                                                             error -> error
+consumeChar :: Char -> M ()
+consumeChar c = consumeString [c]
 
-tokenizeKeyword :: String -> KeyWord
-tokenizeKeyword "where"    = Where
-tokenizeKeyword "module"   = Module
-tokenizeKeyword "let"      = Let
-tokenizeKeyword "in"       = In
-tokenizeKeyword "import"   = Import
-tokenizeKeyword "\\"       = Backslash
-tokenizeKeyword "data"     = Data
-tokenizeKeyword "_"        = Underscore
-tokenizeKeyword "class"    = Class
-tokenizeKeyword "type"     = Type
-tokenizeKeyword "instance" = Instance
+getPos :: M Position
+getPos = do state <- getFS
+            return (pos state)
 
-tokenizePuntuation :: String -> Puntuation
-tokenizePuntuation "("  = LeftParen
-tokenizePuntuation ")"  = RightParen
-tokenizePuntuation "{"  = LeftBrace
-tokenizePuntuation "}"  = RightBrace
-tokenizePuntuation ";"  = SemiColon
-tokenizePuntuation ":"  = Colon
-tokenizePuntuation "="  = Equal
-tokenizePuntuation "=>" = Arrow
+---- Tokenizer
+
+tokenizeM :: String -> M [Token]
+tokenizeM ""                           = return []
+tokenizeM cs@(c : _) | isWhitespace c  = ignoreWhitespace cs
+tokenizeM cs@('-' : '-' : _)           = ignoreSingleLineComment cs
+tokenizeM cs@('{' : '-' : _)           = ignoreMultiLineComment cs
+tokenizeM cs@(c : _) | isPunctuation c = readPunctuation cs
+tokenizeM cs@(c : _) | isIdent c       = readNamePart cs
+tokenizeM (c : _)                      =
+  failM LexerErrorInvalidCharacter
+        ("Invalid character: '" ++ show c ++ "'.")
+
+ignoreWhitespace :: String -> M [Token]
+ignoreWhitespace (c : cs) = do
+  consumeChar c
+  tokenizeM cs
+
+ignoreSingleLineComment :: String -> M [Token]
+ignoreSingleLineComment ('\n' : cs) = do
+  consumeChar '\n'
+  tokenizeM cs
+ignoreSingleLineComment (c : cs)    = do
+  consumeChar c
+  ignoreSingleLineComment cs
+
+ignoreMultiLineComment :: String -> M [Token]
+ignoreMultiLineComment cs = rec 0 cs
+  where
+    rec n ('{' : '-' : cs) = do
+      consumeString "{-"
+      rec (n + 1) cs
+    rec n ('-' : '}' : cs) = do
+      consumeString "-}"
+      if n == 1
+       then tokenizeM cs
+       else rec (n - 1) cs 
+    rec n (c : cs) = do
+      consumeChar c
+      rec n cs
+
+readPunctuation :: String -> M [Token]
+readPunctuation (c : cs) = do
+  start <- getPos
+  consumeChar c
+  end <- getPos
+  let t = Token start end (punctuationType c)
+   in do ts <- tokenizeM cs
+         return (t : ts)
+
+readNamePart :: String -> M [Token]
+readNamePart cs = do
+  start <- getPos
+  let (ident, cs') = span isIdent cs in do
+    consumeString ident
+    end <- getPos
+    let t = Token start end (nameType ident) in do
+      ts <- tokenizeM cs'
+      return (t : ts)
+  where
+    nameType ident
+      | isKeyword ident = keywordType ident
+      | isInteger ident = T_Int (read ident :: Integer)
+      | otherwise       = T_Id ident
+
+failM :: ErrorType -> String -> M a
+failM errorType msg = do
+  pos <- getPos
+  failFS (Error errorType pos msg)
+

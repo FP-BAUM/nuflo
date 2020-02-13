@@ -1,45 +1,38 @@
 module Lexer.Token (
   Token(..),
   TokenType(..),
-  OffsideType(..),
-  Puntuation(..),
-  KeyWord(..),
-  TPosition(..),
-  Point(..),
-  token,
-  positionFromContext,
 ) where
 
-import Lexer.Point
-import Lexer.TContext
+import Position(Position)
 
-data Token = Token { position :: TPosition , tokenType :: TokenType } | OffsideToken OffsideType Int deriving (Eq, Show)
+data Token = Token {
+               tokenStartPos :: Position,
+               tokenEndPos   :: Position,
+               tokenType     :: TokenType
+             }
 
-data OffsideType =  Note1 | -- <>
-                    Note2   -- {}
-                    deriving (Eq, Show)
+data TokenType =
+    T_Int Integer
+  | T_Id String
+  -- Keywords
+  | T_Class
+  | T_Data
+  | T_Import
+  | T_In
+  | T_Instance
+  | T_Lambda
+  | T_Let
+  | T_Module
+  | T_Where
+  -- Punctuation
+  | T_LParen
+  | T_RParen
+  | T_LBrace
+  | T_RBrace
+  | T_Semicolon
+  | T_Underscore
+  deriving (Eq, Show)
 
-data TPosition = TPosition { start :: Point, end :: Point } deriving (Eq, Show)
+instance Show Token where
+  show token = show (tokenType token)
 
-data TokenType =  PToken Puntuation |
-                  NToken Int        |
-                  IDToken String    |
-                  KToken KeyWord deriving (Eq, Show)
-
-data Puntuation = LeftParen | RightParen | -- ( | )
-                  LeftBrace | RightBrace | -- { | }
-                  SemiColon | Colon      | -- ; | :
-                  Equal     | Arrow        -- = | =>
-                  deriving (Eq, Show)
-
-data KeyWord = Where | Let | In | Import | Backslash |              -- where | let | in | import | \
-               Data | Underscore | Class | Type | Instance | Module -- data | _ | class | type | instance | module
-               deriving (Eq, Show)
-
-------------------------------
-
-positionFromContext :: TContext -> TContext -> TPosition
-positionFromContext context nextContext = TPosition (pointFromContext context) (pointFromContext nextContext)
-
-token :: TContext -> TContext -> TokenType -> Token
-token context nextContext tokenType = Token (positionFromContext context nextContext) tokenType

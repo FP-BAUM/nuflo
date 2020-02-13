@@ -2,7 +2,7 @@ module Main where
 
 import System.Environment
 
-import Lexer.Lexer(tokenizeProgram)
+import Lexer.Lexer(tokenize)
 
 import TestMain(runAllTests)
 
@@ -12,9 +12,10 @@ main = do
   run args
 
 run :: [String] -> IO ()
-run ["-t"]        = runTests
-run ["-T", input] = runTokenizer input
+run ["-T"]        = runTests
+run ["-t", input] = runTokenizer input
 run _             = usage
+
 
 runTests :: IO ()
 runTests = do
@@ -24,11 +25,13 @@ runTests = do
 runTokenizer :: String -> IO ()
 runTokenizer filename = do
   source <- readFile filename
-  putStrLn $ show (tokenizeProgram filename source)
+  case tokenize filename source of
+    Left  e      -> putStrLn $ show e
+    Right tokens -> mapM_ (putStrLn . show) tokens
 
 usage :: IO ()
 usage = do
   putStrLn "Usage:"
-  putStrLn "  ./lambda-unif -t              Run tests."
-  putStrLn "  ./lambda-unif -T foo.lu       Tokenize file."
+  putStrLn "  ./lambda-unif -T              Run tests."
+  putStrLn "  ./lambda-unif -t foo.la       Tokenize file."
 
