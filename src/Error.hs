@@ -3,12 +3,17 @@ module Error (
   ErrorType(..),
 ) where
 
-import Point
+import Position(Position)
 
-data Error = Error ErrorType Message Point Source deriving (Eq, Show)
+data Error = Error {
+               errorType     :: ErrorType,
+               errorPosition :: Position,
+               errorMessage  :: String
+             }
+  deriving (Eq, Show)
 
-data ErrorType = LexicographicalError | GrammaticalError | SemanticError deriving (Eq, Show)
+data ErrorType =
+    LexerErrorInvalidCharacter
+  | LexerErrorLayout
+  deriving (Eq, Show)
 
-type Message = String
-
-type Source = String
