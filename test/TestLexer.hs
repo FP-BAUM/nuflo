@@ -32,11 +32,10 @@ tests = TestSuite "LEXER" [
 
   -- Punctuation
   testOK "Punctuation"
-         "(){};_"
+         ".(){};"
          [
            T_LBrace, -- layout
-           T_LParen, T_RParen, T_LBrace, T_RBrace, T_Semicolon,
-           T_Underscore,
+           T_Dot, T_LParen, T_RParen, T_LBrace, T_RBrace, T_Semicolon,
            T_RBrace  -- layout
          ],
 
@@ -67,16 +66,36 @@ tests = TestSuite "LEXER" [
 
   -- Identifiers
   testOK "Identifiers"
-         "if_then_else_ - - ∀|- 1a" 
+         "_ a _a a_ _a_ a_a a_a_ _a_a if.then.else. - - ∀|- 1a" 
          [
            T_LBrace,
-           T_Id "if", T_Underscore,
-           T_Id "then", T_Underscore,
-           T_Id "else", T_Underscore,
+           T_Id "_",
+           T_Id "a",
+           T_Id "_a",
+           T_Id "a_",
+           T_Id "_a_",
+           T_Id "a_a",
+           T_Id "a_a_",
+           T_Id "_a_a",
+           T_Id "if", T_Dot,
+           T_Id "then", T_Dot,
+           T_Id "else", T_Dot,
            T_Id "-", T_Id "-",
            T_Id "∀|-", T_Id "1a",
            T_RBrace
          ],
+
+  testError "Malformed name: two underscores"
+            "a__b" 
+            LexerErrorMalformedName,
+
+  testError "Malformed name: includes a keyword"
+            "a_let" 
+            LexerErrorMalformedName,
+
+  testError "Malformed name: includes an integer"
+            "a_32" 
+            LexerErrorMalformedName,
 
   -- Comments
   testOK "Ignore single-line comments"

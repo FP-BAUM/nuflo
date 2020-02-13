@@ -10,6 +10,7 @@ import Lexer.Categories(
          isPunctuation, punctuationType,
          isKeyword, keywordType, isIdent
        )
+import Lexer.Name(isWellFormedName)
 import Lexer.Layout(layout)
 
 tokenize :: FilePath -> String -> Either Error [Token]
@@ -43,7 +44,7 @@ tokenizeM cs@(c : _) | isWhitespace c  = ignoreWhitespace cs
 tokenizeM cs@('-' : '-' : _)           = ignoreSingleLineComment cs
 tokenizeM cs@('{' : '-' : _)           = ignoreMultiLineComment cs
 tokenizeM cs@(c : _) | isPunctuation c = readPunctuation cs
-tokenizeM cs@(c : _) | isIdent c       = readNamePart cs
+tokenizeM cs@(c : _) | isIdent c       = readName cs
 tokenizeM (c : _)                      =
   failM LexerErrorInvalidCharacter
         ("Invalid character: '" ++ show c ++ "'.")
@@ -85,20 +86,23 @@ readPunctuation (c : cs) = do
    in do ts <- tokenizeM cs
          return (t : ts)
 
-readNamePart :: String -> M [Token]
-readNamePart cs = do
+readName :: String -> M [Token]
+readName cs = do
   start <- getPos
   let (ident, cs') = span isIdent cs in do
     consumeString ident
     end <- getPos
-    let t = Token start end (nameType ident) in do
+    typ <- nameType ident
+    let t = Token start end typ in do
       ts <- tokenizeM cs'
       return (t : ts)
   where
     nameType ident
-      | isKeyword ident = keywordType ident
-      | isInteger ident = T_Int (read ident :: Integer)
-      | otherwise       = T_Id ident
+      | isKeyword        ident = return $ keywordType ident
+      | isInteger        ident = return $ T_Int (read ident :: Integer)
+      | isWellFormedName ident = return $ T_Id ident
+      | otherwise              = failM LexerErrorMalformedName
+                                       ("Malformed name: " ++ ident)
 
 failM :: ErrorType -> String -> M a
 failM errorType msg = do

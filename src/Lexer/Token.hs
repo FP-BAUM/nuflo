@@ -25,12 +25,12 @@ data TokenType =
   | T_Module
   | T_Where
   -- Punctuation
+  | T_Dot
   | T_LParen
   | T_RParen
   | T_LBrace
   | T_RBrace
   | T_Semicolon
-  | T_Underscore
   deriving (Eq, Show)
 
 instance Show Token where

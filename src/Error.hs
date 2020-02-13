@@ -14,6 +14,7 @@ data Error = Error {
 
 data ErrorType =
     LexerErrorInvalidCharacter
+  | LexerErrorMalformedName
   | LexerErrorLayout
   deriving (Eq, Show)
 

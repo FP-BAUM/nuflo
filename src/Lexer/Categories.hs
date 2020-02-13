@@ -12,12 +12,12 @@ import Lexer.Token(TokenType(..))
 
 punctuation :: M.Map Char TokenType
 punctuation = M.fromList [
+  ('.', T_Dot),
   ('(', T_LParen),
   (')', T_RParen),
   ('{', T_LBrace),
   ('}', T_RBrace),
-  (';', T_Semicolon),
-  ('_', T_Underscore)
+  (';', T_Semicolon)
  ]
 
 keywords :: M.Map String TokenType
