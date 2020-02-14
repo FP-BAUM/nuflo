@@ -4,8 +4,8 @@ module TestLexer(tests) where
 import Test(TestSuite(..), Test(..))
 
 import Error(Error(..), ErrorType(..))
-import Lexer.Lexer
 import Lexer.Token(Token(..), TokenType(..))
+import Lexer.Lexer(tokenize)
 
 test :: String -> String -> Either ErrorType [TokenType] -> Test
 test description source expectedResult =

@@ -54,10 +54,10 @@ positionRegion :: Position -> String
 positionRegion p =
     unlines (
       ["Near " ++ show p ++ ":"] ++
+      ithLine (i - 2) ++
       ithLine (i - 1) ++
-      ithLine i ++
       [indicator j] ++
-      ithLine (i + 1)
+      ithLine i
     )
   where
     sourceLines = lines (positionSource p)

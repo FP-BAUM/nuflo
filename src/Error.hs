@@ -15,6 +15,7 @@ data ErrorType =
   | LexerErrorLayout
   | ReaderErrorCyclicDependencies
   | ReaderErrorModuleNameMismatch
+  | ParseError
   deriving (Eq, Show)
 
 errorAtUnknown :: ErrorType -> String -> Error

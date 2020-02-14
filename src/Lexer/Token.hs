@@ -13,7 +13,8 @@ data Token = Token {
              }
 
 data TokenType =
-    T_Int Integer
+    T_EOF
+  | T_Int Integer
   | T_Id String
   -- Keywords
   | T_Class

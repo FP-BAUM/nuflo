@@ -17,24 +17,29 @@ tokenize :: FilePath -> String -> Either Error [Token]
 tokenize filename source = do
     tokens <- evalFS (tokenizeM source) initialState
     layout tokens
-  where initialState = LexerState { pos = initialPosition filename source }
+  where initialState = LexerState {
+                         statePosition = initialPosition filename source
+                       }
 
 ---- Lexer monad
 
-data LexerState = LexerState { pos :: Position }
+data LexerState = LexerState {
+                    statePosition :: Position
+                  }
+
 type M = FailState LexerState
 
 consumeString :: String -> M ()
 consumeString s = modifyFS (\ state -> state {
-                     pos = updatePosition s (pos state)
+                     statePosition = updatePosition s (statePosition state)
                    })
 
 consumeChar :: Char -> M ()
 consumeChar c = consumeString [c]
 
-getPos :: M Position
-getPos = do state <- getFS
-            return (pos state)
+currentPosition :: M Position
+currentPosition = do state <- getFS
+                     return (statePosition state)
 
 ---- Tokenizer
 
@@ -79,19 +84,19 @@ ignoreMultiLineComment cs = rec 0 cs
 
 readPunctuation :: String -> M [Token]
 readPunctuation (c : cs) = do
-  start <- getPos
+  start <- currentPosition
   consumeChar c
-  end <- getPos
+  end <- currentPosition
   let t = Token start end (punctuationType c)
    in do ts <- tokenizeM cs
          return (t : ts)
 
 readName :: String -> M [Token]
 readName cs = do
-  start <- getPos
+  start <- currentPosition
   let (ident, cs') = span isIdent cs in do
     consumeString ident
-    end <- getPos
+    end <- currentPosition
     typ <- nameType ident
     let t = Token start end typ in do
       ts <- tokenizeM cs'
@@ -106,6 +111,6 @@ readName cs = do
 
 failM :: ErrorType -> String -> M a
 failM errorType msg = do
-  pos <- getPos
+  pos <- currentPosition
   failFS (Error errorType pos msg)
 
