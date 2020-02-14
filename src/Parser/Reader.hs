@@ -22,29 +22,25 @@ type Files = S.Set FilePath
 
 readDep :: Files -> Files -> Maybe QName -> FilePath
         -> IO (Either Error (Files, [Token]))
+readDep codependencies _ _ filename
+  | S.member filename codependencies =
+      return $ Left (errorAtUnknown
+                     ReaderErrorCyclicDependencies
+                     ("Cyclic dependencies: " ++ show codependencies))
+readDep _ visited _ filename
+   | S.member filename visited = return $ Right (visited, [])
 readDep codependencies visited mQName filename = do
-  if S.member filename codependencies
-   then return $ Left (errorAtUnknown
-                         ReaderErrorCyclicDependencies
-                         ("Cyclic dependencies: " ++ show codependencies))
-   else
-     if S.member filename visited
-      then return $ Right (visited, [])
-      else do
-        source <- readFile filename
-        case tokenize filename source of
-          Left  e -> return $ Left e
-          Right moduleTokens -> do
-            check <- checkModuleNameMatches mQName filename moduleTokens
-            case check of
-              Left e   -> return $ Left e
-              Right () ->
-                let deps = collectDependencies moduleTokens in do
-                 res <- readDeps codependencies' visited' deps
-                 case res of
-                   Left e -> return $ Left e
-                   Right (visited1, depTokens) ->
-                     return $ Right (visited1, depTokens ++ moduleTokens)
+    source <- readFile filename
+    case tokenize filename source of
+      Left  e -> return $ Left e
+      Right moduleTokens -> do
+        doCheck <- checkModuleNameMatches mQName filename moduleTokens
+        doRead  <- readDeps codependencies' visited'
+                            (collectDependencies moduleTokens)
+        return $ do
+          doCheck
+          (visited1, depTokens) <- doRead
+          return $ (visited1, depTokens ++ moduleTokens)
   where
     codependencies' = codependencies `S.union` S.fromList [filename]
     visited'        = visited `S.union` S.fromList [filename]

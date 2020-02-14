@@ -13,5 +13,6 @@ clean :
 	rm -f app/*.o app/*.hi \
           src/*.o src/*.hi \
           src/Lexer/*.o src/Lexer/*.hi \
+          src/Parser/*.o src/Parser/*.hi \
           test/*.o test/*.hi
 
