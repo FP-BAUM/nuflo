@@ -1,6 +1,7 @@
 module Lexer.Token (
   Token(..),
   TokenType(..),
+  isLBrace, isRBrace, isId, isDot
 ) where
 
 import Position(Position)
@@ -35,4 +36,30 @@ data TokenType =
 
 instance Show Token where
   show token = show (tokenType token)
+
+---
+
+isId :: Token -> Bool
+isId t =
+  case tokenType t of
+    T_Id _ -> True
+    _      -> False
+
+isLBrace :: Token -> Bool
+isLBrace t =
+  case tokenType t of
+    T_LBrace -> True
+    _        -> False
+
+isRBrace :: Token -> Bool
+isRBrace t =
+  case tokenType t of
+    T_RBrace -> True
+    _        -> False
+
+isDot :: Token -> Bool
+isDot t =
+  case tokenType t of
+    T_Dot -> True
+    _     -> False
 

@@ -2,7 +2,7 @@ module Lexer.Layout(layout) where
 
 import Position(Position(..), unknownPosition)
 import Error(Error(..), ErrorType(..))
-import Lexer.Token(Token(..), TokenType(..))
+import Lexer.Token(Token(..), TokenType(..), isLBrace, isRBrace)
 
 layout :: [Token] -> Either Error [Token]
 layout tokens = lay (prepare tokens) []
@@ -34,18 +34,6 @@ isLayoutKeyword t =
     T_Where -> True
     T_Let   -> True
     _       -> False
-
-isLBrace :: Token -> Bool
-isLBrace t =
-  case tokenType t of
-    T_LBrace -> True
-    _        -> False
-
-isRBrace :: Token -> Bool
-isRBrace t =
-  case tokenType t of
-    T_RBrace -> True
-    _        -> False
 
 startsWithLBrace :: [Token] -> Bool
 startsWithLBrace []      = False

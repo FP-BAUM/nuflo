@@ -1,9 +1,6 @@
-module Error (
-  Error(..),
-  ErrorType(..),
-) where
+module Error (Error(..), ErrorType(..), errorAtUnknown) where
 
-import Position(Position)
+import Position(Position, unknownPosition)
 
 data Error = Error {
                errorType     :: ErrorType,
@@ -16,5 +13,9 @@ data ErrorType =
     LexerErrorInvalidCharacter
   | LexerErrorMalformedName
   | LexerErrorLayout
+  | ReaderErrorCyclicDependencies
   deriving (Eq, Show)
+
+errorAtUnknown :: ErrorType -> String -> Error
+errorAtUnknown typ msg = Error typ unknownPosition msg
 
