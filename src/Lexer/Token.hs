@@ -1,7 +1,7 @@
 module Lexer.Token (
   Token(..),
   TokenType(..),
-  isLBrace, isRBrace, isId, isDot
+  isLBrace, isRBrace, isId, isDot, isModule
 ) where
 
 import Position(Position)
@@ -55,6 +55,12 @@ isRBrace :: Token -> Bool
 isRBrace t =
   case tokenType t of
     T_RBrace -> True
+    _        -> False
+
+isModule :: Token -> Bool
+isModule t =
+  case tokenType t of
+    T_Module -> True
     _        -> False
 
 isDot :: Token -> Bool

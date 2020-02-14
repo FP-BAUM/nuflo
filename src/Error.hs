@@ -14,6 +14,7 @@ data ErrorType =
   | LexerErrorMalformedName
   | LexerErrorLayout
   | ReaderErrorCyclicDependencies
+  | ReaderErrorModuleNameMismatch
   deriving (Eq, Show)
 
 errorAtUnknown :: ErrorType -> String -> Error

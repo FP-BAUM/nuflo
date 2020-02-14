@@ -5,22 +5,24 @@ module Parser.Reader(readSource) where
 
 import qualified Data.Set as S
 
-import Error(Error, ErrorType(..), errorAtUnknown)
-import Lexer.Token(Token(..), TokenType(..), isId, isDot)
+import Position(unknownPosition)
+import Error(Error(..), ErrorType(..), errorAtUnknown)
+import Lexer.Token(Token(..), TokenType(..), isId, isDot, isModule)
 import Lexer.Name(QName(..), readName)
 import Lexer.Lexer(tokenize)
 
 readSource :: FilePath -> IO (Either Error [Token])
 readSource filename = do
-  result <- readDep S.empty S.empty filename
+  result <- readDep S.empty S.empty Nothing filename
   case result of
     Left  e         -> return $ Left e
     Right (_, toks) -> return $ Right toks
 
 type Files = S.Set FilePath
 
-readDep :: Files -> Files -> FilePath -> IO (Either Error (Files, [Token]))
-readDep codependencies visited filename = do
+readDep :: Files -> Files -> Maybe QName -> FilePath
+        -> IO (Either Error (Files, [Token]))
+readDep codependencies visited mQName filename = do
   if S.member filename codependencies
    then return $ Left (errorAtUnknown
                          ReaderErrorCyclicDependencies
@@ -31,26 +33,31 @@ readDep codependencies visited filename = do
       else do
         source <- readFile filename
         case tokenize filename source of
-          Left  e            -> return $ Left e
-          Right moduleTokens ->
-            let deps = collectDependencies moduleTokens in do
-             res <- readDeps (codependencies `S.union` S.fromList [filename])
-                             (visited `S.union` S.fromList [filename])
-                             (map qnameToFilename deps)
-             case res of
-               Left e                      -> return $ Left e
-               Right (visited', depTokens) ->
-                 return $ Right (visited', depTokens ++ moduleTokens)
+          Left  e -> return $ Left e
+          Right moduleTokens -> do
+            check <- checkModuleNameMatches mQName filename moduleTokens
+            case check of
+              Left e   -> return $ Left e
+              Right () ->
+                let deps = collectDependencies moduleTokens in do
+                 res <- readDeps codependencies' visited' deps
+                 case res of
+                   Left e -> return $ Left e
+                   Right (visited1, depTokens) ->
+                     return $ Right (visited1, depTokens ++ moduleTokens)
+  where
+    codependencies' = codependencies `S.union` S.fromList [filename]
+    visited'        = visited `S.union` S.fromList [filename]
 
-readDeps :: Files -> Files -> [FilePath] -> IO (Either Error (Files, [Token]))
+readDeps :: Files -> Files -> [QName] -> IO (Either Error (Files, [Token]))
 readDeps codependencies visited0 [] =
   return $ Right (visited0, [])
-readDeps codependencies visited0 (f : fs) = do
-  res1 <- readDep codependencies visited0 f
+readDeps codependencies visited0 (q : qs) = do
+  res1 <- readDep codependencies visited0 (Just q) (qnameToFilename q)
   case res1 of
     Left e                  -> return $ Left e
     Right (visited1, toks1) -> do
-      res2 <- readDep codependencies visited1 f
+      res2 <- readDeps codependencies visited1 qs
       case res2 of
         Left e                  -> return $ Left e
         Right (visited2, toks2) -> return $ Right (visited2, toks1 ++ toks2)
@@ -58,6 +65,34 @@ readDeps codependencies visited0 (f : fs) = do
 qnameToFilename :: QName -> FilePath
 qnameToFilename (Name parts)       = concat parts ++ ".la"
 qnameToFilename (Qualified q name) = q ++ "/" ++ qnameToFilename name
+
+checkModuleNameMatches :: Maybe QName -> FilePath -> [Token]
+                       -> IO (Either Error ())
+checkModuleNameMatches Nothing      filename _    = return $ Right ()
+checkModuleNameMatches (Just qname) filename toks
+  | null toks || not (isModule (head toks))
+              = missingName (getPosition toks)
+  | otherwise =
+      case readQName (tail toks) of
+        Nothing          -> missingName (getPosition toks)
+        Just (qname', _) ->
+          if qname == qname'
+           then return $ Right ()
+           else return $
+                  Left (Error ReaderErrorModuleNameMismatch
+                              (getPosition toks)
+                              ("Module name mismatch.\n" ++
+                               "Expected: \"" ++ show qname ++ "\"\n" ++
+                               "Got     : \"" ++ show qname' ++ "\"\n"))
+  where
+    getPosition []      = unknownPosition
+    getPosition (t : _) = tokenStartPos t
+    missingName pos =
+      return $
+        Left (Error ReaderErrorModuleNameMismatch
+                    pos
+                    ("File \"" ++ filename ++ "\" misses module name.\n" ++
+                     "Expected module name: \"" ++ show qname ++ "\"."))
 
 collectDependencies :: [Token] -> [QName]
 collectDependencies []                        = []

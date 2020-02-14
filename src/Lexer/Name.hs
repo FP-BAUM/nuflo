@@ -35,6 +35,7 @@ isWellFormedName s = case splitParts s of
 data QName =
     Name [String]
   | Qualified String QName
+  deriving Eq
 
 instance Show QName where
   show (Name ss)       = concat ss
