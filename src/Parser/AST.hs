@@ -63,7 +63,6 @@ class EraseAnnotations f where
 
 instance EraseAnnotations AnnExpr where
   eraseAnnotations (EVar _ q)     = EVar () q
-  --eraseAnnotations (EApp _ e1 e2) = EApp () (eraseAnnotations e1)
-  --                                          (eraseAnnotations e2)
-  --TODO
+  eraseAnnotations (EApp _ e1 e2) = EApp () (eraseAnnotations e1)
+                                            (eraseAnnotations e2)
 

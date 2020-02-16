@@ -8,6 +8,7 @@ import Lexer.Token(Token(..), TokenType(..))
 import Parser.AST(Program(..),
                   AnnDeclaration(..), Declaration,
                   AnnExpr(..), Expr)
+import Parser.ModuleSystem()
 
 parse :: [Token] -> Either Error Program
 parse tokens = evalFS parseM initialState

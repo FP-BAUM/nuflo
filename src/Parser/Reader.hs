@@ -42,8 +42,8 @@ readDep codependencies visited mQName filename = do
           (visited1, depTokens) <- doRead
           return $ (visited1, depTokens ++ moduleTokens)
   where
-    codependencies' = codependencies `S.union` S.fromList [filename]
-    visited'        = visited `S.union` S.fromList [filename]
+    codependencies' = S.insert filename codependencies
+    visited'        = S.insert filename visited
 
 readDeps :: Files -> Files -> [QName] -> IO (Either Error (Files, [Token]))
 readDeps codependencies visited0 [] =

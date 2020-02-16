@@ -1,5 +1,5 @@
 
-module Lexer.Name(isWellFormedName, QName(..), readName) where
+module Lexer.Name(isWellFormedName, QName(..), readName, qualify) where
 
 import Lexer.Categories(isKeyword, isInteger)
 
@@ -35,7 +35,7 @@ isWellFormedName s = case splitParts s of
 data QName =
     Name [String]
   | Qualified String QName
-  deriving Eq
+  deriving (Eq, Ord)
 
 instance Show QName where
   show (Name ss)       = concat ss
@@ -45,4 +45,8 @@ readName :: String -> QName
 readName s
   | isWellFormedName s = Name (splitParts s)
   | otherwise          = error "Name is not well-formed."
+
+qualify :: QName -> String -> QName
+qualify (Name parts)          id = Qualified (concat parts) (readName id)
+qualify (Qualified mid qname) id = Qualified mid (qualify qname id)
 
