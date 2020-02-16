@@ -3,8 +3,10 @@
 
 BINARY=lambda-unif
 
+GHCOPTS=-fwarn-incomplete-patterns
+
 build :
-	ghc -isrc/ -itest/ --make app/Main.hs -o ${BINARY}
+	ghc -isrc/ -itest/ $(GHCOPTS) --make app/Main.hs -o ${BINARY}
 
 test : build
 	./${BINARY} -T

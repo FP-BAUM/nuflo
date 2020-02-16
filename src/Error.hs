@@ -13,6 +13,7 @@ data ErrorType =
     LexerErrorInvalidCharacter
   | LexerErrorMalformedName
   | LexerErrorLayout
+  | LexerErrorUnclosedComment
   | ReaderErrorCyclicDependencies
   | ReaderErrorModuleNameMismatch
   | ParseError

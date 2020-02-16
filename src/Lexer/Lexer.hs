@@ -55,11 +55,13 @@ tokenizeM (c : _)                      =
         ("Invalid character: '" ++ show c ++ "'.")
 
 ignoreWhitespace :: String -> M [Token]
+ignoreWhitespace [] = tokenizeM []
 ignoreWhitespace (c : cs) = do
   consumeChar c
   tokenizeM cs
 
 ignoreSingleLineComment :: String -> M [Token]
+ignoreSingleLineComment [] = tokenizeM []
 ignoreSingleLineComment ('\n' : cs) = do
   consumeChar '\n'
   tokenizeM cs
@@ -70,6 +72,8 @@ ignoreSingleLineComment (c : cs)    = do
 ignoreMultiLineComment :: String -> M [Token]
 ignoreMultiLineComment cs = rec 0 cs
   where
+    rec n [] = failM LexerErrorUnclosedComment
+                     "Unclosed multiline comment."
     rec n ('{' : '-' : cs) = do
       consumeString "{-"
       rec (n + 1) cs
@@ -83,6 +87,7 @@ ignoreMultiLineComment cs = rec 0 cs
       rec n cs
 
 readPunctuation :: String -> M [Token]
+readPunctuation []       = error "No punctuation."
 readPunctuation (c : cs) = do
   start <- currentPosition
   consumeChar c

@@ -5,38 +5,67 @@ import Test(TestSuite(..), Test(..))
 
 import Error(Error(..), ErrorType(..))
 import Lexer.Lexer(tokenize)
-import Parser.AST(Program(..))
+import Lexer.Name(QName(..))
+import Parser.AST(Program(..), AnnDeclaration(..), AnnExpr(..), Expr,
+                  eraseAnnotations)
 import Parser.Parser(parse)
 
-test :: String -> String -> Either ErrorType Program -> Test
-test description source expectedResult =
+testProgram :: String -> String -> Either ErrorType Program -> Test
+testProgram description source expected =
   TestCase description 
            (normalizeResult (tokenize "test" source >>= parse))
-           expectedResult
+           expected
   where
     normalizeResult (Left  e) = Left (errorType e)
     normalizeResult (Right x) = Right x
 
-testOK :: String -> String -> Program -> Test
-testOK description source expected =
-  test description source (Right expected)
+testProgramOK :: String -> String -> Program -> Test
+testProgramOK description source expected =
+  testProgram description source (Right expected)
 
-testError :: String -> String -> ErrorType -> Test
-testError description source expected =
-  test description source (Left expected)
+testProgramError :: String -> String -> ErrorType -> Test
+testProgramError description source expected =
+  testProgram description source (Left expected)
+
+----
+
+testExpr :: String -> String -> Either ErrorType (AnnExpr ()) -> Test
+testExpr description source expected =
+  TestCase description 
+           (normalizeResult (tokenize "test" source >>= parse))
+           expected
+  where
+    normalizeResult (Left  e) = Left (errorType e)
+    normalizeResult (Right p) =
+      Right (eraseAnnotations (declRHS (last (programDeclarations p))))
+
+testExprOK :: String -> String -> AnnExpr () -> Test
+testExprOK description source expected =
+  testExpr description source (Right expected)
+
+testExprError :: String -> String -> ErrorType -> Test
+testExprError description source expected =
+  testExpr description source (Left expected)
+
+----
 
 tests :: TestSuite
 tests = TestSuite "PARSER" [
 
-  testError "Expect module name after module keyword"
-            "module module" 
-            ParseError,
+  testProgramError "Expect module name after module keyword"
+     "module module" 
+     ParseError,
+
+  -- Expressions
+  testExprOK "Variable"
+     "x = y" 
+     (EVar () (Name ["y"])),
 
   -- Empty program
-  testOK "Empty program"
-         "" 
-         Program {
-           programDeclarations = []
-         }
+  testProgramOK "Empty program"
+    "" 
+    Program {
+      programDeclarations = []
+    }
   ]
 

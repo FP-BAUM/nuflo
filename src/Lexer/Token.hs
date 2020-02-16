@@ -18,9 +18,14 @@ data TokenType =
   | T_Id String
   -- Keywords
   | T_Class
+  | T_Colon
   | T_Data
+  | T_Eq
   | T_Import
   | T_In
+  | T_Infix
+  | T_Infixl
+  | T_Infixr
   | T_Instance
   | T_Lambda
   | T_Let
