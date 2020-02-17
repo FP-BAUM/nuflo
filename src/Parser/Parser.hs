@@ -1,21 +1,31 @@
 module Parser.Parser(parse) where
 
-import Error(Error(..), ErrorType(..))
+import Error(Error(..), ErrorType(..), ErrorMessage)
 import Position(Position(..), unknownPosition)
-import FailState(FailState, getFS, putFS, evalFS, failFS)
+import FailState(FailState, getFS, modifyFS, putFS, evalFS, failFS)
 import Lexer.Name(QName(..), readName)
 import Lexer.Token(Token(..), TokenType(..))
-import Parser.AST(Program(..),
-                  AnnDeclaration(..), Declaration,
-                  AnnExpr(..), Expr)
-import Parser.ModuleSystem()
+import Parser.AST(
+         Program(..), AnnDeclaration(..), Declaration, AnnExpr(..), Expr,
+         exprHeadVariable
+       )
+import Parser.ModuleSystem(
+         Module,
+           emptyModule, addSubmodule, exportAllNamesFromModule, exportNames,
+           declareName,
+         Context,
+           emptyContext, resolveName, importAllNamesFromModule, importNames
+       )
 
 parse :: [Token] -> Either Error Program
 parse tokens = evalFS parseM initialState
-  where initialState = ParserState {
-                         stateInput    = tokens,
-                         stateLocation = tokensLocation tokens unknownLocation
-                       }
+  where initialState =
+          ParserState {
+            stateInput       = tokens,
+            stateLocation    = tokensLocation tokens unknownLocation,
+            stateRootModule  = emptyModule,
+            stateNameContext = error "Empty name context."
+          }
 
 ---- Location
 
@@ -33,7 +43,7 @@ makeLocation p1 p2 = Location p1 p2 True
 
 locationPosition :: Location -> Position
 locationPosition (Location p _ True)  = p
-locationPosition (Location _ p False) = p
+locationPosition (Location p _ False) = p
 
 locationAtEnd :: Location -> Location
 locationAtEnd (Location p1 p2 _)  = Location p1 p2 False
@@ -41,8 +51,10 @@ locationAtEnd (Location p1 p2 _)  = Location p1 p2 False
 ---- Parser monad
 
 data ParserState = ParserState {
-                     stateInput    :: [Token],
-                     stateLocation :: Location
+                     stateInput       :: [Token],
+                     stateLocation    :: Location,
+                     stateRootModule  :: Module,
+                     stateNameContext :: Context
                    }
 
 type M = FailState ParserState
@@ -69,6 +81,13 @@ peekType :: M TokenType
 peekType = do
   tok <- peek
   return $ tokenType tok
+
+peekIsRParen :: M Bool
+peekIsRParen = do
+  t <- peekType
+  case t of
+    T_RParen -> return True
+    _        -> return False
 
 getToken :: M Token
 getToken = do
@@ -103,6 +122,62 @@ failM errorType msg = do
   pos <- currentPosition
   failFS (Error errorType pos msg)
 
+getRootModule :: M Module
+getRootModule = do
+  state <- getFS
+  return $ stateRootModule state
+
+modifyRootModule :: (Module -> Either ErrorMessage Module) -> M ()
+modifyRootModule f = do
+  state <- getFS
+  case f (stateRootModule state) of
+    Left errmsg ->
+      failM ModuleSystemError errmsg
+    Right stateRootModule' ->
+      putFS (state { stateRootModule = stateRootModule' })
+
+modifyNameContext :: (Context -> Either ErrorMessage Context) -> M ()
+modifyNameContext f = do
+  state <- getFS
+  case f (stateNameContext state) of
+    Left errmsg ->
+      failM ModuleSystemError errmsg
+    Right stateNameContext' ->
+      putFS (state { stateNameContext = stateNameContext' })
+
+enterModule :: QName -> M ()
+enterModule moduleName = do
+  state <- getFS
+  case addSubmodule moduleName (stateRootModule state) of
+    Left  errmsg ->
+      failM ModuleSystemError errmsg
+    Right stateRootModule' ->
+      putFS (state {
+        stateRootModule  = stateRootModule',
+        stateNameContext = emptyContext moduleName
+      })
+
+exportAllNamesFromModuleM :: QName -> M ()
+exportAllNamesFromModuleM moduleName =
+  modifyRootModule (exportAllNamesFromModule moduleName)
+
+exportNamesM :: QName -> [String] -> M ()
+exportNamesM moduleName exportedNames =
+  modifyRootModule (exportNames moduleName exportedNames)
+
+declareQNameM :: QName -> M ()
+declareQNameM qname = modifyRootModule (declareName qname)
+
+importAllNamesFromModuleM :: QName -> M ()
+importAllNamesFromModuleM moduleName = do
+  rootModule <- getRootModule
+  modifyNameContext (importAllNamesFromModule moduleName rootModule)
+
+importNamesM :: QName -> [(String, String)] -> M ()
+importNamesM moduleName renamings = do
+  rootModule <- getRootModule
+  modifyNameContext (importNames moduleName renamings rootModule)
+
 ---- Parser
 
 parseM :: M Program
@@ -130,22 +205,49 @@ parseModule :: M [Declaration]
 parseModule = do
   match T_Module
   qname <- parseQName
+  enterModule qname
+  parseModuleExports qname
   match T_Where
-  --TODO: enter module
   match T_LBrace
-  --TODO: read imports
   decls <- parseDeclarations
   match T_RBrace
   return decls
 
 parseBareModule :: M [Declaration]
 parseBareModule = do
-  --TODO: enter "Main" module
+  enterModule (Name "Main") -- Export all names
   match T_LBrace
-  --TODO: read imports
   decls <- parseDeclarations
   match T_RBrace
   return decls
+
+parseSequence :: M Bool -> M () -> M a -> M [a]
+parseSequence checkTermination matchSeparator parseElement = do
+    b <- checkTermination
+    if b
+     then return []
+     else rec
+  where
+    rec = do
+      elem  <- parseElement
+      b     <- checkTermination
+      if b
+       then return [elem]
+       else do matchSeparator
+               elems <- rec
+               return (elem : elems)
+
+parseModuleExports :: QName -> M ()
+parseModuleExports moduleName = do
+  t <- peekType
+  case t of
+    T_LParen -> do
+      match T_LParen
+      exportedNames <- parseSequence peekIsRParen (match T_Semicolon) parseId 
+      match T_RParen
+      exportNamesM moduleName exportedNames
+    _ ->
+      exportAllNamesFromModuleM moduleName
 
 parseQName :: M QName
 parseQName = do
@@ -158,6 +260,14 @@ parseQName = do
       return $ Qualified id qname
     _ ->
       return $ readName id
+
+parseAndResolveQName :: M QName
+parseAndResolveQName = do
+  qname <- parseQName
+  state <- getFS
+  case resolveName (stateRootModule state) (stateNameContext state) qname of
+    Left  errmsg -> failM ModuleSystemError errmsg
+    Right qname' -> return qname'
 
 parseId :: M String
 parseId = do
@@ -175,27 +285,56 @@ parseDeclarations = do
   case t of
     T_RBrace -> return []
     _        -> do
-      d <- parseDeclaration
-      t' <- peekType
+      ds1 <- parseDeclaration
+      t'  <- peekType
       case t' of
         T_Semicolon -> do
-          ds <- parseDeclarations
-          return (d : ds)
-        T_RBrace    -> return [d]
+          match T_Semicolon
+          ds2 <- parseDeclarations
+          return (ds1 ++ ds2)
+        T_RBrace    -> return ds1
         _           -> failM ParseError
                              ("Expected \";\" or \"}\".\n" ++
                               "Got: " ++ show t' ++ ".")
 
-parseDeclaration :: M Declaration --TODO
+parseDeclaration :: M [Declaration]
 parseDeclaration = do
   t <- peekType
   case t of
-    T_Data -> parseDataDeclaration
+    T_Import -> do parseImport
+                   return []
+    T_Data   -> do d <- parseDataDeclaration
+                   return [d]
     -- TODO: other kinds of declarations
-    T_Id _ -> parseTypeSignatureOrValueDeclaration
-    _      -> failM ParseError
-                     ("Expected a declaration.\n" ++
-                      "Got: " ++ show t ++ ".")
+    T_Id _   -> do d <- parseTypeSignatureOrValueDeclaration
+                   return [d]
+    _        -> failM ParseError
+                       ("Expected a declaration.\n" ++
+                        "Got: " ++ show t ++ ".")
+
+parseImport :: M ()
+parseImport = do
+  match T_Import
+  moduleName <- parseQName
+  t <- peekType
+  case t of
+    T_LParen -> do match T_LParen
+                   renamings  <- parseSequence peekIsRParen
+                                               (match T_Semicolon)
+                                               parseRenameId
+                   importNamesM moduleName renamings
+                   match T_RParen
+    _ -> importAllNamesFromModuleM moduleName
+
+parseRenameId :: M (String, String)
+parseRenameId = do
+  id <- parseId
+  t <- peekType
+  case t of
+    T_As -> do match T_As
+               alias <- parseId
+               return (id, alias)
+    _ -> return (id, id)
 
 parseDataDeclaration :: M Declaration   --TODO
 parseDataDeclaration = return undefined --TODO
@@ -204,6 +343,7 @@ parseTypeSignatureOrValueDeclaration :: M Declaration --TODO
 parseTypeSignatureOrValueDeclaration = do
   pos <- currentPosition
   expr1 <- parseExpr
+  declareQNameM (exprHeadVariable expr1)
   --TODO: if expr is single variable followed by DOT, parse type signature
   match T_Eq
   expr2 <- parseExpr
@@ -213,9 +353,12 @@ parseExpr :: M Expr
 parseExpr = do
   t <- peekType
   case t of
-    T_Id _ -> do pos   <- currentPosition
-                 qname <- parseQName
-                 return $ EVar pos qname
+    T_Id _  -> do pos    <- currentPosition
+                  qname  <- parseAndResolveQName
+                  return $ EVar pos qname
+    T_Int n -> do pos    <- currentPosition
+                  getToken
+                  return $ EInt pos n
     -- TODO: other kinds of expressions
     _      -> failM ParseError
                      ("Expected an expression.\n" ++

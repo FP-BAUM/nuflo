@@ -3,7 +3,7 @@ module Parser.AST(
          Program(..),
          AnnDeclaration(..), Declaration,
          AnnExpr(..), Expr,
-         eraseAnnotations
+         eraseAnnotations, exprHeadVariable
        ) where
 
 import Position(Position)
@@ -49,6 +49,7 @@ data AnnConstructorDeclaration a =
 -- Annotated expression
 data AnnExpr a =
     EVar a QName                      -- variable
+  | EInt a Integer                    -- integer constant
   | EApp a (AnnExpr a) (AnnExpr a)    -- application
   deriving (Eq, Show)
 
@@ -63,6 +64,14 @@ class EraseAnnotations f where
 
 instance EraseAnnotations AnnExpr where
   eraseAnnotations (EVar _ q)     = EVar () q
+  eraseAnnotations (EInt _ n)     = EInt () n
   eraseAnnotations (EApp _ e1 e2) = EApp () (eraseAnnotations e1)
                                             (eraseAnnotations e2)
+
+--
+
+exprHeadVariable :: AnnExpr a -> QName
+exprHeadVariable (EVar _ q)    = q
+exprHeadVariable (EApp _ e1 _) = exprHeadVariable e1
+exprHeadVariable _             = error "Expression has no head variable."
 

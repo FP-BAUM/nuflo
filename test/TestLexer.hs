@@ -53,11 +53,11 @@ tests = TestSuite "LEXER" [
 
   -- Keywords
   testOK "Keywords"
-    "class : data = import in infix infixl infixr \
+    "as class : data = import in infix infixl infixr \
     \ instance \\ let{} module where{}"
     [
       T_LBrace,
-      T_Class, T_Colon, T_Data, T_Eq, T_Import, T_In,
+      T_As, T_Class, T_Colon, T_Data, T_Eq, T_Import, T_In,
       T_Infix, T_Infixl, T_Infixr, T_Instance, T_Lambda,
       T_Let, T_LBrace, T_RBrace, T_Module,
       T_Where, T_LBrace, T_RBrace,

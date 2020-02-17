@@ -22,6 +22,7 @@ punctuation = M.fromList [
 
 keywords :: M.Map String TokenType
 keywords = M.fromList [
+  ("as", T_As),
   ("class", T_Class),
   (":", T_Colon),
   ("data", T_Data),

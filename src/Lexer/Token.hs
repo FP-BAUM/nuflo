@@ -17,6 +17,7 @@ data TokenType =
   | T_Int Integer
   | T_Id String
   -- Keywords
+  | T_As
   | T_Class
   | T_Colon
   | T_Data

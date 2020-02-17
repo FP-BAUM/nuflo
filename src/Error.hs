@@ -19,6 +19,7 @@ data ErrorType =
   | ReaderErrorCyclicDependencies
   | ReaderErrorModuleNameMismatch
   | ParseError
+  | ModuleSystemError
   deriving (Eq, Show)
 
 errorAtUnknown :: ErrorType -> String -> Error

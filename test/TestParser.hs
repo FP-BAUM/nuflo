@@ -49,9 +49,11 @@ testExprError description source expected =
 
 ----
 
+qmain :: String -> QName
+qmain x = Qualified "Main" (Name x)
+
 tests :: TestSuite
 tests = TestSuite "PARSER" [
-
   testProgramError "Expect module name after module keyword"
      "module module" 
      ParseError,
@@ -59,7 +61,13 @@ tests = TestSuite "PARSER" [
   -- Expressions
   testExprOK "Variable"
      "x = y" 
-     (EVar () (Name ["y"])),
+     (EVar () (qmain "y")),
+
+  testExprOK "Integer constant"
+     "x = 42" 
+     (EInt () 42),
+
+  --TODO: qualified
 
   -- Empty program
   testProgramOK "Empty program"

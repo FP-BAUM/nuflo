@@ -33,20 +33,20 @@ isWellFormedName s = case splitParts s of
 
 -- Qualified name
 data QName =
-    Name [String]
+    Name String
   | Qualified String QName
   deriving (Eq, Ord)
 
 instance Show QName where
-  show (Name ss)       = concat ss
+  show (Name s)        = s
   show (Qualified q s) = q ++ "." ++ show s
 
 readName :: String -> QName
 readName s
-  | isWellFormedName s = Name (splitParts s)
+  | isWellFormedName s = Name s
   | otherwise          = error "Name is not well-formed."
 
 qualify :: QName -> String -> QName
-qualify (Name parts)          id = Qualified (concat parts) (readName id)
-qualify (Qualified mid qname) id = Qualified mid (qualify qname id)
+qualify (Name id)            id' = Qualified id (readName id')
+qualify (Qualified id qname) id' = Qualified id (qualify qname id')
 

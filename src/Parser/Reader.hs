@@ -59,7 +59,7 @@ readDeps codependencies visited0 (q : qs) = do
         Right (visited2, toks2) -> return $ Right (visited2, toks1 ++ toks2)
 
 qnameToFilename :: QName -> FilePath
-qnameToFilename (Name parts)       = concat parts ++ ".la"
+qnameToFilename (Name id)          = id ++ ".la"
 qnameToFilename (Qualified q name) = q ++ "/" ++ qnameToFilename name
 
 checkModuleNameMatches :: Maybe QName -> FilePath -> [Token]
