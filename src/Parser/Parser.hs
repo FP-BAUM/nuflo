@@ -23,57 +23,32 @@ parse tokens = evalFS parseM initialState
   where initialState =
           ParserState {
             stateInput       = tokens,
-            stateLocation    = tokensLocation tokens unknownLocation,
+            statePosition    = tokensPosition tokens unknownPosition,
             stateRootModule  = emptyModule,
             stateNameContext = error "Empty name context."
           }
-
----- Location
-
-data Location = Location {
-                  locationStartPos :: Position,
-                  locationEndPos   :: Position,
-                  locationFlag     :: Bool      -- start or end?
-                }
-
-unknownLocation :: Location
-unknownLocation = Location unknownPosition unknownPosition True
-
-makeLocation :: Position -> Position -> Location
-makeLocation p1 p2 = Location p1 p2 True
-
-locationPosition :: Location -> Position
-locationPosition (Location p _ True)  = p
-locationPosition (Location p _ False) = p
-
-locationAtEnd :: Location -> Location
-locationAtEnd (Location p1 p2 _)  = Location p1 p2 False
 
 ---- Parser monad
 
 data ParserState = ParserState {
                      stateInput       :: [Token],
-                     stateLocation    :: Location,
+                     statePosition    :: Position,
                      stateRootModule  :: Module,
                      stateNameContext :: Context
                    }
 
 type M = FailState ParserState
 
-tokensLocation :: [Token] -> Location -> Location
-tokensLocation tokens elseLoc =
+tokensPosition :: [Token] -> Position -> Position
+tokensPosition tokens elsePos =
   if null tokens
-   then elseLoc
-   else makeLocation (tokenStartPos tok) (tokenEndPos tok)
-  where tok = head tokens
+   then elsePos
+   else tokenStartPos (head tokens)
 
 peek :: M Token
 peek = do
   state <- getFS
   pos   <- currentPosition
-  putFS (state {
-           stateLocation = locationAtEnd (stateLocation state)
-         })
   if null (stateInput state)
    then return $ Token pos pos T_EOF
    else return $ head (stateInput state) 
@@ -99,7 +74,7 @@ getToken = do
    else let (tok : toks) = stateInput state in do
           putFS (state {
                    stateInput    = toks,
-                   stateLocation = tokensLocation toks (stateLocation state)
+                   statePosition = tokensPosition toks (statePosition state)
                  })
           return tok
 
@@ -116,7 +91,7 @@ match t = do
 currentPosition :: M Position
 currentPosition = do
   state <- getFS
-  return $ locationPosition (stateLocation state)
+  return $ statePosition state
 
 failM :: ErrorType -> String -> M a
 failM errorType msg = do
