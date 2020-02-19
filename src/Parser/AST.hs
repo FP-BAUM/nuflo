@@ -3,7 +3,7 @@ module Parser.AST(
          Program(..),
          AnnDeclaration(..), Declaration,
          AnnExpr(..), Expr,
-         eraseAnnotations, exprHeadVariable
+         eraseAnnotations, exprIsVariable, exprHeadVariable
        ) where
 
 import Position(Position)
@@ -69,6 +69,10 @@ instance EraseAnnotations AnnExpr where
                                             (eraseAnnotations e2)
 
 --
+
+exprIsVariable :: AnnExpr a -> Bool
+exprIsVariable (EVar _ _) = True
+exprIsVariable _          = False
 
 exprHeadVariable :: AnnExpr a -> QName
 exprHeadVariable (EVar _ q)    = q

@@ -1,0 +1,80 @@
+
+-------------------------------------------------------------
+-------------------------------------------------------------
+
+Module syntax:
+
+  module A where        -- export all from A
+  module A(a; b) where  -- export selected names from A
+  import A              -- import all from A
+  import A(a; b as bb)  -- import selected names from A
+
+To use qualified imports, do:
+
+  import A()
+  ... A.a ...
+
+-------------------------------------------------------------
+-- GRAMMAR
+-------------------------------------------------------------
+
+<program> ::= MODULE <qname> <moduleExports> WHERE
+                LBRACE <moduleImports> <declaration*> RBRACE
+
+<qname> ::= ID
+          | ID DOT <qname>
+
+-------------------------------------------------------------
+
+<moduleExports> ::= /*EMPTY*/              /* Export all names */
+                  | LPAREN <id*> RPAREN    /* Export selected names */
+
+<id*> ::= /*EMPTY*/
+        | ID SEMICOLON <id+> 
+
+<id+> ::= ID
+        | ID SEMICOLON <id+>
+
+-------------------------------------------------------------
+
+<moduleImports> ::= /*EMPTY*/                   /* Import all public names */
+                  | LPAREN <renaming*> RPAREN   /* Import selected names */
+
+<renaming*> ::= /*EMPTY*/
+              | <renaming> SEMICOLON <renaming+> 
+
+<renaming+> ::= <renaming>
+              | <renaming> SEMICOLON <renaming+>
+
+<renaming> ::= ID
+             | ID AS ID
+
+-------------------------------------------------------------
+
+<declaration*> ::= /*EMPTY*/
+                 | <declaration+>
+
+<declaration+> ::= <declaration>
+                 | <declaration> SEMICOLON <declaration+>
+
+<declaration> ::=
+    /* Import*/
+  | IMPORT <qname> <moduleImports>
+
+    /* Fixity declaration */
+    <fixity> INT ID
+  |
+    /* Data declaration */
+    DATA <expr> WHERE LBRACE ***TODO*** RBRACE
+  |
+    /* Type declaration */
+    TYPE <expr> EQ <expr>
+  |
+    /* Type signature */
+    ID COLON <expr> 
+  |
+    /* Value declaration */
+    <expr> EQ <expr>
+
+<fixity> ::= INFIXL | INFIXR | INFIX
+

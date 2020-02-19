@@ -3,7 +3,7 @@ module Parser.ModuleSystem(
            emptyModule, addSubmodule, declareName,
            exportAllNamesFromModule, exportNames,
          Context,
-           emptyContext, 
+           emptyContext, contextCurrentModuleName,
            importAllNamesFromModule, importNames,
            resolveName
        ) where

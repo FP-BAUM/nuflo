@@ -1,5 +1,7 @@
 
-module Lexer.Name(isWellFormedName, QName(..), readName, qualify) where
+module Lexer.Name(
+         isWellFormedName, QName(..), readName, qualify, unqualifiedName
+       ) where
 
 import Lexer.Categories(isKeyword, isInteger)
 
@@ -49,4 +51,8 @@ readName s
 qualify :: QName -> String -> QName
 qualify (Name id)            id' = Qualified id (readName id')
 qualify (Qualified id qname) id' = Qualified id (qualify qname id')
+
+unqualifiedName :: QName -> String
+unqualifiedName (Name id)           = id
+unqualifiedName (Qualified _ qname) = unqualifiedName qname
 

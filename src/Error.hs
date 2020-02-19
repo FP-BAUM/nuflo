@@ -18,6 +18,7 @@ data ErrorType =
   | LexerErrorUnclosedComment
   | ReaderErrorCyclicDependencies
   | ReaderErrorModuleNameMismatch
+  | ReaderErrorMissingFile
   | ParseError
   | ModuleSystemError
   deriving (Eq, Show)

@@ -3,6 +3,7 @@ module Parser.Reader(readSource) where
 
 -- Read and tokenize a file, including its dependencies.
 
+import System.Directory(doesFileExist)
 import qualified Data.Set as S
 
 import Position(unknownPosition)
@@ -30,17 +31,23 @@ readDep codependencies _ _ filename
 readDep _ visited _ filename
    | S.member filename visited = return $ Right (visited, [])
 readDep codependencies visited mQName filename = do
-    source <- readFile filename
-    case tokenize filename source of
-      Left  e -> return $ Left e
-      Right moduleTokens -> do
-        doCheck <- checkModuleNameMatches mQName filename moduleTokens
-        doRead  <- readDeps codependencies' visited'
-                            (collectDependencies moduleTokens)
-        return $ do
-          doCheck
-          (visited1, depTokens) <- doRead
-          return $ (visited1, depTokens ++ moduleTokens)
+    fileExists <- doesFileExist filename
+    if not fileExists
+     then return $ Left (errorAtUnknown
+                           ReaderErrorMissingFile
+                           ("File does not exist: " ++ show filename))
+     else do
+      source <- readFile filename
+      case tokenize filename source of
+        Left  e -> return $ Left e
+        Right moduleTokens -> do
+          doCheck <- checkModuleNameMatches mQName filename moduleTokens
+          doRead  <- readDeps codependencies' visited'
+                              (collectDependencies moduleTokens)
+          return $ do
+            doCheck
+            (visited1, depTokens) <- doRead
+            return $ (visited1, depTokens ++ moduleTokens)
   where
     codependencies' = S.insert filename codependencies
     visited'        = S.insert filename visited

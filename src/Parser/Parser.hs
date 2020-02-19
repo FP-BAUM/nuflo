@@ -3,18 +3,19 @@ module Parser.Parser(parse) where
 import Error(Error(..), ErrorType(..), ErrorMessage)
 import Position(Position(..), unknownPosition)
 import FailState(FailState, getFS, modifyFS, putFS, evalFS, failFS)
-import Lexer.Name(QName(..), readName)
+import Lexer.Name(QName(..), readName, qualify, unqualifiedName)
 import Lexer.Token(Token(..), TokenType(..))
 import Parser.AST(
          Program(..), AnnDeclaration(..), Declaration, AnnExpr(..), Expr,
-         exprHeadVariable
+         exprIsVariable, exprHeadVariable
        )
 import Parser.ModuleSystem(
          Module,
            emptyModule, addSubmodule, exportAllNamesFromModule, exportNames,
            declareName,
          Context,
-           emptyContext, resolveName, importAllNamesFromModule, importNames
+           emptyContext, contextCurrentModuleName,
+           resolveName, importAllNamesFromModule, importNames
        )
 
 parse :: [Token] -> Either Error Program
@@ -127,6 +128,16 @@ getRootModule = do
   state <- getFS
   return $ stateRootModule state
 
+getNameContext :: M Context
+getNameContext = do
+  state <- getFS
+  return $ stateNameContext state
+
+getCurrentModuleName :: M QName
+getCurrentModuleName = do
+  nameContext <- getNameContext
+  return $ contextCurrentModuleName nameContext
+
 modifyRootModule :: (Module -> Either ErrorMessage Module) -> M ()
 modifyRootModule f = do
   state <- getFS
@@ -166,7 +177,14 @@ exportNamesM moduleName exportedNames =
   modifyRootModule (exportNames moduleName exportedNames)
 
 declareQNameM :: QName -> M ()
-declareQNameM qname = modifyRootModule (declareName qname)
+declareQNameM qname = do
+  moduleName <- getCurrentModuleName
+  let uname = unqualifiedName qname in
+    if qname == qualify moduleName uname
+     then modifyRootModule (declareName qname)
+     else failM ModuleSystemError
+                ("Declaration of name \"" ++ uname ++ "\"" ++
+                 " shadows \"" ++ show qname ++ "\".")
 
 importAllNamesFromModuleM :: QName -> M ()
 importAllNamesFromModuleM moduleName = do
@@ -339,15 +357,29 @@ parseRenameId = do
 parseDataDeclaration :: M Declaration   --TODO
 parseDataDeclaration = return undefined --TODO
 
-parseTypeSignatureOrValueDeclaration :: M Declaration --TODO
+parseTypeSignatureOrValueDeclaration :: M Declaration
 parseTypeSignatureOrValueDeclaration = do
   pos <- currentPosition
-  expr1 <- parseExpr
-  declareQNameM (exprHeadVariable expr1)
-  --TODO: if expr is single variable followed by DOT, parse type signature
+  expr <- parseExpr
+  declareQNameM (exprHeadVariable expr)
+  t <- peekType
+  case t of
+    T_Colon | exprIsVariable expr -> parseTypeSignature pos expr
+    _ -> parseValueDeclaration pos expr
+
+parseTypeSignature :: Position -> Expr -> M Declaration
+parseTypeSignature pos (EVar _ name) = do
+  match T_Colon
+  typ <- parseExpr
+  return $ TypeSignature pos name typ
+parseTypeSignature _ _ =
+  error "Expression leading type declaration must be a variable."
+
+parseValueDeclaration :: Position -> Expr -> M Declaration
+parseValueDeclaration pos lhs = do
   match T_Eq
-  expr2 <- parseExpr
-  return (ValueDeclaration pos expr1 expr2)
+  rhs <- parseExpr
+  return $ ValueDeclaration pos lhs rhs
 
 parseExpr :: M Expr
 parseExpr = do
