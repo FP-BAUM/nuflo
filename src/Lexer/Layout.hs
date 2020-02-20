@@ -1,11 +1,17 @@
 module Lexer.Layout(layout) where
 
+import FailState(FailState, getFS, putFS, failFS, evalFS)
+
 import Position(Position(..), unknownPosition)
 import Error(Error(..), ErrorType(..))
 import Lexer.Token(Token(..), TokenType(..), isLBrace, isRBrace)
 
 layout :: [Token] -> Either Error [Token]
-layout tokens = lay (prepare tokens) []
+layout tokens = evalFS (lay (prepare tokens) []) initialPosition
+  where
+    initialPosition
+      | null tokens = unknownPosition
+      | otherwise   = tokenStartPos (head tokens)
 
 ---- Implementation of the layout algorithm,
 ---- following Haskell '98 standard (sec. 9.3).
@@ -67,44 +73,61 @@ prepare ts@(t : _) =
 
 -- Layout algorithm
 
-newToken :: [LToken] -> TokenType -> Token
-newToken []         x = Token unknownPosition unknownPosition x
-newToken (A _ : ts) x = newToken ts x
-newToken (B _ : ts) x = newToken ts x 
-newToken (T t : ts) x = Token (tokenStartPos t) (tokenEndPos t) x 
+type LayoutState = Position
+type M = FailState LayoutState
 
-lay :: [LToken] -> [Integer] -> Either Error [Token]
+putPos :: Token -> M ()
+putPos t = putFS (tokenStartPos t)
+
+newToken :: TokenType -> M Token
+newToken x = do
+  pos <- getFS
+  return $ Token pos pos x
+
+lay :: [LToken] -> [Integer] -> M [Token]
 lay (A n : ts) (m : ms)
   | m == n               = do ls <- lay ts (m : ms)
-                              return (newToken ts T_Semicolon : ls)
+                              tok <- newToken T_Semicolon
+                              return (tok : ls)
   | n < m                = do ls <- lay (A n : ts) ms
-                              return (newToken ts T_RBrace : ls)
+                              tok <- newToken T_RBrace 
+                              return (tok : ls)
 lay (A _ : ts) ms        = lay ts ms
 lay (B n : ts) (m : ms)
   | n > m                = do ls <- lay ts (n : m : ms)
-                              return (newToken ts T_LBrace : ls)
+                              tok <- newToken T_LBrace 
+                              return (tok : ls)
 lay (B n : ts) []
   | n > 0                = do ls <- lay ts [n]
-                              return (newToken ts T_LBrace : ls)
+                              tok <- newToken T_LBrace 
+                              return (tok : ls)
 lay (B n : ts) ms        = do ls <- lay (A n : ts) ms
-                              return (newToken ts T_LBrace :
-                                      newToken ts T_RBrace : ls)
+                              tok1 <- newToken T_LBrace
+                              tok2 <- newToken T_RBrace
+                              return (tok1 : tok2 : ls)
 lay (T t : ts) (0 : ms)
-  | isRBrace t           = do ls <- lay ts ms
+  | isRBrace t           = do putPos t
+                              ls <- lay ts ms
                               return (t : ls)
 lay (T t : ts) ms 
-  | isRBrace t           = Left (Error LexerErrorLayout (tokenStartPos t)
-                                       "Explicit close brace matches \
-                                       \implicit open brace.")
+  | isRBrace t           = do putPos t
+                              failFS (Error LexerErrorLayout (tokenStartPos t)
+                                        "Explicit close brace matches \
+                                        \implicit open brace.")
 lay (T t : ts) ms
-  | isLBrace t           = do ls <- lay ts (0 : ms)
-                              return (newToken ts T_LBrace : ls)
-lay (T t : ts) ms        = do ls <- lay ts ms
+  | isLBrace t           = do putPos t
+                              ls <- lay ts (0 : ms)
+                              tok <- newToken T_LBrace 
+                              return (tok : ls)
+lay (T t : ts) ms        = do putPos t
+                              ls <- lay ts ms
                               return (t : ls)
 lay []         []        = return []
 lay []         (m : ms)
   | m > 0                = do ls <- lay [] ms
-                              return (newToken [] T_RBrace : ls)
-lay _          _         = Left (Error LexerErrorLayout unknownPosition
-                                         "Layout error.")
+                              tok <- newToken T_RBrace 
+                              return (tok : ls)
+lay _          _         = do pos <- getFS
+                              failFS $ Error LexerErrorLayout
+                                             pos "Layout error."
 

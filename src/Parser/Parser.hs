@@ -19,8 +19,7 @@ import Parser.PrecedenceTable(
 import Parser.ModuleSystem.Module(
          Module,
            emptyModule, addSubmodule, exportAllNamesFromModule, exportNames,
-           declareName,
-           declareOperator
+           declareName, declareOperator
        )
 import Parser.ModuleSystem.Context(
          Context,
@@ -84,7 +83,7 @@ getToken = do
    else let (tok : toks) = stateInput state in do
           putFS (state {
                    stateInput    = toks,
-                   statePosition = tokensPosition toks (statePosition state)
+                   statePosition = tokensPosition toks pos
                  })
           return tok
 
