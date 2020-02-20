@@ -1,6 +1,7 @@
 
 module Lexer.Name(
-         isWellFormedName, QName(..), readName, qualify, unqualifiedName
+         isWellFormedName, isWellFormedOperatorName,
+         QName(..), readName, qualify, unqualifiedName
        ) where
 
 import Lexer.Categories(isKeyword, isInteger)
@@ -32,6 +33,9 @@ isWellFormedName s = case splitParts s of
     rec b (p : ps) = isWellFormedNamePart p &&
                      b /= (p == "_") &&
                      rec (not b) ps
+
+isWellFormedOperatorName :: String -> Bool
+isWellFormedOperatorName s = isWellFormedName s && "_" `elem` splitParts s
 
 -- Qualified name
 data QName =
