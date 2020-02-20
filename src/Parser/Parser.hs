@@ -3,24 +3,26 @@ module Parser.Parser(parse) where
 import Error(Error(..), ErrorType(..), ErrorMessage)
 import Position(Position(..), unknownPosition)
 import FailState(FailState, getFS, modifyFS, putFS, evalFS, failFS)
-import Lexer.Name(QName(..), readName, qualify, unqualifiedName)
-import Lexer.Token(Token(..), TokenType(..))
-import Parser.AST(
+import Syntax.Name(QName(..), readName, qualify, unqualifiedName)
+import Syntax.AST(
          Program(..), AnnDeclaration(..), Declaration, AnnExpr(..), Expr,
          exprIsVariable, exprHeadVariable
        )
+import Lexer.Token(Token(..), TokenType(..))
 
 import Parser.PrecedenceTable(
-        PrecedenceTable(..),
-        Associativity(..),
-        Precedence()
-      )
+         PrecedenceTable(..),
+         Associativity(..),
+         Precedence()
+       )
 
-import Parser.ModuleSystem(
+import Parser.ModuleSystem.Module(
          Module,
            emptyModule, addSubmodule, exportAllNamesFromModule, exportNames,
            declareName,
-           declareOperator,
+           declareOperator
+       )
+import Parser.ModuleSystem.Context(
          Context,
            emptyContext, contextCurrentModuleName,
            resolveName, importAllNamesFromModule, importNames
@@ -180,8 +182,9 @@ importNamesM moduleName renamings = do
   modifyNameContext (importNames moduleName renamings rootModule)
 
 declareOperatorM :: Associativity -> Precedence -> QName -> M ()
-declareOperatorM assoc precedence qname = do  declareQNameM qname
-                                              modifyRootModule (declareOperator assoc precedence qname)
+declareOperatorM assoc precedence qname = do
+  declareQNameM qname
+  modifyRootModule (declareOperator assoc precedence qname)
 
 ---- Parser
 
@@ -361,11 +364,12 @@ parseDataDeclaration :: M Declaration   --TODO
 parseDataDeclaration = return undefined --TODO
 
 parseFixityDeclaration :: Associativity -> M ()
-parseFixityDeclaration assoc = do getToken
-                                  precedence    <- parseInt
-                                  operatorName  <- parseId
-                                  currentModule <- getCurrentModuleName 
-                                  declareOperatorM assoc precedence (qualify currentModule operatorName)
+parseFixityDeclaration assoc = do
+  getToken
+  precedence    <- parseInt
+  operatorName  <- parseId
+  currentModule <- getCurrentModuleName 
+  declareOperatorM assoc precedence (qualify currentModule operatorName)
 
 parseTypeSignatureOrValueDeclaration :: M Declaration
 parseTypeSignatureOrValueDeclaration = do

@@ -1,16 +1,16 @@
-module Lexer.Lexer (tokenize) where
+module Lexer.Lexer(tokenize) where
 
 import FailState(FailState, getFS, modifyFS, failFS, evalFS)
 import Error(Error(..), ErrorType(..))
 import Position(Position, initialPosition, updatePosition)
 
+import Syntax.Name(isWellFormedName)
 import Lexer.Token(Token(..), TokenType(..))
 import Lexer.Categories(
          isDigit, isInteger, isWhitespace,
          isPunctuation, punctuationType,
          isKeyword, keywordType, isIdent
        )
-import Lexer.Name(isWellFormedName)
 import Lexer.Layout(layout)
 
 tokenize :: FilePath -> String -> Either Error [Token]

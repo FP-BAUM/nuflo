@@ -8,8 +8,8 @@ import qualified Data.Set as S
 
 import Position(unknownPosition)
 import Error(Error(..), ErrorType(..), errorAtUnknown)
+import Syntax.Name(QName(..), readName)
 import Lexer.Token(Token(..), TokenType(..), isId, isDot, isModule)
-import Lexer.Name(QName(..), readName)
 import Lexer.Lexer(tokenize)
 
 readSource :: FilePath -> IO (Either Error [Token])

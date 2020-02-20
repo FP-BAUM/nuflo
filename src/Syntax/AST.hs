@@ -1,5 +1,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
-module Parser.AST(
+
+module Syntax.AST(
          Program(..),
          AnnDeclaration(..), Declaration,
          AnnExpr(..), Expr,
@@ -7,7 +8,7 @@ module Parser.AST(
        ) where
 
 import Position(Position)
-import Lexer.Name(QName)
+import Syntax.Name(QName)
 
 data Program = Program {
                  programDeclarations :: [Declaration]

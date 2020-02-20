@@ -4,10 +4,10 @@ module TestModuleSystem(tests) where
 import Test(TestSuite(..), Test(..))
 
 import Error(Error(..), ErrorType(..))
-import Lexer.Lexer(tokenize)
-import Lexer.Name(QName(..))
-import Parser.AST(Program(..), AnnDeclaration(..), AnnExpr(..), Expr,
+import Syntax.Name(QName(..))
+import Syntax.AST(Program(..), AnnDeclaration(..), AnnExpr(..), Expr,
                   eraseAnnotations)
+import Lexer.Lexer(tokenize)
 import Parser.Parser(parse)
 
 testExpr :: String -> String -> Either ErrorType (AnnExpr ()) -> Test

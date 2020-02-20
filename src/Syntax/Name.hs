@@ -1,5 +1,5 @@
 
-module Lexer.Name(
+module Syntax.Name(
          isWellFormedName, isWellFormedOperatorName,
          QName(..), readName, qualify, unqualifiedName
        ) where
@@ -34,6 +34,8 @@ isWellFormedName s = case splitParts s of
                      b /= (p == "_") &&
                      rec (not b) ps
 
+-- A well-formed name is moreover a well-formed operator name if
+-- it has at least one underscore.
 isWellFormedOperatorName :: String -> Bool
 isWellFormedOperatorName s = isWellFormedName s && "_" `elem` splitParts s
 

@@ -60,7 +60,6 @@ To use qualified imports, do:
 <declaration> ::=
     /* Import*/
   | IMPORT <qname> <moduleImports>
-
     /* Fixity declaration */
     <fixity> INT ID
   |
