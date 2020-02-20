@@ -34,7 +34,6 @@ instance Monad (FailState state) where
       case ma s0 of
         Left e        -> Left e
         Right (a, s1) -> let FailState mb = f a in mb s1)
-  fail _ = error "Internal error: use failFS rather than fail."
 
 failFS :: Error -> FailState state a
 failFS e = FailState (\ _ -> Left e)

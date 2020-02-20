@@ -2,6 +2,7 @@ module Parser.ModuleSystem(
          Module,
            emptyModule, addSubmodule, declareName,
            exportAllNamesFromModule, exportNames,
+           declareOperator,
          Context,
            emptyContext, contextCurrentModuleName,
            importAllNamesFromModule, importNames,
@@ -11,8 +12,14 @@ module Parser.ModuleSystem(
 import qualified Data.Set as S
 import qualified Data.Map as M
 
+import Parser.PrecedenceTable(PrecedenceTable,
+                              Associativity,
+                              Precedence,
+                              emptyPrecedenceTable,
+                              addOperator)
+
 import Error(ErrorMessage)
-import Lexer.Name(QName(..), qualify)
+import Lexer.Name(QName(..), qualify, isWellFormedOperatorName)
 
 ---- A module represents a tree of namespaces
 
@@ -20,16 +27,20 @@ data ModuleExports = ExportAll
                    | ExportSome (S.Set String)
 
 data Module = Module {
-                moduleNames         :: S.Set String,
-                moduleExportedNames :: ModuleExports,
-                moduleSubmodules    :: M.Map String Module
+                moduleNames               :: S.Set String,
+                moduleExportedNames       :: ModuleExports,
+                moduleSubmodules          :: M.Map String Module,
+                modulePrecedenceTable     :: PrecedenceTable
               }
+
+---- Module
 
 emptyModule :: Module
 emptyModule = Module {
-                moduleNames         = S.empty,
-                moduleExportedNames = ExportSome S.empty,
-                moduleSubmodules    = M.empty
+                moduleNames           = S.empty,
+                moduleExportedNames   = ExportSome S.empty,
+                moduleSubmodules      = M.empty,
+                modulePrecedenceTable = emptyPrecedenceTable
               }
 
 addSubmodule :: QName -> Module -> Either ErrorMessage Module
@@ -47,6 +58,15 @@ declareName =
        moduleNames = S.insert id (moduleNames m)
      })
   )
+
+declareOperator :: Associativity -> Precedence -> QName -> Module -> Either ErrorMessage Module
+declareOperator assoc precedence qname = 
+  liftToQName (\ opName m ->  if isWellFormedOperatorName opName
+                              then  return (m {
+                                      modulePrecedenceTable = addOperator assoc precedence qname (modulePrecedenceTable m)
+                                    })
+                              else  Left ("\"" ++ opName ++ "\" is not a valid operator name.")
+  ) qname
 
 exportAllNamesFromModule :: QName -> Module -> Either ErrorMessage Module
 exportAllNamesFromModule qname =
@@ -108,6 +128,8 @@ nameIsExported (Name id) m =
 nameIsExported (Qualified id qname) m =
   M.member id (moduleSubmodules m) &&
   nameIsExported qname (M.findWithDefault undefined id (moduleSubmodules m))
+
+---- Context
 
 ---- A context represents a scope in which some modules may or may
 ---- not be imported

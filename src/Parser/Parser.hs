@@ -9,10 +9,18 @@ import Parser.AST(
          Program(..), AnnDeclaration(..), Declaration, AnnExpr(..), Expr,
          exprIsVariable, exprHeadVariable
        )
+
+import Parser.PrecedenceTable(
+        PrecedenceTable(..),
+        Associativity(..),
+        Precedence()
+      )
+
 import Parser.ModuleSystem(
          Module,
            emptyModule, addSubmodule, exportAllNamesFromModule, exportNames,
            declareName,
+           declareOperator,
          Context,
            emptyContext, contextCurrentModuleName,
            resolveName, importAllNamesFromModule, importNames
@@ -171,6 +179,10 @@ importNamesM moduleName renamings = do
   rootModule <- getRootModule
   modifyNameContext (importNames moduleName renamings rootModule)
 
+declareOperatorM :: Associativity -> Precedence -> QName -> M ()
+declareOperatorM assoc precedence qname = do  declareQNameM qname
+                                              modifyRootModule (declareOperator assoc precedence qname)
+
 ---- Parser
 
 parseM :: M Program
@@ -272,6 +284,16 @@ parseId = do
                      ("Expected an identifier.\n" ++
                       "Got: " ++ show t ++ ".")
 
+parseInt :: M Integer
+parseInt = do
+  t <- peekType
+  case t of
+    T_Int n -> do getToken
+                  return n
+    _       -> failM ParseError
+                     ("Expected an integer.\n" ++
+                      "Got: " ++ show t ++ ".")
+
 parseDeclarations :: M [Declaration]
 parseDeclarations = do
   t <- peekType
@@ -295,6 +317,12 @@ parseDeclaration = do
   t <- peekType
   case t of
     T_Import -> do parseImport
+                   return []
+    T_Infix  -> do parseFixityDeclaration NonAssoc
+                   return []
+    T_Infixl -> do parseFixityDeclaration LeftAssoc
+                   return []
+    T_Infixr -> do parseFixityDeclaration RightAssoc
                    return []
     T_Data   -> do d <- parseDataDeclaration
                    return [d]
@@ -331,6 +359,13 @@ parseRenameId = do
 
 parseDataDeclaration :: M Declaration   --TODO
 parseDataDeclaration = return undefined --TODO
+
+parseFixityDeclaration :: Associativity -> M ()
+parseFixityDeclaration assoc = do getToken
+                                  precedence    <- parseInt
+                                  operatorName  <- parseId
+                                  currentModule <- getCurrentModuleName 
+                                  declareOperatorM assoc precedence (qualify currentModule operatorName)
 
 parseTypeSignatureOrValueDeclaration :: M Declaration
 parseTypeSignatureOrValueDeclaration = do
