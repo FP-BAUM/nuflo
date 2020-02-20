@@ -102,6 +102,11 @@ tests = TestSuite "MODULE SYSTEM" [
 
   testExprError "Import non-existing name from module"
      "module A where {} module B where { import A(a); x = 1 }" 
+     ModuleSystemError,
+
+  testExprError "Ambiguous name"
+     "module A where { x = 1 } module B where { x = 2; import A; y = x }" 
      ModuleSystemError
+
   ]
 
