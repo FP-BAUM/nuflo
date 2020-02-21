@@ -1,4 +1,6 @@
 language: haskell
+ghc:
+  - "8.6"
 
 script:
   - make
