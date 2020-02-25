@@ -23,7 +23,7 @@ import Parser.ModuleSystem.Module(
        )
 import Parser.ModuleSystem.Context(
          Context,
-           emptyContext, contextCurrentModuleName,
+           emptyContext, contextCurrentModuleName, contextPrecedenceTable,
            resolveName, importAllNamesFromModule, importNames
        )
 
@@ -116,6 +116,11 @@ getNameContext :: M Context
 getNameContext = do
   state <- getFS
   return $ stateNameContext state
+
+precedenceTable :: M PrecedenceTable
+precedenceTable = do
+  nameContext <- getNameContext
+  return $ contextPrecedenceTable nameContext
 
 getCurrentModuleName :: M QName
 getCurrentModuleName = do
@@ -396,16 +401,55 @@ parseValueDeclaration pos lhs = do
 
 parseExpr :: M Expr
 parseExpr = do
+  table <- contextPrecedenceTable
+  parseExprMixfix table 0
+
+parseExprMixfix :: PrecedenceTable -> Precedence -> M Expr
+parseExprMixfix table precedence | isLastPrecedence precedence -> do parseAtom
+parseExprMixfix table precedence = do parseExprMixfixAux precedence table "" [] []
+
+parseExprMixfixAux :: Precedence -> PrecedenceTable -> String -> [Expr] -> [Expr] -> M Expr
+parseExprMixfixAux precedence table '_' reserved [] = do failM ParseError "Parse error."
+parseExprMixfixAux precedence table '_' reserved (child : childrens) = do return child
+parseExprMixfixAux precedence table status reserved childrens | belong status (precedenceLevel precedence table) -> return $ [status] ++ childrens
+parseExprMixfixAux precedence table status reserved childrens = do
   t <- peekType
   case t of
-    T_Id _  -> do pos    <- currentPosition
-                  qname  <- parseAndResolveQName
-                  return $ EVar pos qname
-    T_Int n -> do pos    <- currentPosition
-                  getToken
-                  return $ EInt pos n
+    T_RParen -> failM ParseError
+                     ("Expected an operator.\n" ++ "Got: " ++ show t ++ ".")
+    T_EOF    -> failM ParseError
+                     ("Expected an operator.\n" ++ "Got: " ++ show t ++ ".")
+    _        -> if isPrefixInPrecedenceLevel status precedence table
+                then if tokenIsInReserved reserved t
+                     then if isPrefixInPrecedenceLevel (status ++ t) precedence table
+                          then return $ parseExprMixfixAux precedence table (status ++ t) reserved childrens
+                          else failM ParseError "Precedence error."
+                     else if status == ""
+                          then return $ parseExprMixfixAux (nextPrecedence precedence table) table status reserved childrens
+                          else return $ parseExprMixfixAux precedence table (status + "_") reserved childrens
+                else failM ParseError "Parse Error."
+
+
+parseAtom :: M Expr
+parseAtom = do
+  t1 <- peekType
+  case t1 of
+    T_Id _   -> do pos    <- currentPosition
+                   qname  <- parseAndResolveQName
+                   return $ EVar pos qname
+    T_Int n  -> do pos    <- currentPosition
+                   getToken
+                   return $ EInt pos n
+    T_LParen -> do pos    <- currentPosition
+                   expr   <- parseExpr
+                   t2 <- peekType
+                   case t2 of
+                     T_RParen -> return expr
+                     _        -> failM ParseError
+                     ("Expected ")".\n" ++
+                      "Got: " ++ show t ++ ".")
+
     -- TODO: other kinds of expressions
     _      -> failM ParseError
                      ("Expected an expression.\n" ++
                       "Got: " ++ show t ++ ".")
-

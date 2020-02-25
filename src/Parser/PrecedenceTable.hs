@@ -28,7 +28,14 @@ emptyPrecedenceTable :: PrecedenceTable
 emptyPrecedenceTable = PT M.empty
 
 precedenceLevel :: Precedence -> PrecedenceTable -> PrecedenceLevel
-precedenceLevel precedence (PT map) = M.findWithDefault S.empty precedence map 
+precedenceLevel precedence (PT map) = M.findWithDefault S.empty precedence map
+
+-- TODO: Missing implementation
+nextPrecedence :: Precedence -> PrecedenceTable -> Precedence
+
+-- TODO: Missing implementation
+isLastPrecedence :: Precedence -> PrecedenceTable -> Bool
+
 
 addOperator :: Associativity -> Precedence -> QName -> PrecedenceTable
             -> PrecedenceTable

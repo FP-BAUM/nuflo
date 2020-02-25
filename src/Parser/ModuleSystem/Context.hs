@@ -1,6 +1,6 @@
 module Parser.ModuleSystem.Context(
          Context,
-           emptyContext, contextCurrentModuleName,
+           emptyContext, contextCurrentModuleName, contextPrecedenceTable,
            importAllNamesFromModule, importNames,
            resolveName
        ) where
@@ -11,6 +11,7 @@ import qualified Data.Map as M
 import Error(ErrorMessage)
 import Syntax.Name(QName(..), qualify)
 import Parser.ModuleSystem.Module(Module, moduleExists, nameIsExported)
+import Parser.PrecedenceTable(PrecedenceTable)
 
 ---- Context ----
 
@@ -20,7 +21,8 @@ import Parser.ModuleSystem.Module(Module, moduleExists, nameIsExported)
 data Context = Context {
                  contextCurrentModuleName :: QName,
                  contextImportedNames     :: M.Map String (S.Set QName),
-                 contextImportedModules   :: S.Set QName
+                 contextImportedModules   :: S.Set QName,
+                 contextPrecedenceTable   :: PrecedenceTable
                }
 
 emptyContext :: QName -> Context
@@ -29,6 +31,7 @@ emptyContext currentModuleName =
     contextCurrentModuleName = currentModuleName,
     contextImportedNames     = M.empty,
     contextImportedModules   = S.fromList [currentModuleName]
+    contextPrecedenceTable   = emptyPrecedenceTable
   }
 
 importAllNamesFromModule :: QName -> Module -> Context
@@ -38,6 +41,7 @@ importAllNamesFromModule moduleName m c =
    then
      return (c {
        contextImportedModules = S.insert moduleName (contextImportedModules c)
+       contextPrecedenceTable = S.union (contextPrecedenceTable c) (contextPrecedenceTable m)
      })
    else
      Left ("Module \"" ++ show moduleName ++ "\" does not exist.")
