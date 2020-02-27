@@ -2,14 +2,17 @@ module Parser.ModuleSystem.Module(
          Module,
            emptyModule, addSubmodule, declareName,
            exportAllNamesFromModule, exportNames,
-           declareOperator, moduleExists, nameIsExported
+           declareOperator, moduleExists, nameIsExported,
+           getModulePrecedenceTable
        ) where
 
 import qualified Data.Set as S
 import qualified Data.Map as M
 
 import Error(ErrorMessage)
-import Syntax.Name(QName(..), qualify, isWellFormedOperatorName)
+import Syntax.Name(
+         QName(..), qualify, isWellFormedOperatorName, allNameParts
+       )
 import Parser.PrecedenceTable(
          PrecedenceTable, Associativity, Precedence,
          emptyPrecedenceTable, addOperator
@@ -47,7 +50,8 @@ declareName :: QName -> Module -> Either ErrorMessage Module
 declareName =
   liftToQName (\ id m ->
      return (m {
-       moduleNames = S.insert id (moduleNames m)
+       moduleNames = moduleNames m `S.union`
+                     S.fromList (allNameParts id)
      })
   )
 
@@ -78,7 +82,7 @@ exportSingleName =
         let s = (case moduleExportedNames m of
                   ExportAll    -> S.empty
                   ExportSome s -> s)
-         in ExportSome (S.insert id s)
+         in ExportSome (s `S.union` S.fromList (allNameParts id))
     }))
 
 exportNames :: QName -> [String] -> Module -> Either ErrorMessage Module
@@ -115,6 +119,12 @@ moduleExists (Qualified id qname) m =
   M.member id (moduleSubmodules m) &&
   moduleExists qname (M.findWithDefault undefined id (moduleSubmodules m))
 
+getModule :: QName -> Module -> Module
+getModule (Name id)            m =
+  M.findWithDefault undefined id (moduleSubmodules m)
+getModule (Qualified id qname) m =
+  getModule qname (M.findWithDefault undefined id (moduleSubmodules m))
+
 nameIsExported :: QName -> Module -> Bool
 nameIsExported (Name id) m =
   let e = case moduleExportedNames m of
@@ -124,4 +134,11 @@ nameIsExported (Name id) m =
 nameIsExported (Qualified id qname) m =
   M.member id (moduleSubmodules m) &&
   nameIsExported qname (M.findWithDefault undefined id (moduleSubmodules m))
+
+getModulePrecedenceTable :: QName -> Module
+                         -> Either ErrorMessage PrecedenceTable
+getModulePrecedenceTable qname m =
+  if moduleExists qname m
+   then return $ modulePrecedenceTable (getModule qname m)
+   else Left ("Module \"" ++ show qname ++ "\" does not exist.")
 

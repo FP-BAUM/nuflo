@@ -13,7 +13,7 @@ import Lexer.Token(Token(..), TokenType(..))
 import Parser.PrecedenceTable(
          PrecedenceTable(..),
          Associativity(..),
-         Precedence()
+         PrecedenceLevel, Precedence, precedenceTableLevels
        )
 
 import Parser.ModuleSystem.Module(
@@ -117,8 +117,8 @@ getNameContext = do
   state <- getFS
   return $ stateNameContext state
 
-precedenceTable :: M PrecedenceTable
-precedenceTable = do
+getContextPrecedenceTable :: M PrecedenceTable
+getContextPrecedenceTable = do
   nameContext <- getNameContext
   return $ contextPrecedenceTable nameContext
 
@@ -401,17 +401,32 @@ parseValueDeclaration pos lhs = do
 
 parseExpr :: M Expr
 parseExpr = do
-  table <- contextPrecedenceTable
-  parseExprMixfix table 0
+  table <- getContextPrecedenceTable
+  --parseExprMixfix table
+  parseAtom
 
-parseExprMixfix :: PrecedenceTable -> Precedence -> M Expr
-parseExprMixfix table precedence | isLastPrecedence precedence -> do parseAtom
-parseExprMixfix table precedence = do parseExprMixfixAux precedence table "" [] []
+data Status = EmptyStatus
+            | PushArgument Status Expr
+            | PushOperatorPart Status QName
 
-parseExprMixfixAux :: Precedence -> PrecedenceTable -> String -> [Expr] -> [Expr] -> M Expr
-parseExprMixfixAux precedence table '_' reserved [] = do failM ParseError "Parse error."
-parseExprMixfixAux precedence table '_' reserved (child : childrens) = do return child
-parseExprMixfixAux precedence table status reserved childrens | belong status (precedenceLevel precedence table) -> return $ [status] ++ childrens
+parseExprMixfix :: PrecedenceTable -> M Expr
+parseExprMixfix table =
+  parseExprMixfixAux (precedenceTableLevels table)
+                     EmptyStatus -- status
+                     [] -- reserved
+                     [] -- children
+
+parseExprMixfixAux :: [PrecedenceLevel]
+                   -> Status -> [Expr] -> [Expr] -> M Expr
+parseExprMixfixAux []       _   _        _  = parseAtom
+--parseExprMixfixAux (l : ls) "_" reserved [] =
+--  failM ParseError "Parse error."
+{-
+parseExprMixfixAux precedence table "_" reserved (child : childrens) =
+  return child
+parseExprMixfixAux precedence table status reserved childrens
+  | belong status (precedenceLevel precedence table) =
+    return $ [status] ++ childrens
 parseExprMixfixAux precedence table status reserved childrens = do
   t <- peekType
   case t of
@@ -419,21 +434,26 @@ parseExprMixfixAux precedence table status reserved childrens = do
                      ("Expected an operator.\n" ++ "Got: " ++ show t ++ ".")
     T_EOF    -> failM ParseError
                      ("Expected an operator.\n" ++ "Got: " ++ show t ++ ".")
-    _        -> if isPrefixInPrecedenceLevel status precedence table
-                then if tokenIsInReserved reserved t
-                     then if isPrefixInPrecedenceLevel (status ++ t) precedence table
-                          then return $ parseExprMixfixAux precedence table (status ++ t) reserved childrens
-                          else failM ParseError "Precedence error."
-                     else if status == ""
-                          then return $ parseExprMixfixAux (nextPrecedence precedence table) table status reserved childrens
-                          else return $ parseExprMixfixAux precedence table (status + "_") reserved childrens
-                else failM ParseError "Parse Error."
-
+    _        ->
+     if isPrefixInPrecedenceLevel status precedence table
+      then if tokenIsInReserved reserved t
+           then if isPrefixInPrecedenceLevel (status ++ t) precedence table
+                then return $ parseExprMixfixAux precedence table
+                                                (status ++ t) reserved childrens
+                else failM ParseError "Precedence error."
+           else if status == ""
+                then return $ parseExprMixfixAux
+                                (nextPrecedence precedence table)
+                                table status reserved childrens
+                else return $ parseExprMixfixAux precedence table
+                                (status + "_") reserved childrens
+      else failM ParseError "Parse Error."
+-}
 
 parseAtom :: M Expr
 parseAtom = do
-  t1 <- peekType
-  case t1 of
+  t <- peekType
+  case t of
     T_Id _   -> do pos    <- currentPosition
                    qname  <- parseAndResolveQName
                    return $ EVar pos qname
@@ -442,14 +462,11 @@ parseAtom = do
                    return $ EInt pos n
     T_LParen -> do pos    <- currentPosition
                    expr   <- parseExpr
-                   t2 <- peekType
-                   case t2 of
-                     T_RParen -> return expr
-                     _        -> failM ParseError
-                     ("Expected ")".\n" ++
-                      "Got: " ++ show t ++ ".")
+                   match T_RParen
+                   return expr
 
     -- TODO: other kinds of expressions
     _      -> failM ParseError
                      ("Expected an expression.\n" ++
                       "Got: " ++ show t ++ ".")
+

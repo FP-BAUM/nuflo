@@ -106,6 +106,43 @@ tests = TestSuite "MODULE SYSTEM" [
 
   testExprError "Ambiguous name"
      "module A where { x = 1 } module B where { x = 2; import A; y = x }" 
+     ModuleSystemError,
+
+  -- Operator parts
+
+  testExprOK "Export operator / do not import operator part"
+     (unlines [
+        "module A where { infix 20 if_then_else_ }",
+        "module B where { x = if }" 
+      ])
+     (EVar () (Qualified "B" (Name "if"))),
+
+  testExprOK "Export operator / import operator part"
+     (unlines [
+        "module A where { infix 20 if_then_else_ }",
+        "module B where { import A; x = if }" 
+      ])
+     (EVar () (Qualified "A" (Name "if"))),
+
+  testExprOK "Export operator explicitly / import operator part"
+     (unlines [
+        "module A(if_then_else_) where { infix 20 if_then_else_ }",
+        "module B where { import A; x = if }" 
+      ])
+     (EVar () (Qualified "A" (Name "if"))),
+
+  testExprOK "Export operator / import operator explicitly part"
+     (unlines [
+        "module A where { infix 20 if_then_else_ }",
+        "module B where { import A(if_then_else_); x = if }" 
+      ])
+     (EVar () (Qualified "A" (Name "if"))),
+
+  testExprError "Cannot rename operator on import"
+     (unlines [
+        "module A where { infix 20 if_then_else_ }",
+        "module B where { import A(if_then_else_ as uf_then_ulse_); x = if }" 
+      ])
      ModuleSystemError
 
   ]

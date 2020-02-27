@@ -9,9 +9,13 @@ import qualified Data.Set as S
 import qualified Data.Map as M
 
 import Error(ErrorMessage)
-import Syntax.Name(QName(..), qualify)
-import Parser.ModuleSystem.Module(Module, moduleExists, nameIsExported)
-import Parser.PrecedenceTable(PrecedenceTable)
+import Syntax.Name(QName(..), qualify, isWellFormedOperatorName, allNameParts)
+import Parser.ModuleSystem.Module(
+         Module, moduleExists, nameIsExported, getModulePrecedenceTable
+       )
+import Parser.PrecedenceTable(
+         PrecedenceTable, emptyPrecedenceTable, precedenceTableUnion
+       )
 
 ---- Context ----
 
@@ -30,24 +34,27 @@ emptyContext currentModuleName =
   Context {
     contextCurrentModuleName = currentModuleName,
     contextImportedNames     = M.empty,
-    contextImportedModules   = S.fromList [currentModuleName]
+    contextImportedModules   = S.fromList [currentModuleName],
     contextPrecedenceTable   = emptyPrecedenceTable
   }
 
 importAllNamesFromModule :: QName -> Module -> Context
                          -> Either ErrorMessage Context
-importAllNamesFromModule moduleName m c =
+importAllNamesFromModule moduleName m c = do
+  table <- getModulePrecedenceTable moduleName m
   if moduleExists moduleName m
    then
      return (c {
-       contextImportedModules = S.insert moduleName (contextImportedModules c)
-       contextPrecedenceTable = S.union (contextPrecedenceTable c) (contextPrecedenceTable m)
+       contextImportedModules = S.insert moduleName (contextImportedModules c),
+       contextPrecedenceTable = precedenceTableUnion
+                                          (contextPrecedenceTable c)
+                                          table
      })
    else
      Left ("Module \"" ++ show moduleName ++ "\" does not exist.")
 
 importSingleName :: QName -> String -> Module -> Context
-                 -> Either ErrorMessage Context
+                  -> Either ErrorMessage Context
 importSingleName originalName alias m c =
   if nameIsExported originalName m
    then
@@ -64,9 +71,19 @@ importSingleName originalName alias m c =
 importNames :: QName -> [(String, String)] -> Module -> Context
             -> Either ErrorMessage Context
 importNames moduleName []                  _ c = return c
-importNames moduleName ((id, alias) : ids) m c = do
-  c' <- importSingleName (qualify moduleName id) alias m c
-  importNames moduleName ids m c'
+importNames moduleName ((id, alias) : ids) m c
+  | not (isWellFormedOperatorName id) = do
+      c' <- importSingleName (qualify moduleName id) alias m c
+      importNames moduleName ids m c'
+  | isWellFormedOperatorName id && id /= alias =
+    Left ("Cannot rename operator: \"" ++ id ++ "\" to \"" ++ alias ++ "\".")
+  | isWellFormedOperatorName id && id == alias =
+      rec (allNameParts id) c
+    where
+      rec []             c = return c
+      rec (part : parts) c = do
+        c' <- importSingleName (qualify moduleName part) part m c
+        rec parts c'
 
 resolveName :: Module -> Context -> QName -> Either ErrorMessage QName
 resolveName m c (Name id) =

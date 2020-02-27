@@ -1,10 +1,15 @@
-module Parser.PrecedenceTable(PrecedenceTable,
-                              Associativity(..),
-                              Precedence,
-                              Operator,
-                              emptyPrecedenceTable,
-                              precedenceLevel,
-                              addOperator) where
+module Parser.PrecedenceTable(
+         PrecedenceTable,
+         PrecedenceLevel,
+         Associativity(..),
+         Precedence,
+         Operator,
+         emptyPrecedenceTable,
+         precedenceLevel,
+         addOperator,
+         precedenceTableLevels,
+         precedenceTableUnion
+       ) where
 
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -28,17 +33,17 @@ emptyPrecedenceTable :: PrecedenceTable
 emptyPrecedenceTable = PT M.empty
 
 precedenceLevel :: Precedence -> PrecedenceTable -> PrecedenceLevel
-precedenceLevel precedence (PT map) = M.findWithDefault S.empty precedence map
+precedenceLevel precedence (PT m) = M.findWithDefault S.empty precedence m
 
--- TODO: Missing implementation
-nextPrecedence :: Precedence -> PrecedenceTable -> Precedence
+precedenceTableLevels :: PrecedenceTable -> [PrecedenceLevel]
+precedenceTableLevels (PT m) = map snd (M.toAscList m)
 
--- TODO: Missing implementation
-isLastPrecedence :: Precedence -> PrecedenceTable -> Bool
-
+precedenceTableUnion :: PrecedenceTable -> PrecedenceTable -> PrecedenceTable
+precedenceTableUnion = error "NOT IMPLEMENTED"
 
 addOperator :: Associativity -> Precedence -> QName -> PrecedenceTable
             -> PrecedenceTable
 addOperator assoc precedence name t@(PT map) =
   let level = precedenceLevel precedence t
     in PT $ M.insert precedence (S.insert (Op name assoc) level) map
+

@@ -1,9 +1,10 @@
 
 module Syntax.Name(
-         isWellFormedName, isWellFormedOperatorName,
+         allNameParts, isWellFormedName, isWellFormedOperatorName,
          QName(..), readName, qualify, unqualifiedName
        ) where
 
+import Data.List((\\))
 import Lexer.Categories(isKeyword, isInteger)
 
 splitParts :: String -> [String]
@@ -14,6 +15,9 @@ splitParts (x : xs)   = let (p : ps) = splitParts xs in
                           if p == "_"
                            then [x] : p : ps
                            else (x : p) : ps
+
+allNameParts :: String -> [String]
+allNameParts id = id : (splitParts id \\ ["_"])
 
 -- A name part is well-formed if it is not a keyword nor an integer.
 isWellFormedNamePart :: String -> Bool
