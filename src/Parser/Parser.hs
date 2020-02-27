@@ -1,6 +1,9 @@
 module Parser.Parser(parse) where
 
+import Debug.Trace
+
 import qualified Data.Set as S
+import Data.List(isPrefixOf)
 
 import Error(Error(..), ErrorType(..), ErrorMessage)
 import Position(Position(..), unknownPosition)
@@ -15,17 +18,18 @@ import Lexer.Token(Token(..), TokenType(..))
 
 import Parser.PrecedenceTable(
          PrecedenceTable(..), Associativity(..), Operator(..),
-         PrecedenceLevel, Precedence, precedenceTableLevels
+         PrecedenceLevel, Precedence, precedenceTableLevels,
+         emptyPrecedenceTable, declareOperator, isOperatorPart
        )
 
 import Parser.ModuleSystem.Module(
          Module,
            emptyModule, addSubmodule, exportAllNamesFromModule, exportNames,
-           declareName, declareOperator
+           declareName
        )
 import Parser.ModuleSystem.Context(
          Context,
-           emptyContext, contextCurrentModuleName, contextPrecedenceTable,
+           emptyContext, contextCurrentModuleName,
            resolveName, importAllNamesFromModule, importNames
        )
 
@@ -33,19 +37,21 @@ parse :: [Token] -> Either Error Program
 parse tokens = evalFS parseM initialState
   where initialState =
           ParserState {
-            stateInput       = tokens,
-            statePosition    = tokensPosition tokens unknownPosition,
-            stateRootModule  = emptyModule,
-            stateNameContext = error "Empty name context."
+            stateInput           = tokens,
+            statePosition        = tokensPosition tokens unknownPosition,
+            stateRootModule      = emptyModule,
+            stateNameContext     = error "Empty name context.",
+            statePrecedenceTable = emptyPrecedenceTable
           }
 
 ---- Parser monad
 
 data ParserState = ParserState {
-                     stateInput       :: [Token],
-                     statePosition    :: Position,
-                     stateRootModule  :: Module,
-                     stateNameContext :: Context
+                     stateInput           :: [Token],
+                     statePosition        :: Position,
+                     stateRootModule      :: Module,
+                     stateNameContext     :: Context,
+                     statePrecedenceTable :: PrecedenceTable
                    }
 
 type M = FailState ParserState
@@ -119,10 +125,15 @@ getNameContext = do
   state <- getFS
   return $ stateNameContext state
 
-getContextPrecedenceTable :: M PrecedenceTable
-getContextPrecedenceTable = do
-  nameContext <- getNameContext
-  return $ contextPrecedenceTable nameContext
+getPrecedenceTable :: M PrecedenceTable
+getPrecedenceTable = do
+  state <- getFS
+  return $ statePrecedenceTable state
+
+isOperatorPartM :: QName -> M Bool
+isOperatorPartM qname = do
+  table <- getPrecedenceTable
+  return $ isOperatorPart qname table
 
 getCurrentModuleName :: M QName
 getCurrentModuleName = do
@@ -146,6 +157,16 @@ modifyNameContext f = do
       failM ModuleSystemError errmsg
     Right stateNameContext' ->
       putFS (state { stateNameContext = stateNameContext' })
+
+modifyPrecedenceTable ::
+  (PrecedenceTable -> Either ErrorMessage PrecedenceTable) -> M ()
+modifyPrecedenceTable f = do
+  state <- getFS
+  case f (statePrecedenceTable state) of
+    Left errmsg ->
+      failM ModuleSystemError errmsg
+    Right precedenceTable' ->
+      putFS (state { statePrecedenceTable = precedenceTable' })
 
 enterModule :: QName -> M ()
 enterModule moduleName = do
@@ -190,7 +211,7 @@ importNamesM moduleName renamings = do
 declareOperatorM :: Associativity -> Precedence -> QName -> M ()
 declareOperatorM assoc precedence qname = do
   declareQNameM qname
-  modifyRootModule (declareOperator assoc precedence qname)
+  modifyPrecedenceTable (declareOperator assoc precedence qname)
 
 ---- Parser
 
@@ -413,37 +434,70 @@ parseValueDeclaration pos lhs = do
 
 parseExpr :: M Expr
 parseExpr = do
-  table <- getContextPrecedenceTable
+  table <- getPrecedenceTable
   parseExprMixfix (precedenceTableLevels table) table
-  --parseApplication
 
-data Status = EmptyStatus
+{-- Mixfix parser --}
+
+data Status = EmptyStatus Position
             | PushArgument Status Expr
             | PushOperatorPart Status QName
 
+instance Show Status where
+  show (EmptyStatus _) = ""
+  show (PushOperatorPart status p) = show status ++ show p
+  show (PushArgument status x)     = show status ++ "(" ++ show x ++ ")"
+
 parseExprMixfix :: [PrecedenceLevel] -> PrecedenceTable -> M Expr
 parseExprMixfix []     _     = parseApplication
-parseExprMixfix levels table =
-  parseExprInfix levels table EmptyStatus
+parseExprMixfix levels table = do
+  pos <- currentPosition
+  parseExprInfix levels table (EmptyStatus pos)
 
+-- TODO: infixl, infixr
 parseExprInfix :: [PrecedenceLevel] -> PrecedenceTable -> Status -> M Expr
 parseExprInfix (currentLevel : levels) table status = do
-  b <- isEndOfExpression
-  if b
-   then case status of
-          PushArgument EmptyStatus x -> return x
-          _ -> failM ParseError "Cannot parse expression."
-   else do
-     b <- mustReadPart currentLevel status
-     if b
-      then do part <- parseAndResolveQName
-              parseExprInfix (currentLevel : levels) table
+  do
+    b <- isEndOfExpression
+    if b
+     then case status of
+            PushArgument (EmptyStatus _) x -> return x
+            _ -> failM ParseError (
+                   "Cannot parse expression. Status:\n" ++ show status
+                 )
+     else do
+       b <- mustReadPart currentLevel table status
+       if b
+        then do
+          maybePart <- peekAndResolveQName
+          case maybePart of
+            Nothing -> error "(Expected operator part)."
+            Just part -> do
+              isOp <- isOperatorPartM part
+              if isOp && statusIsValidPrefixInLevel
                              (PushOperatorPart status part)
-              -- TODO: chequear si terminó
-      else do arg <- parseExprMixfix levels table
-              parseExprInfix (currentLevel : levels) table
-                             (PushArgument status arg)
-              -- TODO: chequear si terminó
+                             currentLevel
+               then do parseAndResolveQName
+                       rec (PushOperatorPart status part)
+               else case status of
+                      PushArgument (EmptyStatus _) x -> return x
+                      _ -> do t <- peekType
+                              failM ParseError
+                                ("Expected operator part.\n" ++
+                                 "Got: " ++ show t ++ ".\n" ++
+                                 "Status: " ++ show status)
+        else do
+          arg <- parseExprMixfix levels table
+          rec (PushArgument status arg)
+  where
+    rec status' =
+      if statusIsCompleteInLevel status' currentLevel
+       then return $
+              let pos = statusPosition status' in
+                foldr (flip (EApp pos))
+                      (EVar pos (statusOperatorName status'))
+                      (statusArguments status')
+       else parseExprInfix (currentLevel : levels) table status'
 
 isEndOfExpression :: M Bool
 isEndOfExpression = do
@@ -453,63 +507,97 @@ isEndOfExpression = do
     T_RParen    -> True
     T_RBrace    -> True
     T_Semicolon -> True
-    --T_Eq      -> True  -- maybe add later
+    T_Eq        -> True  -- maybe add later
     --T_Where   -> True  -- maybe add later
     _           -> False
 
-mustReadPart :: PrecedenceLevel -> Status -> M Bool
-mustReadPart level EmptyStatus        = do
+mustReadPart :: PrecedenceLevel -> PrecedenceTable -> Status -> M Bool
+mustReadPart level table status@(EmptyStatus _) = do
   maybeQName <- peekAndResolveQName
   case maybeQName of
     Nothing    -> return False
-    Just qname -> return $ any (partIsPrefix qname)
-                              [ operatorName
-                              | Op operatorName _ <- S.toList level ]
-mustReadPart _ (PushArgument _ _)     = return True
-mustReadPart _ (PushOperatorPart _ _) = return False
+    Just qname -> do
+      isOp <- isOperatorPartM qname
+      return $ isOp && statusIsValidPrefixInLevel
+                         (PushOperatorPart status qname)
+                         level
+mustReadPart _ _ (PushArgument _ _)     = return True
+mustReadPart _ _ (PushOperatorPart _ _) = return False
 
-partIsPrefix :: QName -> QName -> Bool
-partIsPrefix part fullName =
-  let partModule     = moduleNameFromQName part
-      fullNameModule = moduleNameFromQName fullNameModule
-      fullNameParts  = splitParts (unqualifiedName fullName)
-   in
-     partModule == fullNameModule &&
-     unqualifiedName part == head fullNameParts
+statusPosition :: Status -> Position
+statusPosition (EmptyStatus pos)           = pos
+statusPosition (PushArgument status _)     = statusPosition status
+statusPosition (PushOperatorPart status _) = statusPosition status
 
---parseExprMixfixAux (l : ls) table "_" [] =
---  failM ParseError "Parse error."
---parseExprMixfixAux precedence table "_" (child : children) =
---  return child
-{-
-parseExprMixfixAux precedence table status reserved children
-  | belong status (precedenceLevel precedence table) =
-    return $ [status] ++ children
-parseExprMixfixAux precedence table status reserved children = do
-  t <- peekType
-  case t of
-    T_RParen -> failM ParseError
-                     ("Expected an operator.\n" ++ "Got: " ++ show t ++ ".")
-    T_EOF    -> failM ParseError
-                     ("Expected an operator.\n" ++ "Got: " ++ show t ++ ".")
-    _        ->
-     if isPrefixInPrecedenceLevel status precedence table
-      then if tokenIsInReserved reserved t
-           then if isPrefixInPrecedenceLevel (status ++ t) precedence table
-                then return $ parseExprMixfixAux precedence table
-                                                (status ++ t) reserved children
-                else failM ParseError "Precedence error."
-           else if status == ""
-                then return $ parseExprMixfixAux
-                                (nextPrecedence precedence table)
-                                table status reserved children
-                else return $ parseExprMixfixAux precedence table
-                                (status + "_") reserved children
-      else failM ParseError "Parse Error."
--}
+statusIsCompleteInLevel :: Status -> PrecedenceLevel -> Bool
+statusIsCompleteInLevel status level =
+  let moduleName = statusModuleName status
+      parts      = statusOperatorParts status
+   in any (operatorIsEqual moduleName parts)
+          [operatorName | Op operatorName _ <- S.toList level]
+
+statusIsValidPrefixInLevel :: Status -> PrecedenceLevel -> Bool
+statusIsValidPrefixInLevel (EmptyStatus _)                  _ = True
+statusIsValidPrefixInLevel (PushArgument (EmptyStatus _) _) _ = True
+statusIsValidPrefixInLevel status level =
+  let moduleName = statusModuleName status
+      parts      = statusOperatorParts status
+   in (case moduleName of
+         Nothing -> True
+         Just m  -> statusModuleNamesCoherent m status) &&
+      any (operatorIsPrefix moduleName parts)
+          [operatorName | Op operatorName _ <- S.toList level]
+
+statusModuleName :: Status -> Maybe QName
+statusModuleName (EmptyStatus _)        = Nothing
+statusModuleName (PushOperatorPart _ q) = Just $ moduleNameFromQName q
+statusModuleName (PushArgument s _)     = statusModuleName s
+
+statusModuleNamesCoherent :: QName -> Status -> Bool
+statusModuleNamesCoherent m (EmptyStatus _) = True
+statusModuleNamesCoherent m (PushOperatorPart _ q) =
+  m == moduleNameFromQName q
+statusModuleNamesCoherent m (PushArgument s _) =
+  statusModuleNamesCoherent m s
+
+statusOperatorParts :: Status -> [String]
+statusOperatorParts (EmptyStatus _)        = [] 
+statusOperatorParts (PushOperatorPart s q) =
+  statusOperatorParts s ++ [unqualifiedName q]
+statusOperatorParts (PushArgument s _)     =
+  statusOperatorParts s ++ ["_"]
+
+statusOperatorName :: Status -> QName
+statusOperatorName status =
+  case statusModuleName status of
+    Nothing -> error "Status does not match an operator."
+    Just m  -> qualify m (concat (statusOperatorParts status))
+
+statusArguments :: Status -> [Expr]
+statusArguments (EmptyStatus _)             = []
+statusArguments (PushOperatorPart status _) = statusArguments status
+statusArguments (PushArgument status arg)   = arg : statusArguments status
+
+operatorMatches :: ([String] -> [String] -> Bool)
+                -> Maybe QName -> [String] -> QName -> Bool
+operatorMatches f moduleName parts targetOperator =
+    let targetOperatorModule = moduleNameFromQName targetOperator
+        targetOperatorParts  = splitParts (unqualifiedName targetOperator)
+     in (case moduleName of
+          Nothing -> True
+          Just m  -> m == targetOperatorModule) &&
+        f parts targetOperatorParts
+
+operatorIsPrefix :: Maybe QName -> [String] -> QName -> Bool
+operatorIsPrefix = operatorMatches isPrefixOf
+
+operatorIsEqual :: Maybe QName -> [String] -> QName -> Bool
+operatorIsEqual = operatorMatches (==)
+
+{-- End mixfix parser --}
 
 parseApplication :: M Expr
-parseApplication = parseAtom
+parseApplication = parseAtom -- TODO
 
 parseAtom :: M Expr
 parseAtom = do
@@ -517,11 +605,16 @@ parseAtom = do
   case t of
     T_Id _   -> do pos    <- currentPosition
                    qname  <- parseAndResolveQName
-                   return $ EVar pos qname
+                   isOp   <- isOperatorPartM qname 
+                   if isOp
+                    then failM ParseError
+                               ("Operator part: " ++ show qname ++
+                                " cannot be used as a variable.")
+                    else return $ EVar pos qname
     T_Int n  -> do pos    <- currentPosition
                    getToken
                    return $ EInt pos n
-    T_LParen -> do pos    <- currentPosition
+    T_LParen -> do match T_LParen
                    expr   <- parseExpr
                    match T_RParen
                    return expr

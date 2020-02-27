@@ -42,7 +42,10 @@ isWellFormedName s = case splitParts s of
 -- A well-formed name is moreover a well-formed operator name if
 -- it has at least one underscore.
 isWellFormedOperatorName :: String -> Bool
-isWellFormedOperatorName s = isWellFormedName s && "_" `elem` splitParts s
+isWellFormedOperatorName s =
+     isWellFormedName s
+  && s /= "_" 
+  && "_" `elem` splitParts s
 
 -- Qualified name
 data QName =

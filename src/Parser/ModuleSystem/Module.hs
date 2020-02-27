@@ -2,8 +2,7 @@ module Parser.ModuleSystem.Module(
          Module,
            emptyModule, addSubmodule, declareName,
            exportAllNamesFromModule, exportNames,
-           declareOperator, moduleExists, nameIsExported,
-           getModulePrecedenceTable
+           moduleExists, nameIsExported
        ) where
 
 import qualified Data.Set as S
@@ -11,11 +10,7 @@ import qualified Data.Map as M
 
 import Error(ErrorMessage)
 import Syntax.Name(
-         QName(..), qualify, isWellFormedOperatorName, allNameParts
-       )
-import Parser.PrecedenceTable(
-         PrecedenceTable, Associativity, Precedence,
-         emptyPrecedenceTable, addOperator
+         QName(..), qualify, allNameParts
        )
 
 ---- A module represents a tree of namespaces
@@ -26,16 +21,14 @@ data ModuleExports = ExportAll
 data Module = Module {
                 moduleNames           :: S.Set String,
                 moduleExportedNames   :: ModuleExports,
-                moduleSubmodules      :: M.Map String Module,
-                modulePrecedenceTable :: PrecedenceTable
+                moduleSubmodules      :: M.Map String Module
               }
 
 emptyModule :: Module
 emptyModule = Module {
                 moduleNames           = S.empty,
                 moduleExportedNames   = ExportSome S.empty,
-                moduleSubmodules      = M.empty,
-                modulePrecedenceTable = emptyPrecedenceTable
+                moduleSubmodules      = M.empty
               }
 
 addSubmodule :: QName -> Module -> Either ErrorMessage Module
@@ -55,18 +48,6 @@ declareName =
      })
   )
 
-declareOperator :: Associativity -> Precedence -> QName -> Module
-                -> Either ErrorMessage Module
-declareOperator assoc precedence qname = 
-  liftToQName
-    (\ opName m -> 
-        if isWellFormedOperatorName opName
-         then  return (m {
-                 modulePrecedenceTable =
-                   addOperator assoc precedence qname (modulePrecedenceTable m)
-                })
-         else Left ("\"" ++ opName ++ "\" is not a valid operator name."))
-    qname
 
 exportAllNamesFromModule :: QName -> Module -> Either ErrorMessage Module
 exportAllNamesFromModule qname =
@@ -134,11 +115,4 @@ nameIsExported (Name id) m =
 nameIsExported (Qualified id qname) m =
   M.member id (moduleSubmodules m) &&
   nameIsExported qname (M.findWithDefault undefined id (moduleSubmodules m))
-
-getModulePrecedenceTable :: QName -> Module
-                         -> Either ErrorMessage PrecedenceTable
-getModulePrecedenceTable qname m =
-  if moduleExists qname m
-   then return $ modulePrecedenceTable (getModule qname m)
-   else Left ("Module \"" ++ show qname ++ "\" does not exist.")
 

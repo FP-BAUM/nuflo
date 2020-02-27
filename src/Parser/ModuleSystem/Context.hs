@@ -1,6 +1,6 @@
 module Parser.ModuleSystem.Context(
          Context,
-           emptyContext, contextCurrentModuleName, contextPrecedenceTable,
+           emptyContext, contextCurrentModuleName,
            importAllNamesFromModule, importNames,
            resolveName
        ) where
@@ -10,12 +10,7 @@ import qualified Data.Map as M
 
 import Error(ErrorMessage)
 import Syntax.Name(QName(..), qualify, isWellFormedOperatorName, allNameParts)
-import Parser.ModuleSystem.Module(
-         Module, moduleExists, nameIsExported, getModulePrecedenceTable
-       )
-import Parser.PrecedenceTable(
-         PrecedenceTable, emptyPrecedenceTable, precedenceTableUnion
-       )
+import Parser.ModuleSystem.Module(Module, moduleExists, nameIsExported)
 
 ---- Context ----
 
@@ -25,8 +20,7 @@ import Parser.PrecedenceTable(
 data Context = Context {
                  contextCurrentModuleName :: QName,
                  contextImportedNames     :: M.Map String (S.Set QName),
-                 contextImportedModules   :: S.Set QName,
-                 contextPrecedenceTable   :: PrecedenceTable
+                 contextImportedModules   :: S.Set QName
                }
 
 emptyContext :: QName -> Context
@@ -34,21 +28,16 @@ emptyContext currentModuleName =
   Context {
     contextCurrentModuleName = currentModuleName,
     contextImportedNames     = M.empty,
-    contextImportedModules   = S.fromList [currentModuleName],
-    contextPrecedenceTable   = emptyPrecedenceTable
+    contextImportedModules   = S.fromList [currentModuleName]
   }
 
 importAllNamesFromModule :: QName -> Module -> Context
                          -> Either ErrorMessage Context
 importAllNamesFromModule moduleName m c = do
-  table <- getModulePrecedenceTable moduleName m
   if moduleExists moduleName m
    then
      return (c {
-       contextImportedModules = S.insert moduleName (contextImportedModules c),
-       contextPrecedenceTable = precedenceTableUnion
-                                          (contextPrecedenceTable c)
-                                          table
+       contextImportedModules = S.insert moduleName (contextImportedModules c)
      })
    else
      Left ("Module \"" ++ show moduleName ++ "\" does not exist.")
