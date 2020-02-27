@@ -456,6 +456,8 @@ parseExprMixfix levels table = do
 
 -- TODO: infixl, infixr
 parseExprInfix :: [PrecedenceLevel] -> PrecedenceTable -> Status -> M Expr
+parseExprInfix []                      _     _      =
+  error "parseExprInfix: list of levels cannot be empty"
 parseExprInfix (currentLevel : levels) table status = do
   do
     b <- isEndOfExpression
