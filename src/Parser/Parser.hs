@@ -1,9 +1,12 @@
 module Parser.Parser(parse) where
 
+import qualified Data.Set as S
+
 import Error(Error(..), ErrorType(..), ErrorMessage)
 import Position(Position(..), unknownPosition)
 import FailState(FailState, getFS, modifyFS, putFS, evalFS, failFS)
-import Syntax.Name(QName(..), readName, qualify, unqualifiedName)
+import Syntax.Name(QName(..), readName, qualify, moduleNameFromQName,
+                   unqualifiedName, splitParts, allNameParts)
 import Syntax.AST(
          Program(..), AnnDeclaration(..), Declaration, AnnExpr(..), Expr,
          exprIsVariable, exprHeadVariable
@@ -11,8 +14,7 @@ import Syntax.AST(
 import Lexer.Token(Token(..), TokenType(..))
 
 import Parser.PrecedenceTable(
-         PrecedenceTable(..),
-         Associativity(..),
+         PrecedenceTable(..), Associativity(..), Operator(..),
          PrecedenceLevel, Precedence, precedenceTableLevels
        )
 
@@ -281,6 +283,16 @@ parseAndResolveQName = do
     Left  errmsg -> failM ModuleSystemError errmsg
     Right qname' -> return qname'
 
+peekAndResolveQName :: M (Maybe QName)
+peekAndResolveQName = do
+  t <- peekType
+  case t of
+    T_Id _ -> do state <- getFS
+                 qname <- parseAndResolveQName
+                 putFS state
+                 return $ Just qname
+    _ -> return Nothing
+
 parseId :: M String
 parseId = do
   t <- peekType
@@ -402,32 +414,78 @@ parseValueDeclaration pos lhs = do
 parseExpr :: M Expr
 parseExpr = do
   table <- getContextPrecedenceTable
-  --parseExprMixfix table
-  parseAtom
+  parseExprMixfix (precedenceTableLevels table) table
+  --parseApplication
 
 data Status = EmptyStatus
             | PushArgument Status Expr
             | PushOperatorPart Status QName
 
-parseExprMixfix :: PrecedenceTable -> M Expr
-parseExprMixfix table =
-  parseExprMixfixAux (precedenceTableLevels table)
-                     EmptyStatus -- status
-                     [] -- reserved
-                     [] -- children
+parseExprMixfix :: [PrecedenceLevel] -> PrecedenceTable -> M Expr
+parseExprMixfix []     _     = parseApplication
+parseExprMixfix levels table =
+  parseExprInfix levels table EmptyStatus
 
-parseExprMixfixAux :: [PrecedenceLevel]
-                   -> Status -> [Expr] -> [Expr] -> M Expr
-parseExprMixfixAux []       _   _        _  = parseAtom
---parseExprMixfixAux (l : ls) "_" reserved [] =
+parseExprInfix :: [PrecedenceLevel] -> PrecedenceTable -> Status -> M Expr
+parseExprInfix (currentLevel : levels) table status = do
+  b <- isEndOfExpression
+  if b
+   then case status of
+          PushArgument EmptyStatus x -> return x
+          _ -> failM ParseError "Cannot parse expression."
+   else do
+     b <- mustReadPart currentLevel status
+     if b
+      then do part <- parseAndResolveQName
+              parseExprInfix (currentLevel : levels) table
+                             (PushOperatorPart status part)
+              -- TODO: chequear si terminó
+      else do arg <- parseExprMixfix levels table
+              parseExprInfix (currentLevel : levels) table
+                             (PushArgument status arg)
+              -- TODO: chequear si terminó
+
+isEndOfExpression :: M Bool
+isEndOfExpression = do
+  t <- peekType
+  return $ case t of
+    T_EOF       -> True
+    T_RParen    -> True
+    T_RBrace    -> True
+    T_Semicolon -> True
+    --T_Eq      -> True  -- maybe add later
+    --T_Where   -> True  -- maybe add later
+    _           -> False
+
+mustReadPart :: PrecedenceLevel -> Status -> M Bool
+mustReadPart level EmptyStatus        = do
+  maybeQName <- peekAndResolveQName
+  case maybeQName of
+    Nothing    -> return False
+    Just qname -> return $ any (partIsPrefix qname)
+                              [ operatorName
+                              | Op operatorName _ <- S.toList level ]
+mustReadPart _ (PushArgument _ _)     = return True
+mustReadPart _ (PushOperatorPart _ _) = return False
+
+partIsPrefix :: QName -> QName -> Bool
+partIsPrefix part fullName =
+  let partModule     = moduleNameFromQName part
+      fullNameModule = moduleNameFromQName fullNameModule
+      fullNameParts  = splitParts (unqualifiedName fullName)
+   in
+     partModule == fullNameModule &&
+     unqualifiedName part == head fullNameParts
+
+--parseExprMixfixAux (l : ls) table "_" [] =
 --  failM ParseError "Parse error."
+--parseExprMixfixAux precedence table "_" (child : children) =
+--  return child
 {-
-parseExprMixfixAux precedence table "_" reserved (child : childrens) =
-  return child
-parseExprMixfixAux precedence table status reserved childrens
+parseExprMixfixAux precedence table status reserved children
   | belong status (precedenceLevel precedence table) =
-    return $ [status] ++ childrens
-parseExprMixfixAux precedence table status reserved childrens = do
+    return $ [status] ++ children
+parseExprMixfixAux precedence table status reserved children = do
   t <- peekType
   case t of
     T_RParen -> failM ParseError
@@ -439,16 +497,19 @@ parseExprMixfixAux precedence table status reserved childrens = do
       then if tokenIsInReserved reserved t
            then if isPrefixInPrecedenceLevel (status ++ t) precedence table
                 then return $ parseExprMixfixAux precedence table
-                                                (status ++ t) reserved childrens
+                                                (status ++ t) reserved children
                 else failM ParseError "Precedence error."
            else if status == ""
                 then return $ parseExprMixfixAux
                                 (nextPrecedence precedence table)
-                                table status reserved childrens
+                                table status reserved children
                 else return $ parseExprMixfixAux precedence table
-                                (status + "_") reserved childrens
+                                (status + "_") reserved children
       else failM ParseError "Parse Error."
 -}
+
+parseApplication :: M Expr
+parseApplication = parseAtom
 
 parseAtom :: M Expr
 parseAtom = do

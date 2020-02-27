@@ -1,7 +1,8 @@
 
 module Syntax.Name(
-         allNameParts, isWellFormedName, isWellFormedOperatorName,
-         QName(..), readName, qualify, unqualifiedName
+         splitParts, allNameParts,
+         isWellFormedName, isWellFormedOperatorName,
+         QName(..), readName, qualify, moduleNameFromQName, unqualifiedName
        ) where
 
 import Data.List((\\))
@@ -61,6 +62,11 @@ readName s
 qualify :: QName -> String -> QName
 qualify (Name id)            id' = Qualified id (readName id')
 qualify (Qualified id qname) id' = Qualified id (qualify qname id')
+
+moduleNameFromQName :: QName -> QName
+moduleNameFromQName (Qualified id (Name _)) = Name id
+moduleNameFromQName (Qualified id qname)    =
+  Qualified id (moduleNameFromQName qname)
 
 unqualifiedName :: QName -> String
 unqualifiedName (Name id)           = id

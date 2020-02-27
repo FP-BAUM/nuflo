@@ -3,7 +3,7 @@ module Parser.PrecedenceTable(
          PrecedenceLevel,
          Associativity(..),
          Precedence,
-         Operator,
+         Operator(..),
          emptyPrecedenceTable,
          precedenceLevel,
          addOperator,
@@ -39,7 +39,7 @@ precedenceTableLevels :: PrecedenceTable -> [PrecedenceLevel]
 precedenceTableLevels (PT m) = map snd (M.toAscList m)
 
 precedenceTableUnion :: PrecedenceTable -> PrecedenceTable -> PrecedenceTable
-precedenceTableUnion = error "NOT IMPLEMENTED"
+precedenceTableUnion (PT m1) (PT m2) = PT (M.unionWith S.union m1 m2)
 
 addOperator :: Associativity -> Precedence -> QName -> PrecedenceTable
             -> PrecedenceTable
