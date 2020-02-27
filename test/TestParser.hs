@@ -164,8 +164,6 @@ tests = TestSuite "PARSER" [
         ]
       ]),
 
-  --TODO: qualified
-
   -- Empty program
   testProgramOK "Empty program"
     "" 
