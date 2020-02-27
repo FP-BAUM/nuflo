@@ -509,7 +509,7 @@ isEndOfExpression = do
     T_RParen    -> True
     T_RBrace    -> True
     T_Semicolon -> True
-    T_Eq        -> True  -- maybe add later
+    T_Eq        -> True
     --T_Where   -> True  -- maybe add later
     _           -> False
 
