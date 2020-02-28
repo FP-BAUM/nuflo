@@ -12,7 +12,8 @@ data Error = Error {
   deriving (Eq, Show)
 
 data ErrorType =
-    LexerErrorInvalidCharacter
+    InternalError
+  | LexerErrorInvalidCharacter
   | LexerErrorMalformedName
   | LexerErrorLayout
   | LexerErrorUnclosedComment

@@ -4,7 +4,6 @@ import Debug.Trace
 
 import qualified Data.Set as S
 import Data.List(isPrefixOf)
-import Data.Maybe(fromJust)
 
 import Error(Error(..), ErrorType(..), ErrorMessage)
 import Position(Position(..), unknownPosition)
@@ -469,7 +468,6 @@ parseExprMixfix levels table = do
   pos <- currentPosition
   parseExprInfix levels table (EmptyStatus pos)
 
--- TODO: infixl, infixr
 parseExprInfix :: [PrecedenceLevel] -> PrecedenceTable -> Status -> M Expr
 parseExprInfix []                      _     _      =
   error "parseExprInfix: list of levels cannot be empty"
@@ -481,7 +479,7 @@ parseExprInfix (currentLevel : levels) table status = do
       b <- mustReadPart currentLevel table status
       if b
        then do
-         part <- fromJust <$> peekAndResolveQName
+         part <- peekAndResolveQName >>= fromJustOrFail
          isOp <- isOperatorPartM part
          if isOp && statusIsValidPrefixInLevel
                         (PushOperatorPart status part)
@@ -573,6 +571,12 @@ parseExprInfix (currentLevel : levels) table status = do
        in any (operatorIsEqual moduleName parts)
               (S.toList level)
 
+    fromJustOrFail :: Maybe a -> M a
+    fromJustOrFail Nothing = do
+      state <- getFS
+      failM InternalError "INTERNAL ERROR: Extend isEndOfExpression ?"
+    fromJustOrFail (Just x) = return x
+
     isEndOfExpression :: M Bool
     isEndOfExpression = do
       t <- peekType
@@ -582,6 +586,7 @@ parseExprInfix (currentLevel : levels) table status = do
         T_RBrace    -> True
         T_Semicolon -> True
         T_Eq        -> True
+        T_Colon     -> True
         --T_Where   -> True  -- maybe add later
         _           -> False
 
