@@ -80,44 +80,44 @@ tests = TestSuite "PARSER" [
 
   testExprError "Reject using operator part as variable"
      (unlines [
-       "infixl 20 foo_",
+       "infix 20 foo_",
        "x = foo"
      ])
      ParseError,
 
   testExprOK "Basic prefix operator"
      (unlines [
-       "infixl 20 a_",
+       "infix 20 a_",
        "x = a 10"
      ])
      (eapp (evar "a_") [eint 10]),
 
   testExprOK "Basic suffix operator"
      (unlines [
-       "infixl 20 _!",
+       "infix 20 _!",
        "x = 10 !"
      ])
      (eapp (evar "_!") [eint 10]),
 
   testExprOK "Basic infix operator"
      (unlines [
-       "infixl 20 _++_",
+       "infix 20 _++_",
        "x = 10 ++ 20"
      ])
      (eapp (evar "_++_") [eint 10, eint 20]),
 
   testExprOK "Basic circumfix operator"
      (unlines [
-       "infixl 20 [[_]]",
+       "infix 20 [[_]]",
        "x = [[ z ]]"
      ])
      (eapp (evar "[[_]]") [evar "z"]),
 
   testExprOK "Nested infix operators"
      (unlines [
-       "infixl 20 _+_",
-       "infixl 30 _*_",
-       "infixl 40 _^_",
+       "infix 20 _+_",
+       "infix 30 _*_",
+       "infix 40 _^_",
        "x = 1 ^ 2 * 3 ^ 4 + 5 ^ 6 * 7 ^ 8"
      ])
      (eapp (evar "_+_") [
@@ -133,9 +133,9 @@ tests = TestSuite "PARSER" [
 
   testExprOK "Parentheses"
      (unlines [
-       "infixl 20 _+_",
-       "infixl 30 _*_",
-       "infixl 40 _^_",
+       "infix 20 _+_",
+       "infix 30 _*_",
+       "infix 40 _^_",
        "x = ((1 + 2) * (3 + 4)) ^ ((5 + 6) * (7 + 8))"
      ])
      (eapp (evar "_^_") [
@@ -151,9 +151,9 @@ tests = TestSuite "PARSER" [
 
   testExprOK "Mixed nested operators"
      (unlines [
-       "infixl 20 foo_bar_baz_",
-       "infixl 30 _!!",
-       "infixl 40 ??_",
+       "infix 20 foo_bar_baz_",
+       "infix 30 _!!",
+       "infix 40 ??_",
        "x = ??(foo ?? 1 bar ?? 2 !! baz 3 !!)"
      ])
      (eapp (evar "??_") [
@@ -162,6 +162,33 @@ tests = TestSuite "PARSER" [
           eapp (evar "_!!") [eapp (evar "??_") [eint 2]],
           eapp (evar "_!!") [eint 3]
         ]
+      ]),
+
+  testExprError "Reject associating non-associative operator"
+     (unlines [
+       "infix 20 _+_",
+       "x = 1 + 2 + 3"
+     ])
+     ParseError,
+
+  testExprOK "Basic left-associative operator"
+     (unlines [
+       "infixl 20 _+_",
+       "x = 1 + 2 + 3"
+     ])
+     (eapp (evar "_+_") [
+        eapp (evar "_+_") [eint 1, eint 2],
+        eint 3
+      ]),
+
+  testExprOK "Basic right-associative operator"
+     (unlines [
+       "infixr 20 _+_",
+       "x = 1 + 2 + 3"
+     ])
+     (eapp (evar "_+_") [
+        eint 1,
+        eapp (evar "_+_") [eint 2, eint 3]
       ]),
 
   -- Empty program
