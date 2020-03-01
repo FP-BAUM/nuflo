@@ -46,9 +46,9 @@ updatePosition (_ : cs)   pos =
                            positionIndex  = positionIndex pos + 1 })
 
 instance Show Position where
-  show p = positionFilename p ++ "(" ++
+  show p = "<" ++ positionFilename p ++ ":" ++
            show (positionLine p) ++ ":" ++
-           show (positionColumn p) ++ ")"
+           show (positionColumn p) ++ ">"
 
 positionRegion :: Position -> String
 positionRegion p =

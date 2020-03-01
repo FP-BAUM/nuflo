@@ -1,9 +1,11 @@
 
 module Syntax.Name(
+         splitParts, allNameParts,
          isWellFormedName, isWellFormedOperatorName,
-         QName(..), readName, qualify, unqualifiedName
+         QName(..), readName, qualify, moduleNameFromQName, unqualifiedName
        ) where
 
+import Data.List((\\))
 import Lexer.Categories(isKeyword, isInteger)
 
 splitParts :: String -> [String]
@@ -14,6 +16,9 @@ splitParts (x : xs)   = let (p : ps) = splitParts xs in
                           if p == "_"
                            then [x] : p : ps
                            else (x : p) : ps
+
+allNameParts :: String -> [String]
+allNameParts id = id : (splitParts id \\ ["_"])
 
 -- A name part is well-formed if it is not a keyword nor an integer.
 isWellFormedNamePart :: String -> Bool
@@ -37,7 +42,10 @@ isWellFormedName s = case splitParts s of
 -- A well-formed name is moreover a well-formed operator name if
 -- it has at least one underscore.
 isWellFormedOperatorName :: String -> Bool
-isWellFormedOperatorName s = isWellFormedName s && "_" `elem` splitParts s
+isWellFormedOperatorName s =
+     isWellFormedName s
+  && s /= "_" 
+  && "_" `elem` splitParts s
 
 -- Qualified name
 data QName =
@@ -57,6 +65,11 @@ readName s
 qualify :: QName -> String -> QName
 qualify (Name id)            id' = Qualified id (readName id')
 qualify (Qualified id qname) id' = Qualified id (qualify qname id')
+
+moduleNameFromQName :: QName -> QName
+moduleNameFromQName (Qualified id (Name _)) = Name id
+moduleNameFromQName (Qualified id qname)    =
+  Qualified id (moduleNameFromQName qname)
 
 unqualifiedName :: QName -> String
 unqualifiedName (Name id)           = id

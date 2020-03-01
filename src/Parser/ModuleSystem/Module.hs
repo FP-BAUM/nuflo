@@ -2,17 +2,15 @@ module Parser.ModuleSystem.Module(
          Module,
            emptyModule, addSubmodule, declareName,
            exportAllNamesFromModule, exportNames,
-           declareOperator, moduleExists, nameIsExported
+           moduleExists, nameIsExported
        ) where
 
 import qualified Data.Set as S
 import qualified Data.Map as M
 
 import Error(ErrorMessage)
-import Syntax.Name(QName(..), qualify, isWellFormedOperatorName)
-import Parser.PrecedenceTable(
-         PrecedenceTable, Associativity, Precedence,
-         emptyPrecedenceTable, addOperator
+import Syntax.Name(
+         QName(..), qualify, allNameParts
        )
 
 ---- A module represents a tree of namespaces
@@ -23,16 +21,14 @@ data ModuleExports = ExportAll
 data Module = Module {
                 moduleNames           :: S.Set String,
                 moduleExportedNames   :: ModuleExports,
-                moduleSubmodules      :: M.Map String Module,
-                modulePrecedenceTable :: PrecedenceTable
+                moduleSubmodules      :: M.Map String Module
               }
 
 emptyModule :: Module
 emptyModule = Module {
                 moduleNames           = S.empty,
                 moduleExportedNames   = ExportSome S.empty,
-                moduleSubmodules      = M.empty,
-                modulePrecedenceTable = emptyPrecedenceTable
+                moduleSubmodules      = M.empty
               }
 
 addSubmodule :: QName -> Module -> Either ErrorMessage Module
@@ -47,22 +43,11 @@ declareName :: QName -> Module -> Either ErrorMessage Module
 declareName =
   liftToQName (\ id m ->
      return (m {
-       moduleNames = S.insert id (moduleNames m)
+       moduleNames = moduleNames m `S.union`
+                     S.fromList (allNameParts id)
      })
   )
 
-declareOperator :: Associativity -> Precedence -> QName -> Module
-                -> Either ErrorMessage Module
-declareOperator assoc precedence qname = 
-  liftToQName
-    (\ opName m -> 
-        if isWellFormedOperatorName opName
-         then  return (m {
-                 modulePrecedenceTable =
-                   addOperator assoc precedence qname (modulePrecedenceTable m)
-                })
-         else Left ("\"" ++ opName ++ "\" is not a valid operator name."))
-    qname
 
 exportAllNamesFromModule :: QName -> Module -> Either ErrorMessage Module
 exportAllNamesFromModule qname =
@@ -78,7 +63,7 @@ exportSingleName =
         let s = (case moduleExportedNames m of
                   ExportAll    -> S.empty
                   ExportSome s -> s)
-         in ExportSome (S.insert id s)
+         in ExportSome (s `S.union` S.fromList (allNameParts id))
     }))
 
 exportNames :: QName -> [String] -> Module -> Either ErrorMessage Module
@@ -114,6 +99,12 @@ moduleExists (Name id)            m = M.member id (moduleSubmodules m)
 moduleExists (Qualified id qname) m =
   M.member id (moduleSubmodules m) &&
   moduleExists qname (M.findWithDefault undefined id (moduleSubmodules m))
+
+getModule :: QName -> Module -> Module
+getModule (Name id)            m =
+  M.findWithDefault undefined id (moduleSubmodules m)
+getModule (Qualified id qname) m =
+  getModule qname (M.findWithDefault undefined id (moduleSubmodules m))
 
 nameIsExported :: QName -> Module -> Bool
 nameIsExported (Name id) m =
