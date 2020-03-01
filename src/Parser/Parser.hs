@@ -11,7 +11,7 @@ import FailState(FailState, getFS, modifyFS, putFS, evalFS, failFS)
 import Syntax.Name(QName(..), readName, qualify, moduleNameFromQName,
                    unqualifiedName, splitParts, allNameParts)
 import Syntax.AST(
-         Program(..), AnnDeclaration(..), Declaration, AnnExpr(..), Expr,
+         Program(..), AnnDeclaration(..), AnnConstructorDeclaration(..), Declaration, ConstructorDeclaration, AnnExpr(..), Expr,
          exprIsVariable, exprHeadVariable
        )
 import Lexer.Token(Token(..), TokenType(..))
@@ -413,24 +413,27 @@ parseRenameId = do
 
 parseDataDeclaration :: M Declaration
 parseDataDeclaration = do
+  match T_Data
   pos <- currentPosition
   expr <- parseExpr
-  return $ dataDeclaration pos expr
+  dataDeclaration pos expr
 
 dataDeclaration :: Position -> Expr -> M Declaration
-dataDeclaration = pos (EVar _ name)  do
+dataDeclaration pos expr = do
   match T_Where
   match T_LBrace
   constructors <- parseDataConstructorsM
   match T_RBrace
-  return $ DataDeclaration pos name constructors
+  return $ DataDeclaration pos expr constructors
 
-dataDeclaration _ _ =
-  error "Expression leading data declaration must be a variable."
+dataDeclaration _ _ = failM ParseError ("Expression leading data declaration must be a variable.")
 
-parseDataConstructorsM :: M [Expr]
+parseDataConstructorsM :: M [ConstructorDeclaration]
+-- TODO: should support empty constructors
 parseDataConstructorsM = do
-  constructor <- parseTypeSignature
+  pos <- currentPosition
+  expr <- parseExpr
+  constructor <- parseConstructorDeclarationM pos expr
   t <- peekType
   case t  of
     T_Semicolon -> do
@@ -438,6 +441,13 @@ parseDataConstructorsM = do
                   constructors <- parseDataConstructorsM
                   return (constructor : constructors)
     _           -> do return [constructor]
+
+parseConstructorDeclarationM :: Position -> Expr -> M ConstructorDeclaration
+parseConstructorDeclarationM pos (EVar _ name) = do
+  match T_Colon
+  typ <- parseExpr
+  return $ ConstructorDeclaration pos name typ
+parseConstructorDeclarationM _ _ = failM ParseError ("Expression leading type declaration must be a variable.")
 
 parseFixityDeclaration :: Associativity -> M ()
 parseFixityDeclaration assoc = do
@@ -462,8 +472,7 @@ parseTypeSignature pos (EVar _ name) = do
   match T_Colon
   typ <- parseExpr
   return $ TypeSignature pos name typ
-parseTypeSignature _ _ =
-  error "Expression leading type declaration must be a variable."
+parseTypeSignature _ _ = failM ParseError ("Expression leading type declaration must be a variable.")
 
 parseValueDeclaration :: Position -> Expr -> M Declaration
 parseValueDeclaration pos lhs = do

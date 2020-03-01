@@ -3,6 +3,7 @@
 module Syntax.AST(
          Program(..),
          AnnDeclaration(..), Declaration,
+         AnnConstructorDeclaration(..), ConstructorDeclaration,
          AnnExpr(..), Expr,
          eraseAnnotations, exprIsVariable, exprHeadVariable
        ) where
