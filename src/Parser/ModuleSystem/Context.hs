@@ -66,7 +66,7 @@ importNames moduleName ((id, alias) : ids) m c
       importNames moduleName ids m c'
   | isWellFormedOperatorName id && id /= alias =
     Left ("Cannot rename operator: \"" ++ id ++ "\" to \"" ++ alias ++ "\".")
-  | isWellFormedOperatorName id && id == alias =
+  | otherwise = {- isWellFormedOperatorName id && id == alias -}
       rec (allNameParts id) c
     where
       rec []             c = return c

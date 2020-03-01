@@ -67,6 +67,8 @@ qualify (Name id)            id' = Qualified id (readName id')
 qualify (Qualified id qname) id' = Qualified id (qualify qname id')
 
 moduleNameFromQName :: QName -> QName
+moduleNameFromQName (Name id) =
+  error ("Name \"" ++ id ++ "\" is unqualified.")
 moduleNameFromQName (Qualified id (Name _)) = Name id
 moduleNameFromQName (Qualified id qname)    =
   Qualified id (moduleNameFromQName qname)
