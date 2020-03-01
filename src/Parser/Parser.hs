@@ -422,25 +422,26 @@ dataDeclaration :: Position -> Expr -> M Declaration
 dataDeclaration pos expr = do
   match T_Where
   match T_LBrace
+  t <- peekType
   constructors <- parseDataConstructorsM
   match T_RBrace
   return $ DataDeclaration pos expr constructors
 
-dataDeclaration _ _ = failM ParseError ("Expression leading data declaration must be a variable.")
-
 parseDataConstructorsM :: M [ConstructorDeclaration]
--- TODO: should support empty constructors
 parseDataConstructorsM = do
-  pos <- currentPosition
-  expr <- parseExpr
-  constructor <- parseConstructorDeclarationM pos expr
   t <- peekType
-  case t  of
-    T_Semicolon -> do
-                  getToken
-                  constructors <- parseDataConstructorsM
-                  return (constructor : constructors)
-    _           -> do return [constructor]
+  case t of
+    T_RBrace -> do return []
+    _        -> do pos <- currentPosition
+                   expr <- parseExpr
+                   constructor <- parseConstructorDeclarationM pos expr
+                   t1 <- peekType
+                   case t1 of
+                     T_Semicolon -> do
+                                   getToken
+                                   constructors <- parseDataConstructorsM
+                                   return (constructor : constructors)
+                     _           -> do return [constructor]
 
 parseConstructorDeclarationM :: Position -> Expr -> M ConstructorDeclaration
 parseConstructorDeclarationM pos (EVar _ name) = do
