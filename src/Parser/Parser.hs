@@ -411,8 +411,33 @@ parseRenameId = do
                return (id, alias)
     _ -> return (id, id)
 
-parseDataDeclaration :: M Declaration   --TODO
-parseDataDeclaration = return undefined --TODO
+parseDataDeclaration :: M Declaration
+parseDataDeclaration = do
+  pos <- currentPosition
+  expr <- parseExpr
+  return $ dataDeclaration pos expr
+
+dataDeclaration :: Position -> Expr -> M Declaration
+dataDeclaration = pos (EVar _ name)  do
+  match T_Where
+  match T_LBrace
+  constructors <- parseDataConstructorsM
+  match T_RBrace
+  return $ DataDeclaration pos name constructors
+
+dataDeclaration _ _ =
+  error "Expression leading data declaration must be a variable."
+
+parseDataConstructorsM :: M [Expr]
+parseDataConstructorsM = do
+  constructor <- parseTypeSignature
+  t <- peekType
+  case t  of
+    T_Semicolon -> do
+                  getToken
+                  constructors <- parseDataConstructorsM
+                  return (constructor : constructors)
+    _           -> do return [constructor]
 
 parseFixityDeclaration :: Associativity -> M ()
 parseFixityDeclaration assoc = do
