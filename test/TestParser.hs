@@ -61,7 +61,8 @@ eint :: Integer -> AnnExpr ()
 eint n = EInt () n
 
 eapp :: AnnExpr () -> [AnnExpr ()] -> AnnExpr ()
-eapp = foldl (EApp ())
+eapp f []       = f
+eapp f (x : xs) = eapp (EApp () f x) xs
 
 tests :: TestSuite
 tests = TestSuite "PARSER" [
@@ -92,7 +93,6 @@ tests = TestSuite "PARSER" [
            ConstructorDeclaration () (qmain "tt") (evar "Unit")
          ]
      ]),
-
 
   testProgramOK "Data declaration"
      (unlines [
@@ -252,6 +252,15 @@ tests = TestSuite "PARSER" [
         eint 1,
         eapp (evar "_+_") [eint 2, eint 3]
       ]),
+
+  testExprOK "Application"
+     (unlines [
+       "x = f (g y) (h a b)"
+     ])
+     (eapp (evar "f") [
+           (eapp (evar "g") [evar "y"]),
+           (eapp (evar "h") [evar "a", evar "b"])
+     ]),
 
   testExprOK "Import datatype from module"
      (unlines [

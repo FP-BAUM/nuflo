@@ -497,6 +497,19 @@ parseExpr = do
   table <- getPrecedenceTable
   parseExprMixfix (precedenceTableLevels table) table
 
+isEndOfExpression :: M Bool
+isEndOfExpression = do
+  t <- peekType
+  return $ case t of
+    T_EOF       -> True
+    T_RParen    -> True
+    T_RBrace    -> True
+    T_Semicolon -> True
+    T_Eq        -> True
+    T_Colon     -> True
+    T_Where     -> True
+    _           -> False
+
 {-- Mixfix parser --}
 
 data Status = EmptyStatus Position
@@ -624,19 +637,6 @@ parseExprInfix (currentLevel : levels) table status = do
       failM InternalError "INTERNAL ERROR: Extend isEndOfExpression ?"
     fromJustOrFail (Just x) = return x
 
-    isEndOfExpression :: M Bool
-    isEndOfExpression = do
-      t <- peekType
-      return $ case t of
-        T_EOF       -> True
-        T_RParen    -> True
-        T_RBrace    -> True
-        T_Semicolon -> True
-        T_Eq        -> True
-        T_Colon     -> True
-        --T_Where   -> True  -- maybe add later
-        _           -> False
-
     statusPosition :: Status -> Position
     statusPosition (EmptyStatus pos)           = pos
     statusPosition (PushArgument status _)     = statusPosition status
@@ -702,7 +702,30 @@ parseExprInfix (currentLevel : levels) table status = do
 {-- End mixfix parser --}
 
 parseApplication :: M Expr
-parseApplication = parseAtom -- TODO
+parseApplication = do
+  pos <- currentPosition
+  head <- parseAtom
+  args <- parseApplicationArguments
+  return $ foldl (EApp pos) head args
+
+parseApplicationArguments :: M [Expr]
+parseApplicationArguments = do
+  isEnd <- isEndOfApplication
+  if isEnd
+   then return []
+   else do arg  <- parseAtom
+           args <- parseApplicationArguments
+           return (arg : args)
+
+isEndOfApplication :: M Bool
+isEndOfApplication = do
+  isEnd <- isEndOfExpression
+  if isEnd
+   then return True
+   else do maybeQName <- peekAndResolveQName
+           case maybeQName of
+             Nothing    -> return False
+             Just qname -> isOperatorPartM qname
 
 parseAtom :: M Expr
 parseAtom = do
