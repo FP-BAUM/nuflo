@@ -21,6 +21,7 @@ data TokenType =
   | T_Class
   | T_Colon
   | T_Data
+  | T_Type
   | T_Eq
   | T_Import
   | T_In

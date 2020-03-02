@@ -26,6 +26,7 @@ keywords = M.fromList [
   ("class", T_Class),
   (":", T_Colon),
   ("data", T_Data),
+  ("type", T_Type),
   ("=", T_Eq),
   ("import", T_Import),
   ("in", T_In),

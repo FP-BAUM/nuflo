@@ -71,6 +71,26 @@ tests = TestSuite "PARSER" [
      "module module" 
      ParseError,
 
+  testProgramOK "Single type declaration"
+     (unlines [
+       "type Name = String"
+     ])
+     (Program [
+       TypeDeclaration ()
+         (evar "Name")
+         (evar "String")
+     ]),
+
+  testProgramOK "Type declaration"
+     (unlines [
+       "type Ages = List Integer"
+     ])
+     (Program [
+       TypeDeclaration ()
+         (evar "Ages")
+         (eapp (evar "List") [evar "Integer"])
+     ]),
+
   testProgramOK "Empty data declaration"
      (unlines [
        "data Empty where"
