@@ -135,6 +135,12 @@ tests = TestSuite "PARSER" [
      ])
      ParseError,
 
+  testProgramError "Invalid type declaration with no head variable"
+     (unlines [
+       "type 10 = 10"
+     ])
+     ParseError,
+
   testProgramError "Invalid type signature with no head variable"
      (unlines [
        "data Bool where",
@@ -147,7 +153,6 @@ tests = TestSuite "PARSER" [
        "10 = 10"
      ])
      ParseError,
-
 
   -- Expressions
   testExprOK "Variable"
@@ -303,6 +308,16 @@ tests = TestSuite "PARSER" [
        "  x = True"
      ])
      (EVar () (Qualified "A" (Name "True"))),
+
+  testExprOK "Import type from module"
+     (unlines [
+       "module A where",
+       "  type N = Int",
+       "module B where",
+       "  import A",
+       "  x = N"
+     ])
+     (EVar () (Qualified "A" (Name "N"))),
 
   -- Empty program
   testProgramOK "Empty program"

@@ -21,7 +21,6 @@ data TokenType =
   | T_Class
   | T_Colon
   | T_Data
-  | T_Type
   | T_Eq
   | T_Import
   | T_In
@@ -32,6 +31,7 @@ data TokenType =
   | T_Lambda
   | T_Let
   | T_Module
+  | T_Type
   | T_Where
   -- Punctuation
   | T_Dot

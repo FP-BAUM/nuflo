@@ -381,8 +381,8 @@ parseDeclaration = do
                    return []
     T_Infixr -> do parseFixityDeclaration RightAssoc
                    return []
-    T_Type   -> do typeDeclaration <- parseTypeDeclaration
-                   return [typeDeclaration]
+    T_Type   -> do d <- parseTypeDeclaration
+                   return [d]
     T_Data   -> do d <- parseDataDeclaration
                    return [d]
     -- TODO: other kinds of declarations
@@ -420,14 +420,14 @@ parseTypeDeclaration :: M Declaration
 parseTypeDeclaration = do
   match T_Type
   pos <- currentPosition
-  expr <- parseExpr
-  case exprHeadVariable expr of
+  expr1 <- parseExpr
+  case exprHeadVariable expr1 of
     Just name -> declareQNameM name
     Nothing   -> failM ParseError
-                       ("Type name has no head variable: " ++ show expr)
+                       ("Type name has no head variable: " ++ show expr1)
   match T_Eq
   expr2 <- parseExpr
-  return $ TypeDeclaration pos expr expr2
+  return $ TypeDeclaration pos expr1 expr2
 
 parseDataDeclaration :: M Declaration
 parseDataDeclaration = do
