@@ -1,7 +1,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 
 module Syntax.AST(
-         Program(..),
+         AnnProgram(..), Program,
          AnnDeclaration(..), Declaration,
          AnnConstructorDeclaration(..), ConstructorDeclaration,
          AnnExpr(..), Expr,
@@ -11,10 +11,12 @@ module Syntax.AST(
 import Position(Position)
 import Syntax.Name(QName)
 
-data Program = Program {
-                 programDeclarations :: [Declaration]
-               }
+data AnnProgram a = Program {
+                      programDeclarations :: [AnnDeclaration a]
+                    }
   deriving (Eq, Show)
+
+type Program = AnnProgram Position
 
 -- Annotated declaration
 data AnnDeclaration a = 
@@ -64,6 +66,23 @@ type Expr                   = AnnExpr Position
 class EraseAnnotations f where
   eraseAnnotations :: f a -> f ()
 
+instance EraseAnnotations AnnProgram where
+  eraseAnnotations (Program x) = Program (map eraseAnnotations x)
+
+instance EraseAnnotations AnnDeclaration where
+  eraseAnnotations (DataDeclaration _ x y) =
+    DataDeclaration () (eraseAnnotations x) (map eraseAnnotations y)
+  eraseAnnotations (TypeDeclaration _ x y) =
+    TypeDeclaration () (eraseAnnotations x) (eraseAnnotations y)
+  eraseAnnotations (TypeSignature _ x y) =
+    TypeSignature () x (eraseAnnotations y)
+  eraseAnnotations (ValueDeclaration _ x y) =
+    ValueDeclaration () (eraseAnnotations x) (eraseAnnotations y)
+
+instance EraseAnnotations AnnConstructorDeclaration where
+  eraseAnnotations (ConstructorDeclaration _ x y) =
+    ConstructorDeclaration () x (eraseAnnotations y)
+
 instance EraseAnnotations AnnExpr where
   eraseAnnotations (EVar _ q)     = EVar () q
   eraseAnnotations (EInt _ n)     = EInt () n
@@ -76,8 +95,8 @@ exprIsVariable :: AnnExpr a -> Bool
 exprIsVariable (EVar _ _) = True
 exprIsVariable _          = False
 
-exprHeadVariable :: AnnExpr a -> QName
-exprHeadVariable (EVar _ q)    = q
+exprHeadVariable :: AnnExpr a -> Maybe QName
+exprHeadVariable (EVar _ q)    = return q
 exprHeadVariable (EApp _ e1 _) = exprHeadVariable e1
-exprHeadVariable _             = error "Expression has no head variable."
+exprHeadVariable _             = Nothing
 

@@ -5,21 +5,23 @@ import Test(TestSuite(..), Test(..))
 
 import Error(Error(..), ErrorType(..))
 import Syntax.Name(QName(..))
-import Syntax.AST(Program(..), AnnDeclaration(..), AnnExpr(..), Expr,
+import Syntax.AST(AnnProgram(..), AnnDeclaration(..),
+                  AnnConstructorDeclaration(..), ConstructorDeclaration,
+                  AnnExpr(..), Expr,
                   eraseAnnotations)
 import Lexer.Lexer(tokenize)
 import Parser.Parser(parse)
 
-testProgram :: String -> String -> Either ErrorType Program -> Test
+testProgram :: String -> String -> Either ErrorType (AnnProgram ()) -> Test
 testProgram description source expected =
   TestCase description 
            (normalizeResult (tokenize "test" source >>= parse))
            expected
   where
     normalizeResult (Left  e) = Left (errorType e)
-    normalizeResult (Right x) = Right x
+    normalizeResult (Right x) = Right (eraseAnnotations x)
 
-testProgramOK :: String -> String -> Program -> Test
+testProgramOK :: String -> String -> AnnProgram () -> Test
 testProgramOK description source expected =
   testProgram description source (Right expected)
 
@@ -63,9 +65,69 @@ eapp = foldl (EApp ())
 
 tests :: TestSuite
 tests = TestSuite "PARSER" [
+
   testProgramError "Expect module name after module keyword"
      "module module" 
      ParseError,
+
+  testProgramOK "Empty data declaration"
+     (unlines [
+       "data Empty where"
+     ])
+     (Program [
+       DataDeclaration ()
+         (evar "Empty")
+         []
+     ]),
+
+  testProgramOK "Single data declaration"
+     (unlines [
+       "data Unit where",
+       "  tt : Unit"
+     ])
+     (Program [
+       DataDeclaration ()
+         (evar "Unit")
+         [
+           ConstructorDeclaration () (qmain "tt") (evar "Unit")
+         ]
+     ]),
+
+
+  testProgramOK "Data declaration"
+     (unlines [
+       "data Bool where",
+       "  True  : Bool",
+       "  False : Bool"
+     ])
+     (Program [
+       DataDeclaration ()
+         (evar "Bool")
+         [
+           ConstructorDeclaration () (qmain "True") (evar "Bool"),
+           ConstructorDeclaration () (qmain "False") (evar "Bool")
+         ]
+     ]),
+
+  testProgramError "Invalid data declaration with no head variable"
+     (unlines [
+       "data 10 where"
+     ])
+     ParseError,
+
+  testProgramError "Invalid type signature with no head variable"
+     (unlines [
+       "data Bool where",
+       "10 : Bool"
+     ])
+     ParseError,
+
+  testProgramError "Invalid value declaration with no head variable"
+     (unlines [
+       "10 = 10"
+     ])
+     ParseError,
+
 
   -- Expressions
   testExprOK "Variable"
@@ -190,6 +252,28 @@ tests = TestSuite "PARSER" [
         eint 1,
         eapp (evar "_+_") [eint 2, eint 3]
       ]),
+
+  testExprOK "Import datatype from module"
+     (unlines [
+       "module A where",
+       "  data Bool where",
+       "    True : Bool",
+       "module B where",
+       "  import A",
+       "  x = Bool"
+     ])
+     (EVar () (Qualified "A" (Name "Bool"))),
+
+  testExprOK "Import constructor from module"
+     (unlines [
+       "module A where",
+       "  data Bool where",
+       "    True : Bool",
+       "module B where",
+       "  import A",
+       "  x = True"
+     ])
+     (EVar () (Qualified "A" (Name "True"))),
 
   -- Empty program
   testProgramOK "Empty program"

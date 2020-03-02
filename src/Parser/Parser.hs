@@ -11,7 +11,10 @@ import FailState(FailState, getFS, modifyFS, putFS, evalFS, failFS)
 import Syntax.Name(QName(..), readName, qualify, moduleNameFromQName,
                    unqualifiedName, splitParts, allNameParts)
 import Syntax.AST(
-         Program(..), AnnDeclaration(..), AnnConstructorDeclaration(..), Declaration, ConstructorDeclaration, AnnExpr(..), Expr,
+         AnnProgram(..), Program(..),
+         AnnDeclaration(..), Declaration,
+         AnnConstructorDeclaration(..), ConstructorDeclaration,
+         AnnExpr(..), Expr,
          exprIsVariable, exprHeadVariable
        )
 import Lexer.Token(Token(..), TokenType(..))
@@ -416,39 +419,42 @@ parseDataDeclaration = do
   match T_Data
   pos <- currentPosition
   expr <- parseExpr
-  dataDeclaration pos expr
-
-dataDeclaration :: Position -> Expr -> M Declaration
-dataDeclaration pos expr = do
+  case exprHeadVariable expr of
+    Just name -> declareQNameM name
+    Nothing   -> failM ParseError
+                       ("Type name has no head variable: " ++ show expr)
   match T_Where
   match T_LBrace
   t <- peekType
-  constructors <- parseDataConstructorsM
+  constructors <- parseDataConstructors
   match T_RBrace
   return $ DataDeclaration pos expr constructors
 
-parseDataConstructorsM :: M [ConstructorDeclaration]
-parseDataConstructorsM = do
+parseDataConstructors :: M [ConstructorDeclaration]
+parseDataConstructors = do
   t <- peekType
   case t of
     T_RBrace -> do return []
-    _        -> do pos <- currentPosition
-                   expr <- parseExpr
-                   constructor <- parseConstructorDeclarationM pos expr
+    _        -> do constructor <- parseConstructorDeclaration
                    t1 <- peekType
                    case t1 of
-                     T_Semicolon -> do
-                                   getToken
-                                   constructors <- parseDataConstructorsM
-                                   return (constructor : constructors)
-                     _           -> do return [constructor]
+                     T_Semicolon -> do match T_Semicolon
+                                       constructors <- parseDataConstructors
+                                       return (constructor : constructors)
+                     _           -> return [constructor]
 
-parseConstructorDeclarationM :: Position -> Expr -> M ConstructorDeclaration
-parseConstructorDeclarationM pos (EVar _ name) = do
-  match T_Colon
-  typ <- parseExpr
-  return $ ConstructorDeclaration pos name typ
-parseConstructorDeclarationM _ _ = failM ParseError ("Expression leading type declaration must be a variable.")
+parseConstructorDeclaration :: M ConstructorDeclaration
+parseConstructorDeclaration = do
+  pos <- currentPosition
+  expr <- parseExpr
+  case expr of
+    EVar _ name -> do
+      declareQNameM name
+      match T_Colon
+      typ <- parseExpr
+      return $ ConstructorDeclaration pos name typ
+    _ -> failM ParseError
+                ("Expected constructor name. Got: " ++ show expr)
 
 parseFixityDeclaration :: Associativity -> M ()
 parseFixityDeclaration assoc = do
@@ -462,7 +468,11 @@ parseTypeSignatureOrValueDeclaration :: M Declaration
 parseTypeSignatureOrValueDeclaration = do
   pos <- currentPosition
   expr <- parseExpr
-  declareQNameM (exprHeadVariable expr)
+  case exprHeadVariable expr of
+    Just name -> declareQNameM name
+    Nothing   -> failM ParseError
+                       ("Declared expression has no head variable: " ++
+                        show expr)
   t <- peekType
   case t of
     T_Colon | exprIsVariable expr -> parseTypeSignature pos expr
@@ -473,7 +483,8 @@ parseTypeSignature pos (EVar _ name) = do
   match T_Colon
   typ <- parseExpr
   return $ TypeSignature pos name typ
-parseTypeSignature _ _ = failM ParseError ("Expression leading type declaration must be a variable.")
+parseTypeSignature _ _ =
+  error "Expression leading declaration must be a variable."
 
 parseValueDeclaration :: Position -> Expr -> M Declaration
 parseValueDeclaration pos lhs = do
@@ -532,7 +543,8 @@ parseExprInfix (currentLevel : levels) table status = do
     prematureEndOfExpression _ =
       do t <- peekType
          failM ParseError
-           ("Premature end of expression. Possibly expected operator part.\n" ++
+           ("Premature end of expression.\n" ++
+            "Possibly expected operator part.\n" ++
             "Got: " ++ show t ++ ".\n" ++
             "Status: " ++ show status)
 

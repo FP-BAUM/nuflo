@@ -5,7 +5,7 @@ import Test(TestSuite(..), Test(..))
 
 import Error(Error(..), ErrorType(..))
 import Syntax.Name(QName(..))
-import Syntax.AST(Program(..), AnnDeclaration(..), AnnExpr(..), Expr,
+import Syntax.AST(AnnProgram(..), AnnDeclaration(..), AnnExpr(..), Expr,
                   eraseAnnotations)
 import Lexer.Lexer(tokenize)
 import Parser.Parser(parse)
