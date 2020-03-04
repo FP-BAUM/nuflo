@@ -64,29 +64,48 @@ To use qualified imports, do:
     <fixity> INT ID
   |
     /* Data declaration */
-    DATA <expr> WHERE LBRACE <signatures~ RBRACE
+    DATA <expr> WHERE LBRACE <typeSignatures~ RBRACE
   |
     /* Type declaration */
     TYPE <expr> EQ <expr>
   |
     /* Class declaration */
-    CLASS <qname> <qname> WHERE LBRACE <signatures~ RBRACE
+    CLASS <classname> <qname>
+      WHERE LBRACE <typeSignatures> RBRACE
+  |
+    /* Instance declaration */
+    INSTANCE <classname> <expr> <optionalConstraints>
+      WHERE LBRACE <valueDeclarations> RBRACE
   |
     /* Type signature */
-    <signature>
+    <typeSignature>
   |
     /* Value declaration */
-    <expr> EQ <expr>
+    <valueDeclaration>
 
 <fixity> ::= INFIXL | INFIXR | INFIX
 
-<signatures> ::= /* EMPTY */
-               | <signatures+>
+----
 
-<signatures+> ::= <signature>
-                | <signature> SEMICOLON <signatures+>
+<typeSignatures> ::= /* EMPTY */
+                   | <typeSignatures+>
 
-<signature> ::= ID COLON <expr> <optionalConstraints>
+<typeSignatures+> ::= <typeSignature>
+                    | <typeSignature> SEMICOLON <typeSignatures+>
+
+<typeSignature> ::= ID COLON <expr> <optionalConstraints>
+
+----
+
+<valueDeclarations> ::= /* EMPTY */
+                      | <valueDeclarations+>
+
+<valueDeclarations>+ ::= <valueDeclaration>
+                       | <valueDeclaration> <valueDeclarations+>
+
+<valueDeclaration> ::= <expr> EQ <expr>
+
+---
 
 <optionalConstraints> ::= /* EMPTY */
                         | LBRACE <constraints> RBRACE
@@ -97,5 +116,7 @@ To use qualified imports, do:
 <constraints+> ::= <constraint>
                  | <constraint> SEMICOLON <constraints+>
 
-<constraint> ::= <qname> <qname>
+<constraint> ::= <classname> <qname>
+
+<classname> ::= <qname>
 
