@@ -3,7 +3,7 @@
 module Syntax.AST(
          AnnProgram(..), Program,
          AnnDeclaration(..), Declaration,
-         AnnConstructorDeclaration(..), ConstructorDeclaration,
+         AnnSignature(..), Signature,
          AnnExpr(..), Expr,
          eraseAnnotations, exprIsVariable, exprHeadVariable
        ) where
@@ -23,7 +23,7 @@ data AnnDeclaration a =
     DataDeclaration {
       annotation       :: a,
       dataTypeName     :: AnnExpr a,
-      dataConstructors :: [AnnConstructorDeclaration a]
+      dataConstructors :: [AnnSignature a]
     }
   | TypeDeclaration {
       annotation :: a,
@@ -31,24 +31,26 @@ data AnnDeclaration a =
       typeValue  :: AnnExpr a
     }
   | TypeSignature {
-      annotation    :: a,
-      signatureName :: QName,
-      signatureType :: AnnExpr a
+      typeSignature :: AnnSignature a
     }
   | ValueDeclaration {
       annotation :: a,
       declLHS  :: AnnExpr a,
       declRHS  :: AnnExpr a
     }
+  | ClassDeclaration {
+      annotation       :: a,
+      className        :: QName,
+      classTypeName    :: QName,
+      classMethods     :: [AnnSignature a]
+    }
   deriving (Eq, Show)
 
-data AnnConstructorDeclaration a = 
-  ConstructorDeclaration {
-    annotation      :: a,
-    constructorName :: QName,
-    constructorType :: AnnExpr a
-  }
-  deriving (Eq, Show)
+data AnnSignature a = Signature {
+  annotation      :: a,
+  signatureName   :: QName,
+  signatureValue  :: AnnExpr a
+} deriving (Eq, Show)
 
 -- Annotated expression
 data AnnExpr a =
@@ -58,7 +60,7 @@ data AnnExpr a =
   deriving (Eq, Show)
 
 type Declaration            = AnnDeclaration Position
-type ConstructorDeclaration = AnnConstructorDeclaration Position
+type Signature              = AnnSignature Position
 type Expr                   = AnnExpr Position
 
 --
@@ -74,14 +76,14 @@ instance EraseAnnotations AnnDeclaration where
     DataDeclaration () (eraseAnnotations x) (map eraseAnnotations y)
   eraseAnnotations (TypeDeclaration _ x y) =
     TypeDeclaration () (eraseAnnotations x) (eraseAnnotations y)
-  eraseAnnotations (TypeSignature _ x y) =
-    TypeSignature () x (eraseAnnotations y)
+  eraseAnnotations (TypeSignature x) =
+    TypeSignature $ eraseAnnotations x
   eraseAnnotations (ValueDeclaration _ x y) =
     ValueDeclaration () (eraseAnnotations x) (eraseAnnotations y)
 
-instance EraseAnnotations AnnConstructorDeclaration where
-  eraseAnnotations (ConstructorDeclaration _ x y) =
-    ConstructorDeclaration () x (eraseAnnotations y)
+instance EraseAnnotations AnnSignature where
+  eraseAnnotations (Signature _ x y) =
+    Signature () x (eraseAnnotations y)
 
 instance EraseAnnotations AnnExpr where
   eraseAnnotations (EVar _ q)     = EVar () q

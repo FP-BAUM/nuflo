@@ -13,7 +13,7 @@ import Syntax.Name(QName(..), readName, qualify, moduleNameFromQName,
 import Syntax.AST(
          AnnProgram(..), Program(..),
          AnnDeclaration(..), Declaration,
-         AnnConstructorDeclaration(..), ConstructorDeclaration,
+         AnnSignature(..), Signature,
          AnnExpr(..), Expr,
          exprIsVariable, exprHeadVariable
        )
@@ -441,25 +441,25 @@ parseDataDeclaration = do
   match T_Where
   match T_LBrace
   t <- peekType
-  constructors <- parseDataConstructors
+  constructors <- parseSignatures
   match T_RBrace
   return $ DataDeclaration pos expr constructors
 
-parseDataConstructors :: M [ConstructorDeclaration]
-parseDataConstructors = do
+parseSignatures :: M [Signature]
+parseSignatures = do
   t <- peekType
   case t of
     T_RBrace -> do return []
-    _        -> do constructor <- parseConstructorDeclaration
+    _        -> do constructor <- parseSignature
                    t1 <- peekType
                    case t1 of
                      T_Semicolon -> do match T_Semicolon
-                                       constructors <- parseDataConstructors
+                                       constructors <- parseSignatures
                                        return (constructor : constructors)
                      _           -> return [constructor]
 
-parseConstructorDeclaration :: M ConstructorDeclaration
-parseConstructorDeclaration = do
+parseSignature :: M Signature
+parseSignature = do
   pos <- currentPosition
   expr <- parseExpr
   case expr of
@@ -467,7 +467,7 @@ parseConstructorDeclaration = do
       declareQNameM name
       match T_Colon
       typ <- parseExpr
-      return $ ConstructorDeclaration pos name typ
+      return $ Signature pos name typ
     _ -> failM ParseError
                 ("Expected constructor name. Got: " ++ show expr)
 
@@ -497,7 +497,7 @@ parseTypeSignature :: Position -> Expr -> M Declaration
 parseTypeSignature pos (EVar _ name) = do
   match T_Colon
   typ <- parseExpr
-  return $ TypeSignature pos name typ
+  return $ TypeSignature (Signature pos name typ)
 parseTypeSignature _ _ =
   error "Expression leading declaration must be a variable."
 

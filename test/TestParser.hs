@@ -6,7 +6,7 @@ import Test(TestSuite(..), Test(..))
 import Error(Error(..), ErrorType(..))
 import Syntax.Name(QName(..))
 import Syntax.AST(AnnProgram(..), AnnDeclaration(..),
-                  AnnConstructorDeclaration(..), ConstructorDeclaration,
+                  AnnSignature(..), Signature,
                   AnnExpr(..), Expr,
                   eraseAnnotations)
 import Lexer.Lexer(tokenize)
@@ -110,7 +110,7 @@ tests = TestSuite "PARSER" [
        DataDeclaration ()
          (evar "Unit")
          [
-           ConstructorDeclaration () (qmain "tt") (evar "Unit")
+           Signature () (qmain "tt") (evar "Unit")
          ]
      ]),
 
@@ -124,8 +124,8 @@ tests = TestSuite "PARSER" [
        DataDeclaration ()
          (evar "Bool")
          [
-           ConstructorDeclaration () (qmain "True") (evar "Bool"),
-           ConstructorDeclaration () (qmain "False") (evar "Bool")
+           Signature () (qmain "True") (evar "Bool"),
+           Signature () (qmain "False") (evar "Bool")
          ]
      ]),
 
