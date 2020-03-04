@@ -7,6 +7,7 @@ import Error(Error(..), ErrorType(..))
 import Syntax.Name(QName(..))
 import Syntax.AST(AnnProgram(..), AnnDeclaration(..),
                   AnnSignature(..), Signature,
+                  AnnConstraint(..), Constraint,
                   AnnExpr(..), Expr,
                   eraseAnnotations)
 import Lexer.Lexer(tokenize)
@@ -140,6 +141,49 @@ tests = TestSuite "PARSER" [
          (qmain "Eq")
          (qmain "a")
          []
+     ]),
+
+  testProgramOK "Class declaration with methods without constriants"
+     (unlines [
+       "class A b where",
+       " f : a",
+       " g : b"
+     ])
+     (Program [
+       ClassDeclaration ()
+         (qmain "A")
+         (qmain "b") [
+           Signature () (qmain "f") (evar "a") [],
+           Signature () (qmain "g") (evar "b") []
+         ]
+     ]),
+
+  testProgramOK "Class declaration with methods with constriants"
+     (unlines [
+       "class A b where",
+       " f : a { Eq a ; Ord a }",
+       " g : b { Ord b }"
+     ])
+     (Program [
+       ClassDeclaration ()
+         (qmain "A")
+         (qmain "b") [
+           Signature () (qmain "f") (evar "a") [
+             Constraint () (qmain "Eq") (qmain "a"),
+             Constraint () (qmain "Ord") (qmain "a")
+           ],
+           Signature () (qmain "g") (evar "b") [
+             Constraint () (qmain "Ord") (qmain "b")
+           ]
+         ]
+     ]),
+
+  testProgramOK "Basic signature with constraint"
+     (unlines [
+       "foo : a { Eq a }"
+     ])
+     (Program [
+       TypeSignature (Signature () (qmain "foo") (evar "a") [Constraint () (qmain "Eq") (qmain "a")])
      ]),
 
   testProgramError "Invalid data declaration with no head variable"

@@ -557,6 +557,7 @@ isEndOfExpression = do
   return $ case t of
     T_EOF       -> True
     T_RParen    -> True
+    T_LBrace    -> True
     T_RBrace    -> True
     T_Semicolon -> True
     T_Eq        -> True
