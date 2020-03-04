@@ -14,6 +14,7 @@ import Syntax.AST(
          AnnProgram(..), Program(..),
          AnnDeclaration(..), Declaration,
          AnnSignature(..), Signature,
+         AnnConstraint(..), Constraint,
          AnnExpr(..), Expr,
          exprIsVariable, exprHeadVariable
        )
@@ -385,6 +386,8 @@ parseDeclaration = do
                    return [d]
     T_Data   -> do d <- parseDataDeclaration
                    return [d]
+    T_Class  -> do d <- parseClassDeclaration
+                   return [d]
     -- TODO: other kinds of declarations
     T_Id _   -> do d <- parseTypeSignatureOrValueDeclaration
                    return [d]
@@ -440,10 +443,22 @@ parseDataDeclaration = do
                        ("Type name has no head variable: " ++ show expr)
   match T_Where
   match T_LBrace
-  t <- peekType
   constructors <- parseSignatures
   match T_RBrace
   return $ DataDeclaration pos expr constructors
+
+parseClassDeclaration :: M Declaration
+parseClassDeclaration = do
+  match T_Class
+  pos       <- currentPosition
+  className <- parseAndResolveQName
+  declareQNameM className
+  typeName  <- parseAndResolveQName
+  match T_Where
+  match T_LBrace
+  signatures <- parseSignatures
+  match T_RBrace
+  return $ ClassDeclaration pos className typeName signatures
 
 parseSignatures :: M [Signature]
 parseSignatures = do
@@ -467,9 +482,31 @@ parseSignature = do
       declareQNameM name
       match T_Colon
       typ <- parseExpr
-      return $ Signature pos name typ
+      constraints <- parseOptionalConstraints
+      return $ Signature pos name typ constraints
     _ -> failM ParseError
                 ("Expected constructor name. Got: " ++ show expr)
+
+parseOptionalConstraints :: M [Constraint]
+parseOptionalConstraints = do
+  t <- peekType
+  case t of
+    T_LBrace -> do
+      match T_LBrace
+      constraints <- parseConstraints
+      match T_RBrace
+      return constraints
+    _        -> return []
+
+parseConstraints :: M [Constraint]
+parseConstraints = parseSequence peekIsRParen (match T_Semicolon) parseConstraint
+
+parseConstraint :: M Constraint
+parseConstraint = do
+  pos       <- currentPosition
+  className <- parseAndResolveQName
+  typeName <- parseAndResolveQName
+  return $ Constraint pos className typeName
 
 parseFixityDeclaration :: Associativity -> M ()
 parseFixityDeclaration assoc = do
@@ -497,7 +534,8 @@ parseTypeSignature :: Position -> Expr -> M Declaration
 parseTypeSignature pos (EVar _ name) = do
   match T_Colon
   typ <- parseExpr
-  return $ TypeSignature (Signature pos name typ)
+  constraints <- parseOptionalConstraints
+  return $ TypeSignature (Signature pos name typ constraints)
 parseTypeSignature _ _ =
   error "Expression leading declaration must be a variable."
 

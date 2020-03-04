@@ -4,6 +4,7 @@ module Syntax.AST(
          AnnProgram(..), Program,
          AnnDeclaration(..), Declaration,
          AnnSignature(..), Signature,
+         AnnConstraint(..), Constraint,
          AnnExpr(..), Expr,
          eraseAnnotations, exprIsVariable, exprHeadVariable
        ) where
@@ -47,9 +48,16 @@ data AnnDeclaration a =
   deriving (Eq, Show)
 
 data AnnSignature a = Signature {
-  annotation      :: a,
-  signatureName   :: QName,
-  signatureValue  :: AnnExpr a
+  annotation           :: a,
+  signatureName        :: QName,
+  signatureValue       :: AnnExpr a,
+  signatureConstraints :: [AnnConstraint a]
+} deriving (Eq, Show)
+
+data AnnConstraint a = Constraint {
+    annotation                 :: a,
+    constraintClassName        :: QName,
+    constraintTypeName         :: QName
 } deriving (Eq, Show)
 
 -- Annotated expression
@@ -60,6 +68,7 @@ data AnnExpr a =
   deriving (Eq, Show)
 
 type Declaration            = AnnDeclaration Position
+type Constraint             = AnnConstraint Position
 type Signature              = AnnSignature Position
 type Expr                   = AnnExpr Position
 
@@ -80,10 +89,15 @@ instance EraseAnnotations AnnDeclaration where
     TypeSignature $ eraseAnnotations x
   eraseAnnotations (ValueDeclaration _ x y) =
     ValueDeclaration () (eraseAnnotations x) (eraseAnnotations y)
+  eraseAnnotations (ClassDeclaration _ x y z) =
+    ClassDeclaration () x y (map eraseAnnotations z)
 
 instance EraseAnnotations AnnSignature where
-  eraseAnnotations (Signature _ x y) =
-    Signature () x (eraseAnnotations y)
+  eraseAnnotations (Signature _ x y z) =
+    Signature () x (eraseAnnotations y) (map eraseAnnotations z)
+
+instance EraseAnnotations AnnConstraint where
+  eraseAnnotations (Constraint _ x y) = Constraint () x y
 
 instance EraseAnnotations AnnExpr where
   eraseAnnotations (EVar _ q)     = EVar () q

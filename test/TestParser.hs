@@ -67,6 +67,8 @@ eapp f (x : xs) = eapp (EApp () f x) xs
 tests :: TestSuite
 tests = TestSuite "PARSER" [
 
+  -- Declarations
+
   testProgramError "Expect module name after module keyword"
      "module module" 
      ParseError,
@@ -110,7 +112,7 @@ tests = TestSuite "PARSER" [
        DataDeclaration ()
          (evar "Unit")
          [
-           Signature () (qmain "tt") (evar "Unit")
+           Signature () (qmain "tt") (evar "Unit") []
          ]
      ]),
 
@@ -124,9 +126,20 @@ tests = TestSuite "PARSER" [
        DataDeclaration ()
          (evar "Bool")
          [
-           Signature () (qmain "True") (evar "Bool"),
-           Signature () (qmain "False") (evar "Bool")
+           Signature () (qmain "True") (evar "Bool") [],
+           Signature () (qmain "False") (evar "Bool") []
          ]
+     ]),
+
+  testProgramOK "Empty class declaration"
+     (unlines [
+       "class Eq a where"
+     ])
+     (Program [
+       ClassDeclaration ()
+         (qmain "Eq")
+         (qmain "a")
+         []
      ]),
 
   testProgramError "Invalid data declaration with no head variable"
@@ -155,6 +168,7 @@ tests = TestSuite "PARSER" [
      ParseError,
 
   -- Expressions
+
   testExprOK "Variable"
      "x = y" 
      (evar "y"),
