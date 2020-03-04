@@ -178,12 +178,14 @@ tests = TestSuite "PARSER" [
          ]
      ]),
 
-  testProgramOK "Basic signature with constraint"
+  testProgramOK "Type signature with constraint"
      (unlines [
-       "foo : a { Eq a }"
+       "f : a { Eq a }"
      ])
      (Program [
-       TypeSignature (Signature () (qmain "foo") (evar "a") [Constraint () (qmain "Eq") (qmain "a")])
+       TypeSignature
+         (Signature () (qmain "foo") (evar "a")
+                       [Constraint () (qmain "Eq") (qmain "a")])
      ]),
 
   testProgramError "Invalid data declaration with no head variable"
