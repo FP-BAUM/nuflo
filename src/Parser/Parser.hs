@@ -87,6 +87,13 @@ peekIsRParen = do
     T_RParen -> return True
     _        -> return False
 
+peekIsRBrace :: M Bool
+peekIsRBrace = do
+  t <- peekType
+  case t of
+    T_RBrace -> return True
+    _        -> return False
+
 getToken :: M Token
 getToken = do
   state <- getFS
@@ -461,17 +468,9 @@ parseClassDeclaration = do
   return $ ClassDeclaration pos className typeName signatures
 
 parseSignatures :: M [Signature]
-parseSignatures = do
-  t <- peekType
-  case t of
-    T_RBrace -> do return []
-    _        -> do constructor <- parseSignature
-                   t1 <- peekType
-                   case t1 of
-                     T_Semicolon -> do match T_Semicolon
-                                       constructors <- parseSignatures
-                                       return (constructor : constructors)
-                     _           -> return [constructor]
+parseSignatures = parseSequence peekIsRBrace 
+                                (match T_Semicolon)
+                                parseSignature
 
 parseSignature :: M Signature
 parseSignature = do
@@ -499,7 +498,9 @@ parseOptionalConstraints = do
     _        -> return []
 
 parseConstraints :: M [Constraint]
-parseConstraints = parseSequence peekIsRParen (match T_Semicolon) parseConstraint
+parseConstraints = parseSequence peekIsRBrace 
+                                 (match T_Semicolon)
+                                 parseConstraint
 
 parseConstraint :: M Constraint
 parseConstraint = do

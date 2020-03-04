@@ -64,16 +64,38 @@ To use qualified imports, do:
     <fixity> INT ID
   |
     /* Data declaration */
-    DATA <expr> WHERE LBRACE ***TODO*** RBRACE
+    DATA <expr> WHERE LBRACE <signatures~ RBRACE
   |
     /* Type declaration */
     TYPE <expr> EQ <expr>
   |
+    /* Class declaration */
+    CLASS <qname> <qname> WHERE LBRACE <signatures~ RBRACE
+  |
     /* Type signature */
-    ID COLON <expr> 
+    <signature>
   |
     /* Value declaration */
     <expr> EQ <expr>
 
 <fixity> ::= INFIXL | INFIXR | INFIX
+
+<signatures> ::= /* EMPTY */
+               | <signatures+>
+
+<signatures+> ::= <signature>
+                | <signature> SEMICOLON <signatures+>
+
+<signature> ::= ID COLON <expr> <optionalConstraints>
+
+<optionalConstraints> ::= /* EMPTY */
+                        | LBRACE <constraints> RBRACE
+
+<constraints> ::= /* EMPTY */
+                 | <constraint+>
+
+<constraints+> ::= <constraint>
+                 | <constraint> SEMICOLON <constraints+>
+
+<constraint> ::= <qname> <qname>
 
