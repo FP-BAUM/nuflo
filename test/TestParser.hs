@@ -161,8 +161,8 @@ tests = TestSuite "PARSER" [
   testProgramOK "Class declaration with methods with constriants"
      (unlines [
        "class A b where",
-       " f : a { Eq a ; Ord a }",
-       " g : b { Ord b }"
+       " f : a   {Eq a; Ord a}",
+       " g : b   {Ord b}"
      ])
      (Program [
        ClassDeclaration ()
@@ -180,11 +180,11 @@ tests = TestSuite "PARSER" [
 
   testProgramOK "Type signature with constraint"
      (unlines [
-       "f : a { Eq a }"
+       "f : a    {Eq a}"
      ])
      (Program [
        TypeSignature
-         (Signature () (qmain "foo") (evar "a")
+         (Signature () (qmain "f") (evar "a")
                        [Constraint () (qmain "Eq") (qmain "a")])
      ]),
 
@@ -210,6 +210,12 @@ tests = TestSuite "PARSER" [
   testProgramError "Invalid value declaration with no head variable"
      (unlines [
        "10 = 10"
+     ])
+     ParseError,
+
+  testProgramError "Invalid class declaration"
+     (unlines [
+       "class Eq where"
      ])
      ParseError,
 
@@ -346,6 +352,26 @@ tests = TestSuite "PARSER" [
            (eapp (evar "g") [evar "y"]),
            (eapp (evar "h") [evar "a", evar "b"])
      ]),
+
+  testExprOK "Import declared name from module"
+     (unlines [
+       "module A where",
+       "  f : Bool",
+       "module B where",
+       "  import A",
+       "  x = f"
+     ])
+     (EVar () (Qualified "A" (Name "f"))),
+
+  testExprOK "Import defined name from module"
+     (unlines [
+       "module A where",
+       "  f x y = 1",
+       "module B where",
+       "  import A",
+       "  x = f"
+     ])
+     (EVar () (Qualified "A" (Name "f"))),
 
   testExprOK "Import datatype from module"
      (unlines [

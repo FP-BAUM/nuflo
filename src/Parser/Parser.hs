@@ -474,7 +474,7 @@ parseSignatures = parseSequence peekIsRBrace
 
 parseSignature :: M Signature
 parseSignature = do
-  pos <- currentPosition
+  pos  <- currentPosition
   expr <- parseExpr
   case expr of
     EVar _ name -> do
@@ -484,7 +484,7 @@ parseSignature = do
       constraints <- parseOptionalConstraints
       return $ Signature pos name typ constraints
     _ -> failM ParseError
-                ("Expected constructor name. Got: " ++ show expr)
+                ("Expected a name. Got: " ++ show expr)
 
 parseOptionalConstraints :: M [Constraint]
 parseOptionalConstraints = do
@@ -519,29 +519,31 @@ parseFixityDeclaration assoc = do
 
 parseTypeSignatureOrValueDeclaration :: M Declaration
 parseTypeSignatureOrValueDeclaration = do
-  pos <- currentPosition
-  expr <- parseExpr
-  case exprHeadVariable expr of
-    Just name -> declareQNameM name
-    Nothing   -> failM ParseError
-                       ("Declared expression has no head variable: " ++
-                        show expr)
   t <- peekType
   case t of
-    T_Colon | exprIsVariable expr -> parseTypeSignature pos expr
-    _ -> parseValueDeclaration pos expr
+    T_Id _ -> do state <- getFS
+                 parseAndResolveQName -- skip name
+                 t' <- peekType
+                 putFS state
+                 case t' of
+                   T_Colon -> parseTypeSignature
+                   _       -> parseValueDeclaration
+    _ -> parseValueDeclaration
 
-parseTypeSignature :: Position -> Expr -> M Declaration
-parseTypeSignature pos (EVar _ name) = do
-  match T_Colon
-  typ <- parseExpr
-  constraints <- parseOptionalConstraints
-  return $ TypeSignature (Signature pos name typ constraints)
-parseTypeSignature _ _ =
-  error "Expression leading declaration must be a variable."
+parseTypeSignature :: M Declaration
+parseTypeSignature = do
+  sig <- parseSignature
+  return $ TypeSignature sig
 
-parseValueDeclaration :: Position -> Expr -> M Declaration
-parseValueDeclaration pos lhs = do
+parseValueDeclaration :: M Declaration
+parseValueDeclaration = do
+  pos <- currentPosition
+  lhs <- parseExpr
+  case exprHeadVariable lhs of
+    Just qname -> declareQNameM qname
+    Nothing    -> failM ParseError
+                        ("Declared expression has no head variable: " ++
+                         show lhs)
   match T_Eq
   rhs <- parseExpr
   return $ ValueDeclaration pos lhs rhs
