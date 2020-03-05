@@ -475,6 +475,26 @@ tests = TestSuite "PARSER" [
        ]
        (evar "e")),
 
+  testExprOK "Let: allow type declarations"
+     (unlines [
+       "x = let t : Bool",
+       "        t = True",
+       "     in t"
+     ])
+     (ELet ()
+       [
+         TypeSignature (Signature () (qmain "t") (evar "Bool") []),
+         ValueDeclaration (Equation () (evar "t") (evar "True"))
+       ]
+       (evar "t")),
+
+  testExprError "Let: reject type declaration"
+     (unlines [
+       "x = let { type B = Bool }",
+       "     in t"
+     ])
+     ParseError,
+
   ---- Imports
 
   testExprOK "Import declared name from module"

@@ -107,9 +107,25 @@ tests = TestSuite "MODULE SYSTEM" [
      "module A where {} module B where { import A(a); x = 1 }" 
      ModuleSystemError,
 
-  testExprError "Ambiguous name"
+  testExprError "Disallow shadowing name in toplevel declaration"
      "module A where { x = 1 } module B where { x = 2; import A; y = x }" 
      ModuleSystemError,
+
+  testExprOK "Allow shadowing name inside 'let'"
+     (unlines [
+       "module A where",
+       "  x = 1",
+       "module B where",
+       "  import A",
+       "  y = let x = y in x"
+     ])
+     (ELet ()
+       [
+         ValueDeclaration
+           (Equation () (EVar () (Qualified "A" (Name "x")))
+                        (EVar () (Qualified "B" (Name "y"))))
+       ]
+       (EVar () (Qualified "A" (Name "x")))),
 
   -- Operator parts
 

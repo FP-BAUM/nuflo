@@ -219,16 +219,20 @@ exportNamesM moduleName exportedNames =
 
 declareQNameM :: QName -> M ()
 declareQNameM qname = do
-  moduleName <- getCurrentModuleName
-  let uname = unqualifiedName qname in
-    if qname == qualify moduleName uname
-     then do -- Declare name in current module
-             modifyRootModule (declareName qname)
-             -- If it is an undeclared operator, declare it
-             declareIfOperatorM qname
-     else failM ModuleSystemError
-                ("Declaration of name \"" ++ uname ++ "\"" ++
-                 " shadows \"" ++ show qname ++ "\".")
+  isTop <- isToplevelScopeM
+  if isTop
+   then do moduleName <- getCurrentModuleName
+           let uname = unqualifiedName qname in
+             if qname == qualify moduleName uname
+              then do -- Declare name in current module
+                      modifyRootModule (declareName qname)
+                      -- If it is an undeclared operator, declare it
+                      declareIfOperatorM qname
+              else failM ModuleSystemError
+                         ("Declaration of name \"" ++ uname ++ "\"" ++
+                          " shadows \"" ++ show qname ++ "\".")
+   else -- Names not in the toplevel are not declared
+        return ()
 
 importAllNamesFromModuleM :: QName -> M ()
 importAllNamesFromModuleM moduleName = do
@@ -428,6 +432,14 @@ parseDeclarations = do
 
 parseDeclaration :: M [Declaration]
 parseDeclaration = do
+  isTop <- isToplevelScopeM
+  if isTop
+   then parseToplevelDeclaration
+   else do d <- parseTypeSignatureOrValueDeclaration
+           return [d]
+
+parseToplevelDeclaration :: M [Declaration]
+parseToplevelDeclaration = do
   t <- peekType
   case t of
     T_Import   -> do parseImport
