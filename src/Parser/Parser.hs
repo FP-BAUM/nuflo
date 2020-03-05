@@ -241,8 +241,20 @@ isRightAssoc op table =
 
 ---- Parser
 
+modulePRIM :: QName
+modulePRIM = Name "PRIM"
+
+moduleMain :: QName
+moduleMain = Name "Main"
+
 parseM :: M Program
 parseM = do
+  -- Initialize primitive module
+  enterModule modulePRIM
+  exportAllNamesFromModuleM modulePRIM
+  declareOperatorM RightAssoc 50 (qualify modulePRIM "_->_")
+
+  -- Parse
   decls <- parseModules 
   return $ Program {
              programDeclarations = decls
@@ -267,6 +279,7 @@ parseModule = do
   match T_Module
   qname <- parseQName
   enterModule qname
+  importAllNamesFromModuleM modulePRIM -- Every module imports PRIM
   parseModuleExports qname
   match T_Where
   match T_LBrace
@@ -276,7 +289,9 @@ parseModule = do
 
 parseBareModule :: M [Declaration]
 parseBareModule = do
-  enterModule (Name "Main") -- Export all names
+  enterModule moduleMain
+  exportAllNamesFromModuleM moduleMain
+  importAllNamesFromModuleM modulePRIM -- Every module imports PRIM
   match T_LBrace
   decls <- parseDeclarations
   match T_RBrace
