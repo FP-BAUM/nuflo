@@ -7,6 +7,7 @@ import Error(Error(..), ErrorType(..))
 import Syntax.Name(QName(..))
 import Syntax.AST(AnnProgram(..), AnnDeclaration(..),
                   AnnSignature(..), Signature,
+                  AnnEquation(..), Equation,
                   AnnConstraint(..), Constraint,
                   AnnExpr(..), Expr,
                   eraseAnnotations)
@@ -40,7 +41,9 @@ testExpr description source expected =
   where
     normalizeResult (Left  e) = Left (errorType e)
     normalizeResult (Right p) =
-      Right (eraseAnnotations (declRHS (last (programDeclarations p))))
+      Right (eraseAnnotations
+              (equationRHS
+                (declEquation (last (programDeclarations p)))))
 
 testExprOK :: String -> String -> AnnExpr () -> Test
 testExprOK description source expected =
@@ -143,7 +146,7 @@ tests = TestSuite "PARSER" [
          []
      ]),
 
-  testProgramOK "Class declaration with methods without constriants"
+  testProgramOK "Class declaration (typical)"
      (unlines [
        "class A b where",
        " f : a",
@@ -152,13 +155,14 @@ tests = TestSuite "PARSER" [
      (Program [
        ClassDeclaration ()
          (qmain "A")
-         (qmain "b") [
+         (qmain "b")
+         [
            Signature () (qmain "f") (evar "a") [],
            Signature () (qmain "g") (evar "b") []
          ]
      ]),
 
-  testProgramOK "Class declaration with methods with constriants"
+  testProgramOK "Class declaration with constriants"
      (unlines [
        "class A b where",
        " f : a   {Eq a; Ord a}",
@@ -167,7 +171,8 @@ tests = TestSuite "PARSER" [
      (Program [
        ClassDeclaration ()
          (qmain "A")
-         (qmain "b") [
+         (qmain "b")
+         [
            Signature () (qmain "f") (evar "a") [
              Constraint () (qmain "Eq") (qmain "a"),
              Constraint () (qmain "Ord") (qmain "a")
@@ -177,6 +182,53 @@ tests = TestSuite "PARSER" [
            ]
          ]
      ]),
+
+  testProgramOK "Empty instance declaration"
+     (unlines [
+       "instance Eq Bool where"
+     ])
+     (Program [
+       InstanceDeclaration ()
+         (qmain "Eq")
+         (evar "Bool")
+         []
+         []
+     ]),
+
+  testProgramOK "Instance declaration (typical)"
+     (unlines [
+       "instance Eq Bool where",
+       "  a = b",
+       "  c = d"
+     ])
+     (Program [
+       InstanceDeclaration ()
+         (qmain "Eq")
+         (evar "Bool")
+         []
+         [
+           Equation () (evar "a") (evar "b"),
+           Equation () (evar "c") (evar "d")
+         ]
+     ]),
+
+  testProgramOK "Instance declaration with constraints"
+     (unlines [
+       "instance Eq (List a) {Eq a} where",
+       "  c = d"
+     ])
+     (Program [
+       InstanceDeclaration ()
+         (qmain "Eq")
+         (eapp (evar "List") [evar "a"])
+         [
+           Constraint () (qmain "Eq") (qmain "a")
+         ]
+         [
+           Equation () (evar "c") (evar "d")
+         ]
+     ]),
+
 
   testProgramOK "Type signature with constraint"
      (unlines [

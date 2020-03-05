@@ -14,6 +14,7 @@ import Syntax.AST(
          AnnProgram(..), Program(..),
          AnnDeclaration(..), Declaration,
          AnnSignature(..), Signature,
+         AnnEquation(..), Equation,
          AnnConstraint(..), Constraint,
          AnnExpr(..), Expr,
          exprIsVariable, exprHeadVariable
@@ -381,26 +382,27 @@ parseDeclaration :: M [Declaration]
 parseDeclaration = do
   t <- peekType
   case t of
-    T_Import -> do parseImport
-                   return []
-    T_Infix  -> do parseFixityDeclaration NonAssoc
-                   return []
-    T_Infixl -> do parseFixityDeclaration LeftAssoc
-                   return []
-    T_Infixr -> do parseFixityDeclaration RightAssoc
-                   return []
-    T_Type   -> do d <- parseTypeDeclaration
-                   return [d]
-    T_Data   -> do d <- parseDataDeclaration
-                   return [d]
-    T_Class  -> do d <- parseClassDeclaration
-                   return [d]
-    -- TODO: other kinds of declarations
-    T_Id _   -> do d <- parseTypeSignatureOrValueDeclaration
-                   return [d]
-    _        -> failM ParseError
-                       ("Expected a declaration.\n" ++
-                        "Got: " ++ show t ++ ".")
+    T_Import   -> do parseImport
+                     return []
+    T_Infix    -> do parseFixityDeclaration NonAssoc
+                     return []
+    T_Infixl   -> do parseFixityDeclaration LeftAssoc
+                     return []
+    T_Infixr   -> do parseFixityDeclaration RightAssoc
+                     return []
+    T_Type     -> do d <- parseTypeDeclaration
+                     return [d]
+    T_Data     -> do d <- parseDataDeclaration
+                     return [d]
+    T_Class    -> do d <- parseClassDeclaration
+                     return [d]
+    T_Instance -> do d <- parseInstanceDeclaration
+                     return [d]
+    T_Id _     -> do d <- parseTypeSignatureOrValueDeclaration
+                     return [d]
+    _          -> failM ParseError
+                        ("Expected a declaration.\n" ++
+                         "Got: " ++ show t ++ ".")
 
 parseImport :: M ()
 parseImport = do
@@ -486,6 +488,37 @@ parseSignature = do
     _ -> failM ParseError
                 ("Expected a name. Got: " ++ show expr)
 
+parseInstanceDeclaration :: M Declaration
+parseInstanceDeclaration = do
+  match T_Instance
+  pos         <- currentPosition
+  className   <- parseAndResolveQName
+  typ         <- parseExpr
+  constraints <- parseOptionalConstraints
+  match T_Where
+  match T_LBrace
+  equations <- parseEquations
+  match T_RBrace
+  return $ InstanceDeclaration pos className typ constraints equations
+
+parseEquations :: M [Equation]
+parseEquations = parseSequence peekIsRBrace 
+                               (match T_Semicolon)
+                               parseEquation
+
+parseEquation :: M Equation
+parseEquation = do
+  pos <- currentPosition
+  lhs <- parseExpr
+  case exprHeadVariable lhs of
+    Just qname -> declareQNameM qname
+    Nothing    -> failM ParseError
+                        ("Left-hand side of equation has no head variable: " ++
+                         show lhs)
+  match T_Eq
+  rhs <- parseExpr
+  return $ Equation pos lhs rhs
+
 parseOptionalConstraints :: M [Constraint]
 parseOptionalConstraints = do
   t <- peekType
@@ -537,16 +570,8 @@ parseTypeSignature = do
 
 parseValueDeclaration :: M Declaration
 parseValueDeclaration = do
-  pos <- currentPosition
-  lhs <- parseExpr
-  case exprHeadVariable lhs of
-    Just qname -> declareQNameM qname
-    Nothing    -> failM ParseError
-                        ("Declared expression has no head variable: " ++
-                         show lhs)
-  match T_Eq
-  rhs <- parseExpr
-  return $ ValueDeclaration pos lhs rhs
+  equation <- parseEquation 
+  return $ ValueDeclaration equation
 
 parseExpr :: M Expr
 parseExpr = do

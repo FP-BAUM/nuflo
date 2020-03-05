@@ -5,7 +5,8 @@ import Test(TestSuite(..), Test(..))
 
 import Error(Error(..), ErrorType(..))
 import Syntax.Name(QName(..))
-import Syntax.AST(AnnProgram(..), AnnDeclaration(..), AnnExpr(..), Expr,
+import Syntax.AST(AnnProgram(..), AnnDeclaration(..),
+                  AnnEquation(..), AnnExpr(..), Expr,
                   eraseAnnotations)
 import Lexer.Lexer(tokenize)
 import Parser.Parser(parse)
@@ -18,7 +19,9 @@ testExpr description source expected =
   where
     normalizeResult (Left  e) = Left (errorType e)
     normalizeResult (Right p) =
-      Right (eraseAnnotations (declRHS (last (programDeclarations p))))
+      Right (eraseAnnotations
+              (equationRHS
+                (declEquation (last (programDeclarations p)))))
 
 testExprOK :: String -> String -> AnnExpr () -> Test
 testExprOK description source expected =

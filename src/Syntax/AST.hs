@@ -4,6 +4,7 @@ module Syntax.AST(
          AnnProgram(..), Program,
          AnnDeclaration(..), Declaration,
          AnnSignature(..), Signature,
+         AnnEquation(..), Equation,
          AnnConstraint(..), Constraint,
          AnnExpr(..), Expr,
          eraseAnnotations, exprIsVariable, exprHeadVariable
@@ -35,15 +36,20 @@ data AnnDeclaration a =
       typeSignature :: AnnSignature a
     }
   | ValueDeclaration {
-      annotation :: a,
-      declLHS  :: AnnExpr a,
-      declRHS  :: AnnExpr a
+      declEquation :: AnnEquation a
     }
   | ClassDeclaration {
       annotation    :: a,
       className     :: QName,
       classTypeName :: QName,
       classMethods  :: [AnnSignature a]
+    }
+  | InstanceDeclaration {
+      annotation          :: a,
+      instanceClassName   :: QName,
+      instanceType        :: AnnExpr a,
+      instanceConstraints :: [AnnConstraint a],
+      instanceMethods     :: [AnnEquation a]
     }
   deriving Eq
 
@@ -53,6 +59,12 @@ data AnnSignature a = Signature {
                         signatureType        :: AnnExpr a,
                         signatureConstraints :: [AnnConstraint a]
                       } deriving Eq
+
+data AnnEquation a = Equation {
+                       annotation :: a,
+                       equationLHS  :: AnnExpr a,
+                       equationRHS  :: AnnExpr a
+                     } deriving Eq
 
 data AnnConstraint a = Constraint {
                          annotation          :: a,
@@ -70,6 +82,7 @@ data AnnExpr a =
 type Declaration = AnnDeclaration Position
 type Constraint  = AnnConstraint Position
 type Signature   = AnnSignature Position
+type Equation    = AnnEquation Position
 type Expr        = AnnExpr Position
 
 --
@@ -87,14 +100,22 @@ instance EraseAnnotations AnnDeclaration where
     TypeDeclaration () (eraseAnnotations x) (eraseAnnotations y)
   eraseAnnotations (TypeSignature x) =
     TypeSignature (eraseAnnotations x)
-  eraseAnnotations (ValueDeclaration _ x y) =
-    ValueDeclaration () (eraseAnnotations x) (eraseAnnotations y)
+  eraseAnnotations (ValueDeclaration x) =
+    ValueDeclaration (eraseAnnotations x)
   eraseAnnotations (ClassDeclaration _ x y z) =
     ClassDeclaration () x y (map eraseAnnotations z)
+  eraseAnnotations (InstanceDeclaration _ x y z w) =
+    InstanceDeclaration () x (eraseAnnotations y)
+                             (map eraseAnnotations z)
+                             (map eraseAnnotations w)
 
 instance EraseAnnotations AnnSignature where
   eraseAnnotations (Signature _ x y z) =
     Signature () x (eraseAnnotations y) (map eraseAnnotations z)
+
+instance EraseAnnotations AnnEquation where
+  eraseAnnotations (Equation _ x y) =
+    Equation () (eraseAnnotations x) (eraseAnnotations y)
 
 instance EraseAnnotations AnnConstraint where
   eraseAnnotations (Constraint _ x y) = Constraint () x y
@@ -141,17 +162,25 @@ instance Show a => Show (AnnDeclaration a) where
   show (TypeDeclaration _ typ val) =
     "type " ++ show typ ++ " = " ++ show val
   show (TypeSignature sig) = show sig
-  show (ValueDeclaration _ lhs rhs) =
-    show lhs ++ " = " ++ show rhs
-  show (ClassDeclaration _ name typeName methods) =
+  show (ValueDeclaration equation) = show equation
+  show (ClassDeclaration _ name typeName signatures) =
     joinLines (
       ["class " ++ show name ++ " " ++ show typeName ++ " where"] ++
-      map (indent . show) methods
+      map (indent . show) signatures
+    )
+  show (InstanceDeclaration _ name typ constraints equations) =
+    joinLines (
+      ["instance " ++ show name ++ " " ++ show typ ++
+                      showOptionalConstraints constraints ++ " where"] ++
+      map (indent . show) equations
     )
 
 instance Show a => Show (AnnSignature a) where
   show (Signature _ name typ constraints) =
       show name ++ " : " ++ show typ ++ showOptionalConstraints constraints
+
+instance Show a => Show (AnnEquation a) where
+  show (Equation _ lhs rhs) = show lhs ++ " = " ++ show rhs
 
 instance Show a => Show (AnnConstraint a) where
   show (Constraint _ className typeName) =
