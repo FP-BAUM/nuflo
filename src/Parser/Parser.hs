@@ -22,22 +22,21 @@ import Syntax.AST(
        )
 import Lexer.Token(Token(..), TokenType(..))
 
-import Parser.PrecedenceTable(
-         PrecedenceTable(..), Associativity(..),
-         PrecedenceLevel, Precedence, precedenceTableLevels,
-         emptyPrecedenceTable, declareOperator, isOperator, isOperatorPart,
-         operatorFixity
-       )
-
-import Parser.ModuleSystem.Module(
+import ModuleSystem.Module(
          Module,
            emptyModule, addSubmodule, exportAllNamesFromModule, exportNames,
            declareName
        )
-import Parser.ModuleSystem.Context(
+import ModuleSystem.Context(
          Context,
            emptyContext, contextCurrentModuleName,
            resolveName, importAllNamesFromModule, importNames
+       )
+import ModuleSystem.PrecedenceTable(
+         PrecedenceTable(..), Associativity(..),
+         PrecedenceLevel, Precedence, precedenceTableLevels,
+         emptyPrecedenceTable, declareOperator, isOperator, isOperatorPart,
+         operatorFixity
        )
 
 parse :: [Token] -> Either Error Program

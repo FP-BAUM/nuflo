@@ -15,8 +15,8 @@ clean :
 	rm -f app/*.{o,hi} \
           src/*.{o,hi} \
           src/Syntax/*.{o,hi} \
+          src/ModuleSystem/*.{o,hi} \
           src/Lexer/*.{o,hi} \
           src/Parser/*.{o,hi} \
-          src/Parser/ModuleSystem/*.{o,hi} \
           test/*.{o,hi}
 

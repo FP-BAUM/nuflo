@@ -1,4 +1,4 @@
-module Parser.ModuleSystem.Module(
+module ModuleSystem.Module(
          Module,
            emptyModule, addSubmodule, declareName,
            exportAllNamesFromModule, exportNames,

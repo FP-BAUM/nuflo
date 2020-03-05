@@ -1,4 +1,4 @@
-module Parser.PrecedenceTable(
+module ModuleSystem.PrecedenceTable(
          PrecedenceTable, PrecedenceLevel, Associativity(..),
          Precedence, emptyPrecedenceTable, precedenceLevel,
          declareOperator, precedenceTableLevels, isOperator,

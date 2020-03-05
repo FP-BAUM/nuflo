@@ -1,4 +1,4 @@
-module Parser.ModuleSystem.Context(
+module ModuleSystem.Context(
          Context,
            emptyContext, contextCurrentModuleName,
            importAllNamesFromModule, importNames,
@@ -10,7 +10,7 @@ import qualified Data.Map as M
 
 import Error(ErrorMessage)
 import Syntax.Name(QName(..), qualify, isWellFormedOperatorName, allNameParts)
-import Parser.ModuleSystem.Module(Module, moduleExists, nameIsExported)
+import ModuleSystem.Module(Module, moduleExists, nameIsExported)
 
 ---- Context ----
 
