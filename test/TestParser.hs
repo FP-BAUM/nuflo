@@ -421,6 +421,62 @@ tests = TestSuite "PARSER" [
            (eapp (evar "h") [evar "a", evar "b"])
      ]),
 
+  ---- Let
+
+  testExprOK "Empty let"
+     (unlines [
+       "x = let in a"
+     ])
+     (ELet () [] (evar "a")),
+
+  testExprOK "Let: without braces, 'in' on same line"
+     (unlines [
+       "x = let a = b in c"
+     ])
+     (ELet ()
+       [
+         ValueDeclaration (Equation () (evar "a") (evar "b"))
+       ]
+       (evar "c")),
+
+  testExprOK "Let: without braces, 'in' on different line"
+     (unlines [
+       "x = let a = b",
+       "        c = d",
+       "     in e"
+     ])
+     (ELet ()
+       [
+         ValueDeclaration (Equation () (evar "a") (evar "b")),
+         ValueDeclaration (Equation () (evar "c") (evar "d"))
+       ]
+       (evar "e")),
+
+  testExprOK "Let: with braces, 'in' on same line"
+     (unlines [
+       "x = let { a = b ; c = d } in e"
+     ])
+     (ELet ()
+       [
+         ValueDeclaration (Equation () (evar "a") (evar "b")),
+         ValueDeclaration (Equation () (evar "c") (evar "d"))
+       ]
+       (evar "e")),
+
+  testExprOK "Let: with braces, 'in' on different line"
+     (unlines [
+       "x = let { a = b ; c = d }",
+       "   in e"
+     ])
+     (ELet ()
+       [
+         ValueDeclaration (Equation () (evar "a") (evar "b")),
+         ValueDeclaration (Equation () (evar "c") (evar "d"))
+       ]
+       (evar "e")),
+
+  ---- Imports
+
   testExprOK "Import declared name from module"
      (unlines [
        "module A where",

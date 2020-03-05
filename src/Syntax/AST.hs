@@ -74,9 +74,10 @@ data AnnConstraint a = Constraint {
 
 -- Annotated expression
 data AnnExpr a =
-    EVar a QName                      -- variable
-  | EInt a Integer                    -- integer constant
-  | EApp a (AnnExpr a) (AnnExpr a)    -- application
+    EVar a QName                           -- variable
+  | EInt a Integer                         -- integer constant
+  | EApp a (AnnExpr a) (AnnExpr a)         -- application
+  | ELet a [AnnDeclaration a] (AnnExpr a)  -- let
   deriving Eq
 
 type Declaration = AnnDeclaration Position
@@ -125,6 +126,8 @@ instance EraseAnnotations AnnExpr where
   eraseAnnotations (EInt _ n)     = EInt () n
   eraseAnnotations (EApp _ e1 e2) = EApp () (eraseAnnotations e1)
                                             (eraseAnnotations e2)
+  eraseAnnotations (ELet _ ds e)  = ELet () (map eraseAnnotations ds)
+                                            (eraseAnnotations e)
 
 --
 
@@ -150,10 +153,10 @@ joinLines = joinS "\n"
 indent :: String -> String
 indent s = "  " ++ s
 
-instance Show a => Show (AnnProgram a) where
+instance Show (AnnProgram a) where
   show (Program decls) = joinS "\n\n" (map show decls)
 
-instance Show a => Show (AnnDeclaration a) where
+instance Show (AnnDeclaration a) where
   show (DataDeclaration _ typ constructorDeclarations) =
     joinLines (
       ["data " ++ show typ ++ " where"] ++
@@ -175,18 +178,18 @@ instance Show a => Show (AnnDeclaration a) where
       map (indent . show) equations
     )
 
-instance Show a => Show (AnnSignature a) where
+instance Show (AnnSignature a) where
   show (Signature _ name typ constraints) =
       show name ++ " : " ++ show typ ++ showOptionalConstraints constraints
 
-instance Show a => Show (AnnEquation a) where
+instance Show (AnnEquation a) where
   show (Equation _ lhs rhs) = show lhs ++ " = " ++ show rhs
 
-instance Show a => Show (AnnConstraint a) where
+instance Show (AnnConstraint a) where
   show (Constraint _ className typeName) =
     show className ++ " " ++ show typeName
 
-showOptionalConstraints :: Show a => [AnnConstraint a] -> String
+showOptionalConstraints :: [AnnConstraint a] -> String
 showOptionalConstraints [] = ""
 showOptionalConstraints cs = 
   indent ("{"
@@ -197,4 +200,6 @@ instance Show (AnnExpr a) where
   show (EVar _ qname) = show qname
   show (EInt _ n)     = show n
   show (EApp _ f x)   = "(" ++ show f ++ " " ++ show x ++ ")"
+  show (ELet _ ds e)  =
+    "(let {" ++ joinS "; " (map show ds) ++ "} in " ++ show e ++ ")"
 

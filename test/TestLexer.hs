@@ -53,8 +53,14 @@ tests = TestSuite "LEXER" [
 
   -- Keywords
   testOK "Keywords"
-    "as class : data = import in infix infixl infixr \
-    \ instance \\ let{} module type where{}"
+    (unlines [
+      "{",
+      "as class : data = import",
+      "in", -- closing layout keyword (must be alone)
+      "infix infixl infixr",
+      "instance \\ let{} module type where{}",
+      "}"
+    ])
     [
       T_LBrace,
       T_As, T_Class, T_Colon, T_Data, T_Eq, T_Import, T_In,

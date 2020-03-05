@@ -48,7 +48,8 @@ parse tokens = evalFS parseM initialState
             statePosition        = tokensPosition tokens unknownPosition,
             stateRootModule      = emptyModule,
             stateNameContext     = error "Empty name context.",
-            statePrecedenceTable = emptyPrecedenceTable
+            statePrecedenceTable = emptyPrecedenceTable,
+            stateScopeLevel      = 0 
           }
 
 ---- Some constants
@@ -75,7 +76,9 @@ data ParserState = ParserState {
                      statePosition        :: Position,
                      stateRootModule      :: Module,
                      stateNameContext     :: Context,
-                     statePrecedenceTable :: PrecedenceTable
+                     statePrecedenceTable :: PrecedenceTable,
+                     stateScopeLevel      :: Integer --   0 : toplevel scope
+                                                     -- > 0 : nested scope
                    }
 
 type M = FailState ParserState
@@ -203,7 +206,8 @@ enterModule moduleName = do
     Right stateRootModule' ->
       putFS (state {
         stateRootModule  = stateRootModule',
-        stateNameContext = emptyContext moduleName
+        stateNameContext = emptyContext moduleName,
+        stateScopeLevel  = 0
       })
 
 exportAllNamesFromModuleM :: QName -> M ()
@@ -274,6 +278,19 @@ isRightAssoc op table =
   case operatorFixity op table of
     RightAssoc -> True
     _          -> False
+
+isToplevelScopeM :: M Bool
+isToplevelScopeM = do
+  state <- getFS
+  return $ stateScopeLevel state == 0
+
+enterScopeM :: M ()
+enterScopeM = modifyFS (\ state ->
+              state { stateScopeLevel = stateScopeLevel state + 1 })
+
+exitScopeM :: M ()
+exitScopeM = modifyFS (\ state ->
+              state { stateScopeLevel = stateScopeLevel state - 1 })
 
 ---- Parser
 
@@ -407,21 +424,8 @@ parseInt = do
 
 parseDeclarations :: M [Declaration]
 parseDeclarations = do
-  t <- peekType
-  case t of
-    T_RBrace -> return []
-    _        -> do
-      ds1 <- parseDeclaration
-      t'  <- peekType
-      case t' of
-        T_Semicolon -> do
-          match T_Semicolon
-          ds2 <- parseDeclarations
-          return (ds1 ++ ds2)
-        T_RBrace    -> return ds1
-        _           -> failM ParseError
-                             ("Expected \";\" or \"}\".\n" ++
-                              "Got: " ++ show t' ++ ".")
+  dss <- parseSequence peekIsRBrace (match T_Semicolon) parseDeclaration
+  return $ concat dss
 
 parseDeclaration :: M [Declaration]
 parseDeclaration = do
@@ -581,7 +585,7 @@ parseConstraint :: M Constraint
 parseConstraint = do
   pos       <- currentPosition
   className <- parseAndResolveQName
-  typeName <- parseAndResolveQName
+  typeName  <- parseAndResolveQName
   return $ Constraint pos className typeName
 
 parseFixityDeclaration :: Associativity -> M ()
@@ -617,8 +621,25 @@ parseValueDeclaration = do
 
 parseExpr :: M Expr
 parseExpr = do
-  table <- getPrecedenceTable
-  parseExprMixfix (precedenceTableLevels table) table
+  t <- peekType
+  case t of
+    T_Let -> parseLet
+    _     -> do
+      table <- getPrecedenceTable
+      parseExprMixfix (precedenceTableLevels table) table
+
+parseLet :: M Expr
+parseLet = do
+  pos <- currentPosition
+  enterScopeM
+  match T_Let
+  match T_LBrace
+  decls <- parseDeclarations
+  match T_RBrace
+  match T_In
+  expr <- parseExpr
+  exitScopeM
+  return $ ELet pos decls expr
 
 isEndOfExpression :: M Bool
 isEndOfExpression = do
@@ -870,8 +891,6 @@ parseAtom = do
                    expr   <- parseExpr
                    match T_RParen
                    return expr
-
-    -- TODO: other kinds of expressions
     _      -> failM ParseError
                      ("Expected an expression.\n" ++
                       "Got: " ++ show t ++ ".")

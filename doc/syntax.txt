@@ -87,36 +87,50 @@ To use qualified imports, do:
 
 ----
 
-<typeSignatures> ::= /* EMPTY */
-                   | <typeSignatures+>
+<typeSignature*> ::= /* EMPTY */
+                   | <typeSignature+>
 
-<typeSignatures+> ::= <typeSignature>
-                    | <typeSignature> SEMICOLON <typeSignatures+>
+<typeSignature+> ::= <typeSignature>
+                   | <typeSignature> SEMICOLON <typeSignatures+>
 
 <typeSignature> ::= ID COLON <expr> <optionalConstraints>
 
 ----
 
-<valueDeclarations> ::= /* EMPTY */
-                      | <valueDeclarations+>
+<valueDeclaration*> ::= /* EMPTY */
+                      | <valueDeclaration+>
 
-<valueDeclarations>+ ::= <valueDeclaration>
-                       | <valueDeclaration> <valueDeclarations+>
+<valueDeclaration+> ::= <valueDeclaration>
+                      | <valueDeclaration> SEMICOLON <valueDeclaration+>
 
 <valueDeclaration> ::= <expr> EQ <expr>
 
 ---
 
 <optionalConstraints> ::= /* EMPTY */
-                        | LBRACE <constraints> RBRACE
+                        | LBRACE <constraint*> RBRACE
 
-<constraints> ::= /* EMPTY */
+<constraint*> ::= /* EMPTY */
                  | <constraint+>
 
-<constraints+> ::= <constraint>
-                 | <constraint> SEMICOLON <constraints+>
+<constraint+> ::= <constraint>
+                | <constraint> SEMICOLON <constraint+>
 
 <constraint> ::= <classname> <qname>
 
 <classname> ::= <qname>
+
+---
+
+<expr> ::= <atom>
+         | <atom> <expr>
+         | LET LBRACE <declaration*> RBRACE IN <expr>
+         | LAMBDA <atom*> ARROW <expr>
+
+<atom*> ::= /* EMPTY */
+          | <atom> <atom*>
+
+<atom> ::= <qname>
+         | INT
+         | LPAREN <expr> RPAREN
 
