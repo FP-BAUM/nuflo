@@ -396,6 +396,16 @@ tests = TestSuite "PARSER" [
         eapp (evar "_+_") [eint 2, eint 3]
       ]),
 
+  testExprOK "Operator with default associativity/precedence"
+     (unlines [
+       "_+_ : a",
+       "x = 1 + 2"
+     ])
+     (eapp (evar "_+_") [
+        eint 1,
+        eint 2
+      ]),
+
   testExprOK "Application"
      (unlines [
        "x = f (g y) (h a b)"

@@ -9,7 +9,8 @@ import Error(Error(..), ErrorType(..), ErrorMessage)
 import Position(Position(..), unknownPosition)
 import FailState(FailState, getFS, modifyFS, putFS, evalFS, failFS)
 import Syntax.Name(QName(..), readName, qualify, moduleNameFromQName,
-                   unqualifiedName, splitParts, allNameParts)
+                   isWellFormedOperatorName, unqualifiedName, splitParts,
+                   allNameParts)
 import Syntax.AST(
          AnnProgram(..), Program(..),
          AnnDeclaration(..), Declaration,
@@ -24,7 +25,7 @@ import Lexer.Token(Token(..), TokenType(..))
 import Parser.PrecedenceTable(
          PrecedenceTable(..), Associativity(..),
          PrecedenceLevel, Precedence, precedenceTableLevels,
-         emptyPrecedenceTable, declareOperator, isOperatorPart,
+         emptyPrecedenceTable, declareOperator, isOperator, isOperatorPart,
          operatorFixity
        )
 
@@ -49,6 +50,23 @@ parse tokens = evalFS parseM initialState
             stateNameContext     = error "Empty name context.",
             statePrecedenceTable = emptyPrecedenceTable
           }
+
+---- Some constants
+
+modulePRIM :: QName
+modulePRIM = Name "PRIM"
+
+moduleMain :: QName
+moduleMain = Name "Main"
+
+operatorArrow :: QName
+operatorArrow = qualify modulePRIM "_->_"
+
+defaultAssociativity :: Associativity
+defaultAssociativity = NonAssoc
+
+defaultPrecedence :: Precedence
+defaultPrecedence = 200
 
 ---- Parser monad
 
@@ -201,7 +219,10 @@ declareQNameM qname = do
   moduleName <- getCurrentModuleName
   let uname = unqualifiedName qname in
     if qname == qualify moduleName uname
-     then modifyRootModule (declareName qname)
+     then do -- Declare name in current module
+             modifyRootModule (declareName qname)
+             -- If it is an undeclared operator, declare it
+             declareIfOperatorM qname
      else failM ModuleSystemError
                 ("Declaration of name \"" ++ uname ++ "\"" ++
                  " shadows \"" ++ show qname ++ "\".")
@@ -218,8 +239,23 @@ importNamesM moduleName renamings = do
 
 declareOperatorM :: Associativity -> Precedence -> QName -> M ()
 declareOperatorM assoc precedence qname = do
-  declareQNameM qname
+  -- Note: the order of the two following lines cannot be changed,
+  -- as declareQNameM declares a name with default associativity/precedence
+  -- if it is an operator.
   modifyPrecedenceTable (declareOperator assoc precedence qname)
+  declareQNameM qname
+
+-- If the name is a currently undeclared operator,
+-- declare it with default associativity and precedence
+declareIfOperatorM :: QName -> M ()
+declareIfOperatorM qname = do
+  table <- getPrecedenceTable
+  if isWellFormedOperatorName uname && not (isOperator qname table)
+   then modifyPrecedenceTable (declareOperator defaultAssociativity
+                                               defaultPrecedence
+                                               qname)
+   else return ()
+  where uname = unqualifiedName qname
 
 isOperatorPartM :: QName -> M Bool
 isOperatorPartM qname = do
@@ -241,18 +277,12 @@ isRightAssoc op table =
 
 ---- Parser
 
-modulePRIM :: QName
-modulePRIM = Name "PRIM"
-
-moduleMain :: QName
-moduleMain = Name "Main"
-
 parseM :: M Program
 parseM = do
   -- Initialize primitive module
   enterModule modulePRIM
   exportAllNamesFromModuleM modulePRIM
-  declareOperatorM RightAssoc 50 (qualify modulePRIM "_->_")
+  declareOperatorM RightAssoc 50 operatorArrow
 
   -- Parse
   decls <- parseModules 
