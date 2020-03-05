@@ -58,6 +58,12 @@ testExprError description source expected =
 qmain :: String -> QName
 qmain x = Qualified "Main" (Name x)
 
+qprim :: String -> QName
+qprim x = Qualified "PRIM" (Name x)
+
+primvar :: String -> AnnExpr ()
+primvar x = EVar () (qprim x)
+
 evar :: String -> AnnExpr ()
 evar x = EVar () (qmain x)
 
@@ -162,7 +168,7 @@ tests = TestSuite "PARSER" [
          ]
      ]),
 
-  testProgramOK "Class declaration with constriants"
+  testProgramOK "Class declaration with constraints"
      (unlines [
        "class A b where",
        " f : a   {Eq a; Ord a}",
@@ -467,11 +473,61 @@ tests = TestSuite "PARSER" [
      ])
      (EVar () (Qualified "A" (Name "N"))),
 
+  -- Example
+
+  testProgramOK "Example: List concatenation"
+     (unlines [
+       "data List a where",
+       "  []   : List a",
+       "  _::_ : a -> List a -> List a",
+       "_++_ : List a -> List a -> List a",
+       "[]        ++ ys = ys",
+       "(x :: xs) ++ ys = x :: (xs ++ ys)"
+     ])
+     (Program [
+       DataDeclaration ()
+         (eapp (evar "List") [evar "a"])
+         [
+           Signature () (qmain "[]")
+                        (eapp (evar "List") [evar "a"])
+                        [],
+           Signature () (qmain "_::_")
+                        (eapp (primvar "_->_") [
+                          evar "a",
+                          eapp (primvar "_->_") [
+                            eapp (evar "List") [evar "a"],
+                            eapp (evar "List") [evar "a"]
+                          ]
+                        ])
+                        []
+         ],
+       TypeSignature (Signature ()
+                        (qmain "_++_")
+                        (eapp (primvar "_->_") [
+                          eapp (evar "List") [evar "a"],
+                          eapp (primvar "_->_") [
+                            eapp (evar "List") [evar "a"],
+                            eapp (evar "List") [evar "a"]
+                          ]
+                        ])
+                        []),
+       ValueDeclaration (Equation ()
+                          (eapp (evar "_++_") [evar "[]", evar "ys"])
+                          (evar "ys")),
+       ValueDeclaration (Equation ()
+                          (eapp (evar "_++_") [
+                            eapp (evar "_::_") [evar "x", evar "xs"],
+                            evar "ys"
+                          ])
+                          (eapp (evar "_::_") [
+                            evar "x",
+                            eapp (evar "_++_") [evar "xs", evar "ys"]
+                          ]))
+     ]),
+
   -- Empty program
   testProgramOK "Empty program"
     "" 
-    Program {
-      programDeclarations = []
-    }
+    (Program [])
   ]
 

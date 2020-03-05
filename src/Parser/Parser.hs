@@ -443,11 +443,8 @@ parseDeclaration = do
                      return [d]
     T_Instance -> do d <- parseInstanceDeclaration
                      return [d]
-    T_Id _     -> do d <- parseTypeSignatureOrValueDeclaration
+    _          -> do d <- parseTypeSignatureOrValueDeclaration
                      return [d]
-    _          -> failM ParseError
-                        ("Expected a declaration.\n" ++
-                         "Got: " ++ show t ++ ".")
 
 parseImport :: M ()
 parseImport = do
