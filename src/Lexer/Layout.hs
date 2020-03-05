@@ -17,9 +17,9 @@ layout tokens = evalFS (lay (prepare tokens) []) initialPosition
 ---- following Haskell '98 standard (sec. 9.3).
 
 data LToken = T Token
-            | A Integer  -- <n>
-            | B Integer  -- {n}
-            | C Position -- force closing implicit brace
+            | A Integer -- <n>
+            | B Integer -- {n}
+            | C         -- force closing implicit brace
 
 line :: Token -> Integer
 line t = positionLine (tokenStartPos t)
@@ -71,7 +71,7 @@ prepare ts@(t : _) =
         -- If the current token is a closing layout keyword such as "in",
         -- on the same line as the previous token, and there is not a
         -- closing brace ("}") before, forcibly insert a closing brace.
-        C (tokenStartPos t) : rec b True l (t : ts)
+        C : rec b True l (t : ts)
     rec b _ l (t : ts)
       | isLayoutKeyword t && not (startsWithLBrace ts) =
          continue b l t ++ T t : B n : rec True (isRBrace t) (line t) ts
@@ -140,7 +140,7 @@ lay []         (m : ms)
   | m > 0                 = do ls <- lay [] ms
                                tok <- newToken T_RBrace 
                                return (tok : ls)
-lay (C pos : ts) (m : ms) = do tok <- newToken T_RBrace 
+lay (C : ts) (m : ms)     = do tok <- newToken T_RBrace 
                                ls <- lay ts ms
                                return (tok : ls)
 lay _          _          = do pos <- getFS
