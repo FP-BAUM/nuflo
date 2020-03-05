@@ -9,7 +9,8 @@ import Lexer.Token(Token(..), TokenType(..))
 import Lexer.Categories(
          isDigit, isInteger, isWhitespace,
          isPunctuation, punctuationType,
-         isKeyword, keywordType, isIdent
+         isKeyword, keywordType, isIdent,
+         isRenaming, renaming
        )
 import Lexer.Layout(layout)
 
@@ -110,6 +111,7 @@ readName cs = do
     nameType ident
       | isKeyword        ident = return $ keywordType ident
       | isInteger        ident = return $ T_Int (read ident :: Integer)
+      | isRenaming       ident = return $ T_Id (renaming ident)
       | isWellFormedName ident = return $ T_Id ident
       | otherwise              = failM LexerErrorMalformedName
                                        ("Malformed name: " ++ ident)

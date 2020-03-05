@@ -2,14 +2,16 @@ module ModuleSystem.Context(
          Context,
            emptyContext, contextCurrentModuleName,
            importAllNamesFromModule, importNames,
-           resolveName
+           declareModuleAlias, resolveName
        ) where
 
 import qualified Data.Set as S
 import qualified Data.Map as M
 
 import Error(ErrorMessage)
-import Syntax.Name(QName(..), qualify, isWellFormedOperatorName, allNameParts)
+import Syntax.Name(QName(..), qualify,
+                   moduleNameFromQName, unqualifiedName,
+                   isWellFormedOperatorName, allNameParts)
 import ModuleSystem.Module(Module, moduleExists, nameIsExported)
 
 ---- Context ----
@@ -20,7 +22,8 @@ import ModuleSystem.Module(Module, moduleExists, nameIsExported)
 data Context = Context {
                  contextCurrentModuleName :: QName,
                  contextImportedNames     :: M.Map String (S.Set QName),
-                 contextImportedModules   :: S.Set QName
+                 contextImportedModules   :: S.Set QName,
+                 contextModuleAliases     :: M.Map String (S.Set QName)
                }
 
 emptyContext :: QName -> Context
@@ -28,7 +31,8 @@ emptyContext currentModuleName =
   Context {
     contextCurrentModuleName = currentModuleName,
     contextImportedNames     = M.empty,
-    contextImportedModules   = S.fromList [currentModuleName]
+    contextImportedModules   = S.fromList [currentModuleName],
+    contextModuleAliases     = M.empty
   }
 
 importAllNamesFromModule :: QName -> Module -> Context
@@ -74,6 +78,22 @@ importNames moduleName ((id, alias) : ids) m c
         c' <- importSingleName (qualify moduleName part) part m c
         rec parts c'
 
+declareModuleAlias :: QName -> String -> Module -> Context
+                   -> Either ErrorMessage Context
+declareModuleAlias moduleName alias m c =
+  if moduleExists moduleName m
+   then
+     let ns = contextModuleAliases c in
+       return (c {
+         contextModuleAliases =
+           M.insert alias
+                    (S.insert moduleName
+                      (M.findWithDefault S.empty alias ns))
+                    ns
+       })
+   else
+     Left ("Module \"" ++ show moduleName ++ "\" does not exist.")
+
 resolveName :: Module -> Context -> QName -> Either ErrorMessage QName
 resolveName m c (Name id) =
     if null candidates
@@ -81,23 +101,53 @@ resolveName m c (Name id) =
      else
        if null (tail candidates)
         then return $ head candidates
-        else Left ("Ambiguous name: \"" ++ id ++ "\". Candidates:\n" ++
+        else Left ("Ambiguous unqualified name: \"" ++ id ++ "\".\n" ++
+                   "Candidates:\n" ++
                    unlines (map show candidates))
   where
     candidates =
-       S.toList (
-           -- Explicitly imported name 
-           M.findWithDefault S.empty id (contextImportedNames c)
-         `S.union`
-           -- Implicitly imported name (by importing all from a module)
-           S.fromList [ qualifiedName |
-              submoduleName <- S.toList (contextImportedModules c),
-              qualifiedName <- [qualify submoduleName id],
-              nameIsExported qualifiedName m
-           ]
-       )
+       S.toList (explicitlyImportedName `S.union` implicitlyImportedNames)
+    -- Explicitly imported name 
+    explicitlyImportedName =
+      M.findWithDefault S.empty id (contextImportedNames c)
+    -- Implicitly imported name (by importing all from a module)
+    implicitlyImportedNames =
+      S.fromList [ qualifiedName |
+         submoduleName <- S.toList (contextImportedModules c),
+         qualifiedName <- [qualify submoduleName id],
+         nameIsExported qualifiedName m
+      ]
+
 resolveName m c qname =
-  if nameIsExported qname m
-   then return $ qname
-   else Left ("Name: \"" ++ show qname ++ "\" does not exist.")
+  if null candidates
+   then Left ("Name: \"" ++ show qname ++ "\" does not exist.")
+   else
+     if null (tail candidates)
+      then return $ head candidates
+      else Left ("Ambiguous qualified name: \"" ++ show qname ++ "\".\n" ++
+                 "Candidates:\n" ++
+                 unlines (map show candidates))
+  where
+    candidates =
+      S.toList (directlyReferencedName `S.union` indirectlyReferencedNames)
+    -- Name referenced directly by the name of the module 
+    directlyReferencedName =
+      if nameIsExported qname m
+        then S.fromList [qname]
+        else S.empty
+    -- Names referenced indirectly by giving an alias to a module
+    indirectlyReferencedNames =
+      let barename = unqualifiedName qname
+          qalias   = moduleNameFromQName qname
+       in case qalias of
+            -- Alias must be a single identifier
+            Name alias ->
+              S.fromList [ qualifiedName |
+                submoduleName <- S.toList (M.findWithDefault S.empty
+                                          alias
+                                          (contextModuleAliases c)),
+                qualifiedName <- [qualify submoduleName barename],
+                nameIsExported qualifiedName m
+              ]
+            _ -> S.empty
 

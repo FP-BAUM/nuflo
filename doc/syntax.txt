@@ -4,15 +4,25 @@
 
 Module syntax:
 
-  module A where        -- export all from A
-  module A(a; b) where  -- export selected names from A
-  import A              -- import all from A
-  import A(a; b as bb)  -- import selected names from A
+  module A.B.C where        -- export all from A.B.C
+  module A.B.C(a; b) where  -- export selected names from A.B.C
+
+  import A.B.C                  -- import all from A.B.C
+  import A.B.C as D             -- import all from A.B.C
+                                -- and declare alias D for A.B.C
+  import A.B.C(a; b as bb)      -- import selected names from A
+  import A.B.C(a; b as bb) as D -- import selected names from A.B.C
+                                -- and declare alias D for A.B.C
 
 To use qualified imports, do:
 
-  import A()
-  ... A.a ...
+  import A.B.C()
+  ... A.B.C.a ...
+
+or
+
+  import A.B.C() as D
+  ... D.a ...
 
 -------------------------------------------------------------
 -- GRAMMAR
@@ -60,6 +70,8 @@ To use qualified imports, do:
 <declaration> ::=
     /* Import*/
   | IMPORT <qname> <moduleImports>
+  | IMPORT <qname> <moduleImports> AS ID
+
     /* Fixity declaration */
     <fixity> INT ID
   |

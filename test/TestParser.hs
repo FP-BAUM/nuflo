@@ -568,9 +568,9 @@ tests = TestSuite "PARSER" [
                         (eapp (evar "List") [evar "a"])
                         [],
            Signature () (qmain "_::_")
-                        (eapp (primvar "_->_") [
+                        (eapp (primvar "_→_") [
                           evar "a",
-                          eapp (primvar "_->_") [
+                          eapp (primvar "_→_") [
                             eapp (evar "List") [evar "a"],
                             eapp (evar "List") [evar "a"]
                           ]
@@ -579,9 +579,9 @@ tests = TestSuite "PARSER" [
          ],
        TypeSignature (Signature ()
                         (qmain "_++_")
-                        (eapp (primvar "_->_") [
+                        (eapp (primvar "_→_") [
                           eapp (evar "List") [evar "a"],
-                          eapp (primvar "_->_") [
+                          eapp (primvar "_→_") [
                             eapp (evar "List") [evar "a"],
                             eapp (evar "List") [evar "a"]
                           ]

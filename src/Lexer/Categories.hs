@@ -2,7 +2,8 @@
 module Lexer.Categories(
          isDigit, isInteger, isWhitespace,
          isPunctuation, punctuationType,
-         isKeyword, keywordType, isIdent
+         isKeyword, keywordType, isIdent,
+         isRenaming, renaming
        ) where
 
 import qualified Data.Map as M
@@ -34,10 +35,17 @@ keywords = M.fromList [
   ("infixr", T_Infixr),
   ("instance", T_Instance),
   ("\\", T_Lambda),
+  ("λ", T_Lambda),
   ("let", T_Let),
   ("module", T_Module),
   ("type", T_Type),
   ("where", T_Where)
+ ]
+
+renamings :: M.Map String String
+renamings = M.fromList [
+  ("->", "→"),
+  ("_->_", "_→_")
  ]
 
 isDigit :: Char -> Bool
@@ -63,4 +71,10 @@ keywordType s = M.findWithDefault undefined s keywords
 
 isIdent :: Char -> Bool
 isIdent c = isPrint c && not (isWhitespace c) && not (isPunctuation c)
+
+isRenaming :: String -> Bool
+isRenaming s = M.member s renamings
+
+renaming :: String -> String
+renaming s = M.findWithDefault undefined s renamings
 

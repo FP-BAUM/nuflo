@@ -58,13 +58,13 @@ tests = TestSuite "LEXER" [
       "as class : data = import",
       "in", -- closing layout keyword (must be alone)
       "infix infixl infixr",
-      "instance \\ let{} module type where{}",
+      "instance \\ λ let{} module type where{}",
       "}"
     ])
     [
       T_LBrace,
       T_As, T_Class, T_Colon, T_Data, T_Eq, T_Import, T_In,
-      T_Infix, T_Infixl, T_Infixr, T_Instance, T_Lambda,
+      T_Infix, T_Infixl, T_Infixr, T_Instance, T_Lambda, T_Lambda,
       T_Let, T_LBrace, T_RBrace, T_Module, T_Type,
       T_Where, T_LBrace, T_RBrace,
       T_RBrace

@@ -30,7 +30,8 @@ import ModuleSystem.Module(
 import ModuleSystem.Context(
          Context,
            emptyContext, contextCurrentModuleName,
-           resolveName, importAllNamesFromModule, importNames
+           resolveName, importAllNamesFromModule, importNames,
+           declareModuleAlias
        )
 import ModuleSystem.PrecedenceTable(
          PrecedenceTable(..), Associativity(..),
@@ -60,7 +61,7 @@ moduleMain :: QName
 moduleMain = Name "Main"
 
 operatorArrow :: QName
-operatorArrow = qualify modulePRIM "_->_"
+operatorArrow = qualify modulePRIM "_→_"
 
 defaultAssociativity :: Associativity
 defaultAssociativity = NonAssoc
@@ -243,6 +244,11 @@ importNamesM :: QName -> [(String, String)] -> M ()
 importNamesM moduleName renamings = do
   rootModule <- getRootModule
   modifyNameContext (importNames moduleName renamings rootModule)
+
+declareModuleAliasM :: QName -> String -> M ()
+declareModuleAliasM moduleName alias = do
+  rootModule <- getRootModule
+  modifyNameContext (declareModuleAlias moduleName alias rootModule)
 
 declareOperatorM :: Associativity -> Precedence -> QName -> M ()
 declareOperatorM assoc precedence qname = do
@@ -474,6 +480,13 @@ parseImport = do
                    importNamesM moduleName renamings
                    match T_RParen
     _ -> importAllNamesFromModuleM moduleName
+  -- Parse optional alias for module
+  t' <- peekType
+  case t' of
+    T_As -> do match T_As
+               alias <- parseId
+               declareModuleAliasM moduleName alias
+    _ -> return ()
 
 parseRenameId :: M (String, String)
 parseRenameId = do
