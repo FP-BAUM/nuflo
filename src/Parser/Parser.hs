@@ -102,6 +102,11 @@ peekType = do
   tok <- peek
   return $ tokenType tok
 
+peekIs :: TokenType  -> M Bool
+peekIs t = do
+  t' <- peekType
+  return $ t == t'
+
 peekIsRParen :: M Bool
 peekIsRParen = do
   t <- peekType
@@ -647,10 +652,21 @@ parseExpr :: M Expr
 parseExpr = do
   t <- peekType
   case t of
-    T_Let -> parseLet
-    _     -> do
+    T_Let    -> parseLet
+    T_Lambda -> parseLambda
+    _        -> do
       table <- getPrecedenceTable
       parseExprMixfix (precedenceTableLevels table) table
+
+parseLambda :: M Expr
+parseLambda = do
+  pos <- currentPosition
+  match T_Lambda
+  params <- parseSequence (peekIs T_LBrace) (return ()) parseExpr
+  match T_LBrace
+  body <- parseExpr
+  match T_RBrace
+  return $ ELambda pos params body
 
 parseLet :: M Expr
 parseLet = do
