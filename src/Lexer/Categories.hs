@@ -3,7 +3,7 @@ module Lexer.Categories(
          isDigit, isInteger, isWhitespace,
          isPunctuation, punctuationType,
          isKeyword, keywordType, isIdent,
-         isRenaming, renaming
+         isRenaming, renaming, isArrow
        ) where
 
 import qualified Data.Map as M
@@ -47,6 +47,11 @@ renamings = M.fromList [
   ("->", "→"),
   ("_->_", "_→_")
  ]
+
+isArrow :: String -> Bool
+isArrow "→"   = True
+isArrow "_→_" = True
+isArrow _     = False
 
 isDigit :: Char -> Bool
 isDigit c = '0' <= c && c <= '9'

@@ -203,7 +203,7 @@ instance Show (AnnExpr a) where
   show (EInt _ n)     = show n
   show (EApp _ f x)   = "(" ++ show f ++ " " ++ show x ++ ")"
   show (ELambda _ params body) =
-    "\\ " ++ joinS " " (map show params) ++ "-> { " ++ show body ++ " }"
+    "\\" ++ joinS " " (map show params) ++ " -> " ++ show body
   show (EWhere _ equations) =
     "{ " ++  joinS "\n" (map show equations) ++ "}"
   show (ELet _ ds e)  =

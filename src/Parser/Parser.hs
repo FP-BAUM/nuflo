@@ -40,6 +40,8 @@ import ModuleSystem.PrecedenceTable(
          operatorFixity
        )
 
+import Lexer.Categories(isArrow)
+
 parse :: [Token] -> Either Error Program
 parse tokens = evalFS parseM initialState
   where initialState =
@@ -653,7 +655,7 @@ parseExpr = do
   t <- peekType
   case t of
     T_Let    -> parseLet
-    T_Where  -> parseWhere
+    -- T_Where  -> parseWhere
     T_Lambda -> parseLambda
     _        -> do
       table <- getPrecedenceTable
@@ -663,21 +665,45 @@ parseLambda :: M Expr
 parseLambda = do
   pos <- currentPosition
   match T_Lambda
-  -- TODO: Here should parseSequence while there not -> , we should fix it
-  params <- parseSequence (peekIs T_LBrace) (return ()) parseExpr
-  match T_LBrace
+  params <- parseSequence idIsArrow (return ()) parseExpr
+  matchArrow
   body <- parseExpr
   match T_RBrace
   return $ ELambda pos params body
 
-parseWhere :: M Expr
-parseWhere = do
-  pos <- currentPosition
-  match T_Where
-  match T_LBrace
-  equations <- parseEquations
-  match T_RBrace
-  return $ EWhere pos equations
+matchArrow :: M ()
+matchArrow = do
+  t <- peekType
+  case t of
+    T_Id id -> do
+      if isArrow id
+        then do
+          getToken
+          return ()
+        else do
+          failM ParseError
+            ("Expected: → or -> .\n" ++
+            "Got     : " ++ show t ++ ".")
+    _       -> failM ParseError
+                  ("Expected: → or -> .\n" ++
+                  "Got     : " ++ show t ++ ".")
+
+idIsArrow :: M Bool
+idIsArrow = do
+  t <- peekType
+  case  t of
+    T_Id id -> do
+      return $ isArrow id
+    _       -> return False
+
+-- parseWhere :: M Expr
+-- parseWhere = do
+--   pos <- currentPosition
+--   match T_Where
+--   match T_LBrace
+--   equations <- parseEquations
+--   match T_RBrace
+--   return $ EWhere pos equations
 
 parseLet :: M Expr
 parseLet = do
