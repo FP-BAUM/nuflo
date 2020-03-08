@@ -435,7 +435,7 @@ tests = TestSuite "PARSER" [
      ])
      (ELambda () [evar "f", evar "g", evar "x"] (eapp (evar "f") [evar "g", evar "x"])),
 
-  testExprOK "lambda nested lambdas"
+  testExprOK "lambda with nested lambdas"
      (unlines [
        "x = \\ x -> \\ y -> \\ z -> z y x"
      ])
