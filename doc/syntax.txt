@@ -76,14 +76,14 @@ or
     <fixity> INT ID
   |
     /* Data declaration */
-    DATA <expr> WHERE LBRACE <typeSignatures~ RBRACE
+    DATA <expr> WHERE LBRACE <typeSignature*> RBRACE
   |
     /* Type declaration */
     TYPE <expr> EQ <expr>
   |
     /* Class declaration */
     CLASS <classname> <qname>
-      WHERE LBRACE <typeSignatures> RBRACE
+      WHERE LBRACE <typeSignature*> RBRACE
   |
     /* Instance declaration */
     INSTANCE <classname> <expr> <optionalConstraints>
@@ -103,7 +103,7 @@ or
                    | <typeSignature+>
 
 <typeSignature+> ::= <typeSignature>
-                   | <typeSignature> SEMICOLON <typeSignatures+>
+                   | <typeSignature> SEMICOLON <typeSignature+>
 
 <typeSignature> ::= ID COLON <expr> <optionalConstraints>
 
