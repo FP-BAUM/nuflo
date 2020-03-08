@@ -136,13 +136,26 @@ or
 
 <expr> ::= <atom>
          | <atom> <expr>
-         | LET LBRACE <declaration*> RBRACE IN <expr>
-         | LAMBDA <atom*> ARROW <expr>
-
-<atom*> ::= /* EMPTY */
-          | <atom> <atom*>
 
 <atom> ::= <qname>
          | INT
          | LPAREN <expr> RPAREN
+         | LET LBRACE <declaration*> RBRACE IN <expr>
+         | LAMBDA <id*> ARROW <expr>
+         | LAMBDA LBRACE <branch*> RBRACE
+         | CASE <expr> OF LBRACE <branch*> RBRACE
+
+<id*> ::= /* EMPTY */
+        | <id> <id*>
+
+<branch*> ::= /* EMPTY */
+            | <branch+>
+
+<branch+> ::= <branch>
+            | <branch> SEMICOLON <branch+>
+
+<branch> ::= <expr*> ARROW <expr>
+
+<expr*> ::= /* EMPTY */
+          | <expr> <expr*>
 
