@@ -77,7 +77,7 @@ data AnnExpr a =
     EVar a QName                           -- variable
   | EInt a Integer                         -- integer constant
   | EApp a (AnnExpr a) (AnnExpr a)         -- application
-  | ELambda a [AnnExpr a] (AnnExpr a)      -- lambda
+  | ELambda a (AnnExpr a) (AnnExpr a)      -- lambda
   | ELet a [AnnDeclaration a] (AnnExpr a)  -- let
   deriving Eq
 
@@ -127,8 +127,9 @@ instance EraseAnnotations AnnExpr where
   eraseAnnotations (EInt _ n)     = EInt () n
   eraseAnnotations (EApp _ e1 e2) = EApp () (eraseAnnotations e1)
                                             (eraseAnnotations e2)
-  eraseAnnotations (ELambda _ params e) = ELambda () (map eraseAnnotations params)
-                                            (eraseAnnotations e)
+  eraseAnnotations (ELambda _ param e) = ELambda ()
+                                                 (eraseAnnotations param)
+                                                 (eraseAnnotations e)
   eraseAnnotations (ELet _ ds e)  = ELet () (map eraseAnnotations ds)
                                             (eraseAnnotations e)
 
@@ -203,8 +204,8 @@ instance Show (AnnExpr a) where
   show (EVar _ qname) = show qname
   show (EInt _ n)     = show n
   show (EApp _ f x)   = "(" ++ show f ++ " " ++ show x ++ ")"
-  show (ELambda _ params body) =
-    "\\ " ++ joinS " " (map show params) ++ " -> " ++ show body
+  show (ELambda _ param body) =
+    "\\ " ++ show param ++ " -> " ++ show body
   show (ELet _ ds e)  =
     "(let {" ++ joinS "; " (map show ds) ++ "} in " ++ show e ++ ")"
 

@@ -40,7 +40,7 @@ import ModuleSystem.PrecedenceTable(
          operatorFixity
        )
 
-import Lexer.Categories(isArrow)
+import Lexer.Categories(arrowSymbol)
 
 parse :: [Token] -> Either Error Program
 parse tokens = evalFS parseM initialState
@@ -63,7 +63,7 @@ moduleMain :: QName
 moduleMain = Name "Main"
 
 operatorArrow :: QName
-operatorArrow = qualify modulePRIM "_→_"
+operatorArrow = qualify modulePRIM ("_" ++ arrowSymbol ++ "_")
 
 defaultAssociativity :: Associativity
 defaultAssociativity = NonAssoc
@@ -655,7 +655,6 @@ parseExpr = do
   t <- peekType
   case t of
     T_Let    -> parseLet
-    -- T_Where  -> parseWhere
     T_Lambda -> parseLambda
     _        -> do
       table <- getPrecedenceTable
@@ -665,44 +664,20 @@ parseLambda :: M Expr
 parseLambda = do
   pos <- currentPosition
   match T_Lambda
-  params <- parseSequence idIsArrow (return ()) parseAtom
+  params <- parseSequence checkArrow (return ()) parseAtom
   matchArrow
   body <- parseExpr
-  return $ ELambda pos params body
+  return $ foldr (ELambda pos) body params
 
 matchArrow :: M ()
-matchArrow = do
+matchArrow = match (T_Id arrowSymbol)
+
+checkArrow :: M Bool
+checkArrow = do
   t <- peekType
   case t of
-    T_Id id -> do
-      if isArrow id
-        then do
-          getToken
-          return ()
-        else do
-          failM ParseError
-            ("Expected: → or -> .\n" ++
-            "Got     : " ++ show t ++ ".")
-    _       -> failM ParseError
-                  ("Expected: → or -> .\n" ++
-                  "Got     : " ++ show t ++ ".")
-
-idIsArrow :: M Bool
-idIsArrow = do
-  t <- peekType
-  case  t of
-    T_Id id -> do
-      return $ isArrow id
+    T_Id id -> return (id == arrowSymbol)
     _       -> return False
-
--- parseWhere :: M Expr
--- parseWhere = do
---   pos <- currentPosition
---   match T_Where
---   match T_LBrace
---   equations <- parseEquations
---   match T_RBrace
---   return $ EWhere pos equations
 
 parseLet :: M Expr
 parseLet = do

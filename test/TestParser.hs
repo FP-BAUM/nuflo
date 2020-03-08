@@ -423,25 +423,42 @@ tests = TestSuite "PARSER" [
 
   ---- Lambda
 
-  testExprOK "Id lambda"
+  testExprOK "Lambda: empty lambda"
      (unlines [
-       "x = \\ x -> x"
+       "x = \\ -> a"
      ])
-     (ELambda () [evar "x"] (evar "x")),
+     (evar "a"),
 
-  testExprOK "lambda with more parameters"
+  testExprOK "Lambda: one parameter"
+     (unlines [
+       "x = \\ a -> b"
+     ])
+     (ELambda () (evar "a") (evar "b")),
+
+  testExprOK "Lambda: many parameters"
      (unlines [
        "x = \\ f g x -> f g x"
      ])
-     (ELambda () [evar "f", evar "g", evar "x"] (eapp (evar "f") [evar "g", evar "x"])),
+     (ELambda () (evar "f")
+       (ELambda () (evar "g")
+         (ELambda () (evar "x")
+           (eapp (evar "f") [evar "g", evar "x"])))),
 
-  testExprOK "lambda nested lambdas"
+  testExprOK "Lambda: complex patterns"
+     (unlines [
+       "x = \\ (Cons x xs) (Cons y ys) -> a"
+     ])
+     (ELambda () (eapp (evar "Cons") [evar "x", evar "xs"])
+       (ELambda () (eapp (evar "Cons") [evar "y", evar "ys"])
+         (evar "a"))),
+
+  testExprOK "Lambda: nested lambdas"
      (unlines [
        "x = \\ x -> \\ y -> \\ z -> z y x"
      ])
-     (ELambda () [evar "x"]
-      (ELambda () [evar "y"]
-        (ELambda () [evar "z"] (eapp (evar "z") [evar "y", evar "x"])))),
+     (ELambda () (evar "x")
+      (ELambda () (evar "y")
+        (ELambda () (evar "z") (eapp (evar "z") [evar "y", evar "x"])))),
 
   ---- Let
 
