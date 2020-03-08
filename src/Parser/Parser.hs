@@ -665,10 +665,9 @@ parseLambda :: M Expr
 parseLambda = do
   pos <- currentPosition
   match T_Lambda
-  params <- parseSequence idIsArrow (return ()) parseExpr
+  params <- parseSequence idIsArrow (return ()) parseAtom
   matchArrow
   body <- parseExpr
-  match T_RBrace
   return $ ELambda pos params body
 
 matchArrow :: M ()

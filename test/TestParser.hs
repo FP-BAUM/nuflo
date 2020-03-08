@@ -425,7 +425,7 @@ tests = TestSuite "PARSER" [
 
   testExprOK "Id lambda"
      (unlines [
-       "x = \\x -> x"
+       "x = \\ x -> x"
      ])
      (ELambda () [evar "x"] (evar "x")),
 
