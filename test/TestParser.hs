@@ -429,6 +429,20 @@ tests = TestSuite "PARSER" [
      ])
      (ELambda () [evar "x"] (evar "x")),
 
+  testExprOK "lambda with more parameters"
+     (unlines [
+       "x = \\ f g x -> f g x"
+     ])
+     (ELambda () [evar "f", evar "g", evar "x"] (eapp (evar "f") [evar "g", evar "x"])),
+
+  testExprOK "lambda nested lambdas"
+     (unlines [
+       "x = \\ x -> \\ y -> \\ z -> z y x"
+     ])
+     (ELambda () [evar "x"]
+      (ELambda () [evar "y"]
+        (ELambda () [evar "z"] (eapp (evar "z") [evar "y", evar "x"])))),
+
   ---- Let
 
   testExprOK "Empty let"
