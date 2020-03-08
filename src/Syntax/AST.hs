@@ -78,7 +78,6 @@ data AnnExpr a =
   | EInt a Integer                         -- integer constant
   | EApp a (AnnExpr a) (AnnExpr a)         -- application
   | ELambda a [AnnExpr a] (AnnExpr a)      -- lambda
-  | EWhere a [AnnEquation a]               -- where
   | ELet a [AnnDeclaration a] (AnnExpr a)  -- let
   deriving Eq
 
@@ -206,7 +205,6 @@ instance Show (AnnExpr a) where
   show (EApp _ f x)   = "(" ++ show f ++ " " ++ show x ++ ")"
   show (ELambda _ params body) =
     "\\ " ++ joinS " " (map show params) ++ " -> " ++ show body
-  show (EWhere _ equations) =
-    "{ " ++  joinS "\n" (map show equations) ++ "}"
   show (ELet _ ds e)  =
     "(let {" ++ joinS "; " (map show ds) ++ "} in " ++ show e ++ ")"
+
