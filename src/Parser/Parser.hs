@@ -653,6 +653,7 @@ parseExpr = do
   t <- peekType
   case t of
     T_Let    -> parseLet
+    T_Where  -> parseWhere
     T_Lambda -> parseLambda
     _        -> do
       table <- getPrecedenceTable
@@ -662,11 +663,21 @@ parseLambda :: M Expr
 parseLambda = do
   pos <- currentPosition
   match T_Lambda
+  -- TODO: Here should parseSequence while there not -> , we should fix it
   params <- parseSequence (peekIs T_LBrace) (return ()) parseExpr
   match T_LBrace
   body <- parseExpr
   match T_RBrace
   return $ ELambda pos params body
+
+parseWhere :: M Expr
+parseWhere = do
+  pos <- currentPosition
+  match T_Where
+  match T_LBrace
+  equations <- parseEquations
+  match T_RBrace
+  return $ EWhere pos equations
 
 parseLet :: M Expr
 parseLet = do

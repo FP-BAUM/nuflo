@@ -421,6 +421,14 @@ tests = TestSuite "PARSER" [
            (eapp (evar "h") [evar "a", evar "b"])
      ]),
 
+  ---- Lambda
+
+  testExprOK "Id lambda"
+     (unlines [
+       "x = \\x -> x"
+     ])
+     (ELambda () [evar "x"] (evar "x")),
+
   ---- Let
 
   testExprOK "Empty let"
