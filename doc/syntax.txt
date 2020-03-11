@@ -143,8 +143,14 @@ or
          | LPAREN <expr> RPAREN
          | LET LBRACE <declaration*> RBRACE IN <expr>
          | LAMBDA <id*> ARROW <expr>
-         | LAMBDA LBRACE <long-branch*> RBRACE
          | CASE <expr> OF LBRACE <branch*> RBRACE
+         | FRESH LBRACE <idseq*> RBRACE IN <expr>
+
+<idseq*> ::= /* EMPTY */
+           | <id*> SEMICOLON <idseq+>
+
+<idseq+> ::= <id*>
+           | <id*> SEMICOLON <idseq+>
 
 <id*> ::= /* EMPTY */
         | <id> <id*>
@@ -154,17 +160,4 @@ or
 <branch+> ::= <branch>
             | <branch> SEMICOLON <branch+>
 <branch> ::= <atom> ARROW <expr>
-
-<long-branch*> ::= /* EMPTY */
-                 | <long-branch+>
-
-<long-branch+> ::= <long-branch>
-                 | <long-branch> SEMICOLON <long-branch+>
-
-<long-branch> ::= <atom*> ARROW <expr>
-
-----
-
-<atom*> ::= /* EMPTY */
-          | <expr> <atom*>
 
