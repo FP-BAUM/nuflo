@@ -4,15 +4,25 @@
 
 Module syntax:
 
-  module A where        -- export all from A
-  module A(a; b) where  -- export selected names from A
-  import A              -- import all from A
-  import A(a; b as bb)  -- import selected names from A
+  module A.B.C where        -- export all from A.B.C
+  module A.B.C(a; b) where  -- export selected names from A.B.C
+
+  import A.B.C                  -- import all from A.B.C
+  import A.B.C as D             -- import all from A.B.C
+                                -- and declare alias D for A.B.C
+  import A.B.C(a; b as bb)      -- import selected names from A
+  import A.B.C(a; b as bb) as D -- import selected names from A.B.C
+                                -- and declare alias D for A.B.C
 
 To use qualified imports, do:
 
-  import A()
-  ... A.a ...
+  import A.B.C()
+  ... A.B.C.a ...
+
+or
+
+  import A.B.C() as D
+  ... D.a ...
 
 -------------------------------------------------------------
 -- GRAMMAR
@@ -60,20 +70,94 @@ To use qualified imports, do:
 <declaration> ::=
     /* Import*/
   | IMPORT <qname> <moduleImports>
+  | IMPORT <qname> <moduleImports> AS ID
+
     /* Fixity declaration */
     <fixity> INT ID
   |
     /* Data declaration */
-    DATA <expr> WHERE LBRACE ***TODO*** RBRACE
+    DATA <expr> WHERE LBRACE <typeSignature*> RBRACE
   |
     /* Type declaration */
     TYPE <expr> EQ <expr>
   |
+    /* Class declaration */
+    CLASS <classname> <qname>
+      WHERE LBRACE <typeSignature*> RBRACE
+  |
+    /* Instance declaration */
+    INSTANCE <classname> <expr> <optionalConstraints>
+      WHERE LBRACE <valueDeclarations> RBRACE
+  |
     /* Type signature */
-    ID COLON <expr> 
+    <typeSignature>
   |
     /* Value declaration */
-    <expr> EQ <expr>
+    <equation>
 
 <fixity> ::= INFIXL | INFIXR | INFIX
+
+----
+
+<typeSignature*> ::= /* EMPTY */
+                   | <typeSignature+>
+
+<typeSignature+> ::= <typeSignature>
+                   | <typeSignature> SEMICOLON <typeSignature+>
+
+<typeSignature> ::= ID COLON <expr> <optionalConstraints>
+
+----
+
+<equation*> ::= /* EMPTY */
+              | <equation+>
+
+<equation+> ::= <equation>
+              | <equation> SEMICOLON <equation+>
+
+<equation> ::= <expr> EQ <expr>
+             | <expr> EQ <expr> WHERE LBRACE <declaration*> RBRACE
+
+---
+
+<optionalConstraints> ::= /* EMPTY */
+                        | LBRACE <constraint*> RBRACE
+
+<constraint*> ::= /* EMPTY */
+                 | <constraint+>
+
+<constraint+> ::= <constraint>
+                | <constraint> SEMICOLON <constraint+>
+
+<constraint> ::= <classname> <qname>
+
+<classname> ::= <qname>
+
+---
+
+<expr> ::= <atom>
+         | <atom> <expr>
+
+<atom> ::= <qname>
+         | INT
+         | LPAREN <expr> RPAREN
+         | LET LBRACE <declaration*> RBRACE IN <expr>
+         | LAMBDA <id*> ARROW <expr>
+         | CASE <expr> OF LBRACE <branch*> RBRACE
+         | FRESH LBRACE <idseq*> RBRACE IN <expr>
+
+<idseq*> ::= /* EMPTY */
+           | <id*> SEMICOLON <idseq+>
+
+<idseq+> ::= <id*>
+           | <id*> SEMICOLON <idseq+>
+
+<id*> ::= /* EMPTY */
+        | <id> <id*>
+
+<branch*> ::= /* EMPTY */
+            | <branch+>
+<branch+> ::= <branch>
+            | <branch> SEMICOLON <branch+>
+<branch> ::= <atom> ARROW <expr>
 

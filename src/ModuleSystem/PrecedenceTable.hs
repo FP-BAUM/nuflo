@@ -1,8 +1,8 @@
-module Parser.PrecedenceTable(
+module ModuleSystem.PrecedenceTable(
          PrecedenceTable, PrecedenceLevel, Associativity(..),
          Precedence, emptyPrecedenceTable, precedenceLevel,
-         declareOperator, precedenceTableLevels, isOperatorPart,
-         operatorFixity
+         declareOperator, precedenceTableLevels, isOperator,
+         isOperatorPart, operatorFixity
        ) where
 
 import qualified Data.Map as M
@@ -67,6 +67,9 @@ declareOperator assoc precedence qname table =
   if isWellFormedOperatorName (unqualifiedName qname)
    then Right $ addOperator assoc precedence qname table
    else Left ("\"" ++ show qname ++ "\" is not a valid operator name.")
+
+isOperator :: QName -> PrecedenceTable -> Bool
+isOperator qname table = M.member qname (ptAssociativities table)
 
 isOperatorPart :: QName -> PrecedenceTable -> Bool
 isOperatorPart qname table = S.member qname (ptAllOperatorParts table)

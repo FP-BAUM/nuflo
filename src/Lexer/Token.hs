@@ -1,7 +1,7 @@
 module Lexer.Token (
   Token(..),
   TokenType(..),
-  isLBrace, isRBrace, isId, isDot, isModule
+  isLBrace, isRBrace, isId, isIn, isDot, isModule
 ) where
 
 import Position(Position)
@@ -18,10 +18,12 @@ data TokenType =
   | T_Id String
   -- Keywords
   | T_As
+  | T_Case
   | T_Class
   | T_Colon
   | T_Data
   | T_Eq
+  | T_Fresh
   | T_Import
   | T_In
   | T_Infix
@@ -31,6 +33,8 @@ data TokenType =
   | T_Lambda
   | T_Let
   | T_Module
+  | T_Of
+  | T_Type
   | T_Where
   -- Punctuation
   | T_Dot
@@ -51,6 +55,12 @@ isId t =
   case tokenType t of
     T_Id _ -> True
     _      -> False
+
+isIn :: Token -> Bool
+isIn t =
+  case tokenType t of
+    T_In -> True
+    _    -> False
 
 isLBrace :: Token -> Bool
 isLBrace t =
