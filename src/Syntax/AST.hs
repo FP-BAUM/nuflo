@@ -84,9 +84,9 @@ data AnnExpr a =
     EVar a QName                           -- variable
   | EInt a Integer                         -- integer constant
   | EApp a (AnnExpr a) (AnnExpr a)         -- application
-  | ECase a (AnnExpr a) [AnnCaseBranch a]  -- case
   | ELambda a (AnnExpr a) (AnnExpr a)      -- lambda
   | ELet a [AnnDeclaration a] (AnnExpr a)  -- let
+  | ECase a (AnnExpr a) [AnnCaseBranch a]  -- case
   | EFresh a QName (AnnExpr a)             -- fresh
   deriving Eq
 
@@ -136,16 +136,17 @@ instance EraseAnnotations AnnCaseBranch where
   eraseAnnotations (CaseBranch _ p r) =  CaseBranch () (eraseAnnotations p) (eraseAnnotations r)
 
 instance EraseAnnotations AnnExpr where
-  eraseAnnotations (EVar _ q)         = EVar () q
-  eraseAnnotations (EInt _ n)         = EInt () n
-  eraseAnnotations (EApp _ e1 e2)     = EApp () (eraseAnnotations e1)
-                                                (eraseAnnotations e2)
+  eraseAnnotations (EVar _ q)          = EVar () q
+  eraseAnnotations (EInt _ n)          = EInt () n
+  eraseAnnotations (EApp _ e1 e2)      = EApp () (eraseAnnotations e1)
+                                                 (eraseAnnotations e2)
   eraseAnnotations (ELambda _ param e) = ELambda ()
                                                  (eraseAnnotations param)
                                                  (eraseAnnotations e)
   eraseAnnotations (ELet _ ds e)       = ELet () (map eraseAnnotations ds)
                                                  (eraseAnnotations e)
-  eraseAnnotations (ECase _ e branchs) = ECase () (eraseAnnotations e)  (map eraseAnnotations branchs)
+  eraseAnnotations (ECase _ e bs)      = ECase () (eraseAnnotations e)
+                                                  (map eraseAnnotations bs)
   eraseAnnotations (EFresh _ name e)   = EFresh () name (eraseAnnotations e)
 
 --
@@ -227,5 +228,8 @@ instance Show (AnnExpr a) where
     "\\ " ++ show param ++ " -> " ++ show body
   show (ELet _ ds e)          =
     "(let {" ++ joinS "; " (map show ds) ++ "} in " ++ show e ++ ")"
-  show (ECase _ e branchs)    = "(case " ++ show e ++ " of {" ++ (joinS ";" (map show branchs)) ++ " })"
-  show (EFresh _ name e)      = "(fresh " ++ show name ++ " in " ++ show e ++ ")"
+  show (ECase _ e branchs)    =
+    "(case " ++ show e ++ " of {" ++ (joinS "; " (map show branchs)) ++ "})"
+  show (EFresh _ name e)      =
+    "(fresh " ++ show name ++ " in " ++ show e ++ ")"
+

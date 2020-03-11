@@ -548,7 +548,10 @@ tests = TestSuite "PARSER" [
       "x = f where",
       " f = g"
     ])
-    (ELet () [ValueDeclaration (Equation () (evar "f") (evar "g"))] (evar "f")),
+    (ELet () [
+      ValueDeclaration (Equation () (evar "f") (evar "g"))
+     ]
+     (evar "f")),
 
   testExprOK "Where: with type signature and declaration"
     (unlines [
@@ -559,7 +562,8 @@ tests = TestSuite "PARSER" [
     (ELet () [
       TypeSignature (Signature () (qmain "f") (evar "Bool") []),
       ValueDeclaration (Equation () (evar "f") (evar "g"))
-    ] (evar "f")),
+     ]
+     (evar "f")),
 
   testExprOK "Where: with nested wheres"
     (unlines [
@@ -578,6 +582,7 @@ tests = TestSuite "PARSER" [
     ] (evar "f")),
 
   ---- Case
+
   testExprOK "Case: Case without branches"
     (unlines [
       "x = case a of",
@@ -605,6 +610,7 @@ tests = TestSuite "PARSER" [
       ]) (evar "False")]),
 
   ---- Fresh
+
   testExprOK "Fresh: empty fresh"
     (unlines [
       "x = fresh in x"
@@ -621,14 +627,20 @@ tests = TestSuite "PARSER" [
     (unlines [
       "x = fresh a b c in z"
     ])
-    (EFresh () (qmain "a") (EFresh () (qmain "b") (EFresh () (qmain "c") (evar "z")))),
+    (EFresh () (qmain "a")
+      (EFresh () (qmain "b")
+        (EFresh () (qmain "c")
+          (evar "z")))),
 
   testExprOK "Fresh: variables at the same row and 'in' at next line"
     (unlines [
       "x = fresh a b c",
       " in z"
     ])
-    (EFresh () (qmain "a") (EFresh () (qmain "b") (EFresh () (qmain "c") (evar "z")))),
+    (EFresh () (qmain "a")
+      (EFresh () (qmain "b")
+        (EFresh () (qmain "c")
+          (evar "z")))),
 
   testExprOK "Fresh: variables and 'in' at the same column"
     (unlines [
@@ -636,7 +648,10 @@ tests = TestSuite "PARSER" [
       "          b",
       "          c in z"
     ])
-    (EFresh () (qmain "a") (EFresh () (qmain "b") (EFresh () (qmain "c") (evar "z")))),
+    (EFresh () (qmain "a")
+      (EFresh () (qmain "b")
+        (EFresh () (qmain "c")
+          (evar "z")))),
 
   testExprOK "Fresh: variables at the same column and 'in' at next line"
     (unlines [
@@ -645,7 +660,10 @@ tests = TestSuite "PARSER" [
       "          c",
       "         in z"
     ])
-    (EFresh () (qmain "a") (EFresh () (qmain "b") (EFresh () (qmain "c") (evar "z")))),
+    (EFresh () (qmain "a")
+      (EFresh () (qmain "b")
+        (EFresh () (qmain "c")
+          (evar "z")))),
 
   ---- Imports
 
@@ -754,6 +772,7 @@ tests = TestSuite "PARSER" [
      ]),
 
   -- Empty program
+
   testProgramOK "Empty program"
     "" 
     (Program [])

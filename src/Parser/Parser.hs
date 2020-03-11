@@ -105,30 +105,13 @@ peekType = do
   tok <- peek
   return $ tokenType tok
 
-peekIsSemiColonOrRBrace :: M Bool
-peekIsSemiColonOrRBrace = do
-  isRBrace <- peekIsRBrace
-  isSemiColon <- peekIs T_Semicolon
-  return (isRBrace || isSemiColon)
+peekIsAny :: [TokenType] -> M Bool
+peekIsAny ts = do
+  t <- peekType
+  return (t `elem` ts)
 
 peekIs :: TokenType  -> M Bool
-peekIs t = do
-  t' <- peekType
-  return $ t == t'
-
-peekIsRParen :: M Bool
-peekIsRParen = do
-  t <- peekType
-  case t of
-    T_RParen -> return True
-    _        -> return False
-
-peekIsRBrace :: M Bool
-peekIsRBrace = do
-  t <- peekType
-  case t of
-    T_RBrace -> return True
-    _        -> return False
+peekIs t = peekIsAny [t]
 
 getToken :: M Token
 getToken = do
@@ -383,13 +366,19 @@ parseSequence checkTermination matchSeparator parseElement = do
                elems <- rec
                return (elem : elems)
 
+-- Parses a possibly empty sequence x1; 
+parseSuite :: M a -> M [a]
+parseSuite = parseSequence (peekIs T_RBrace) (match T_Semicolon)
+
 parseModuleExports :: QName -> M ()
 parseModuleExports moduleName = do
   t <- peekType
   case t of
     T_LParen -> do
       match T_LParen
-      exportedNames <- parseSequence peekIsRParen (match T_Semicolon) parseId 
+      exportedNames <- parseSequence (peekIs T_RParen)
+                                     (match T_Semicolon)
+                                     parseId 
       match T_RParen
       exportNamesM moduleName exportedNames
     _ ->
@@ -447,7 +436,7 @@ parseInt = do
 
 parseDeclarations :: M [Declaration]
 parseDeclarations = do
-  dss <- parseSequence peekIsRBrace (match T_Semicolon) parseDeclaration
+  dss <- parseSuite parseDeclaration
   return $ concat dss
 
 parseDeclaration :: M [Declaration]
@@ -488,7 +477,7 @@ parseImport = do
   t <- peekType
   case t of
     T_LParen -> do match T_LParen
-                   renamings  <- parseSequence peekIsRParen
+                   renamings  <- parseSequence (peekIs T_RParen)
                                                (match T_Semicolon)
                                                parseRenameId
                    importNamesM moduleName renamings
@@ -554,9 +543,7 @@ parseClassDeclaration = do
   return $ ClassDeclaration pos className typeName signatures
 
 parseSignatures :: M [Signature]
-parseSignatures = parseSequence peekIsRBrace 
-                                (match T_Semicolon)
-                                parseSignature
+parseSignatures = parseSuite parseSignature
 
 parseSignature :: M Signature
 parseSignature = do
@@ -586,9 +573,7 @@ parseInstanceDeclaration = do
   return $ InstanceDeclaration pos className typ constraints equations
 
 parseEquations :: M [Equation]
-parseEquations = parseSequence peekIsRBrace 
-                               (match T_Semicolon)
-                               parseEquation
+parseEquations = parseSuite parseEquation
 
 parseEquation :: M Equation
 parseEquation = do
@@ -625,9 +610,7 @@ parseOptionalConstraints = do
     _        -> return []
 
 parseConstraints :: M [Constraint]
-parseConstraints = parseSequence peekIsRBrace 
-                                 (match T_Semicolon)
-                                 parseConstraint
+parseConstraints = parseSuite parseConstraint
 
 parseConstraint :: M Constraint
 parseConstraint = do
@@ -693,14 +676,16 @@ parseFresh = do
   pos <- currentPosition
   match T_Fresh
   match T_LBrace
-  freshNames <- parseSequence peekIsRBrace (match T_Semicolon) parseQNames
+  freshNames <- parseSuite parseQNames
   match T_RBrace
   match T_In
   expr <- parseExpr
   return $ foldr (EFresh pos) expr (concat freshNames)
 
 parseQNames :: M [QName]
-parseQNames = parseSequence peekIsSemiColonOrRBrace (return ()) parseAndResolveQName
+parseQNames = parseSequence (peekIsAny [T_Semicolon, T_RBrace])
+                            (return ())
+                            parseAndResolveQName
 
 matchArrow :: M ()
 matchArrow = match (T_Id arrowSymbol)
@@ -732,9 +717,9 @@ parseCase = do
   expr <- parseExpr
   match T_Of
   match T_LBrace
-  branchs <- parseSequence peekIsRBrace (match T_Semicolon) parseCaseBranch
+  branches <- parseSuite parseCaseBranch
   match T_RBrace
-  return $ ECase pos expr branchs
+  return $ ECase pos expr branches
 
 parseCaseBranch :: M CaseBranch
 parseCaseBranch = do
