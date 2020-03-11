@@ -105,6 +105,12 @@ peekType = do
   tok <- peek
   return $ tokenType tok
 
+peekIsSemiColonOrRBrace :: M Bool
+peekIsSemiColonOrRBrace = do
+  isRBrace <- peekIsRBrace
+  isSemiColon <- peekIs T_Semicolon
+  return (isRBrace || isSemiColon)
+
 peekIs :: TokenType  -> M Bool
 peekIs t = do
   t' <- peekType
@@ -667,6 +673,7 @@ parseExpr = do
   case t of
     T_Let    -> parseLet
     T_Lambda -> parseLambda
+    T_Fresh  -> parseFresh
     T_Case   -> parseCase
     _        -> do
       table <- getPrecedenceTable
@@ -680,6 +687,20 @@ parseLambda = do
   matchArrow
   body <- parseExpr
   return $ foldr (ELambda pos) body params
+
+parseFresh :: M Expr
+parseFresh = do
+  pos <- currentPosition
+  match T_Fresh
+  match T_LBrace
+  freshNames <- parseSequence peekIsRBrace (match T_Semicolon) parseQNames
+  match T_RBrace
+  match T_In
+  expr <- parseExpr
+  return $ foldr (EFresh pos) expr (concat freshNames)
+
+parseQNames :: M [QName]
+parseQNames = parseSequence peekIsSemiColonOrRBrace (return ()) parseAndResolveQName
 
 matchArrow :: M ()
 matchArrow = match (T_Id arrowSymbol)

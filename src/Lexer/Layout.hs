@@ -39,6 +39,7 @@ isLayoutKeyword t =
   case tokenType t of
     T_Where -> True
     T_Of    -> True
+    T_Fresh -> True
     T_Let   -> True
     _       -> False
 

@@ -604,6 +604,49 @@ tests = TestSuite "PARSER" [
         (evar "x"), (evar "xs")
       ]) (evar "False")]),
 
+  ---- Fresh
+  testExprOK "Fresh: empty fresh"
+    (unlines [
+      "x = fresh in x"
+    ])
+    (evar "x"),
+
+  testExprOK "Fresh: with a fresh variable"
+    (unlines [
+      "x = fresh a in b"
+    ])
+    (EFresh () (qmain "a") (evar "b")),
+
+  testExprOK "Fresh: variables and 'in' at the same row"
+    (unlines [
+      "x = fresh a b c in z"
+    ])
+    (EFresh () (qmain "a") (EFresh () (qmain "b") (EFresh () (qmain "c") (evar "z")))),
+
+  testExprOK "Fresh: variables at the same row and 'in' at next line"
+    (unlines [
+      "x = fresh a b c",
+      " in z"
+    ])
+    (EFresh () (qmain "a") (EFresh () (qmain "b") (EFresh () (qmain "c") (evar "z")))),
+
+  testExprOK "Fresh: variables and 'in' at the same column"
+    (unlines [
+      "x = fresh a",
+      "          b",
+      "          c in z"
+    ])
+    (EFresh () (qmain "a") (EFresh () (qmain "b") (EFresh () (qmain "c") (evar "z")))),
+
+  testExprOK "Fresh: variables at the same column and 'in' at next line"
+    (unlines [
+      "x = fresh a",
+      "          b",
+      "          c",
+      "         in z"
+    ])
+    (EFresh () (qmain "a") (EFresh () (qmain "b") (EFresh () (qmain "c") (evar "z")))),
+
   ---- Imports
 
   testExprOK "Import declared name from module"

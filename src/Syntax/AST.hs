@@ -87,6 +87,7 @@ data AnnExpr a =
   | ECase a (AnnExpr a) [AnnCaseBranch a]  -- case
   | ELambda a (AnnExpr a) (AnnExpr a)      -- lambda
   | ELet a [AnnDeclaration a] (AnnExpr a)  -- let
+  | EFresh a QName (AnnExpr a)             -- fresh
   deriving Eq
 
 type Declaration = AnnDeclaration Position
@@ -145,6 +146,7 @@ instance EraseAnnotations AnnExpr where
   eraseAnnotations (ELet _ ds e)       = ELet () (map eraseAnnotations ds)
                                                  (eraseAnnotations e)
   eraseAnnotations (ECase _ e branchs) = ECase () (eraseAnnotations e)  (map eraseAnnotations branchs)
+  eraseAnnotations (EFresh _ name e)   = EFresh () name (eraseAnnotations e)
 
 --
 
@@ -225,5 +227,5 @@ instance Show (AnnExpr a) where
     "\\ " ++ show param ++ " -> " ++ show body
   show (ELet _ ds e)          =
     "(let {" ++ joinS "; " (map show ds) ++ "} in " ++ show e ++ ")"
-  show (ECase _ e branchs)      = "(case " ++ show e ++ " of {" ++ (joinS ";" (map show branchs)) ++ " })"
-
+  show (ECase _ e branchs)    = "(case " ++ show e ++ " of {" ++ (joinS ";" (map show branchs)) ++ " })"
+  show (EFresh _ name e)      = "(fresh " ++ show name ++ " in " ++ show e ++ ")"

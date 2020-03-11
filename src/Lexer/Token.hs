@@ -23,6 +23,7 @@ data TokenType =
   | T_Colon
   | T_Data
   | T_Eq
+  | T_Fresh
   | T_Import
   | T_In
   | T_Infix
