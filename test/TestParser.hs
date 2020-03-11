@@ -514,7 +514,7 @@ tests = TestSuite "PARSER" [
        ]
        (evar "e")),
 
-  testExprOK "Let: allow type declarations"
+  testExprOK "Let: allow type signature"
      (unlines [
        "x = let t : Bool",
        "        t = True",

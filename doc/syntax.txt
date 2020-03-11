@@ -93,7 +93,7 @@ or
     <typeSignature>
   |
     /* Value declaration */
-    <valueDeclaration>
+    <equation>
 
 <fixity> ::= INFIXL | INFIXR | INFIX
 
@@ -109,13 +109,14 @@ or
 
 ----
 
-<valueDeclaration*> ::= /* EMPTY */
-                      | <valueDeclaration+>
+<equation*> ::= /* EMPTY */
+              | <equation+>
 
-<valueDeclaration+> ::= <valueDeclaration>
-                      | <valueDeclaration> SEMICOLON <valueDeclaration+>
+<equation+> ::= <equation>
+              | <equation> SEMICOLON <equation+>
 
-<valueDeclaration> ::= <expr> EQ <expr>
+<equation> ::= <expr> EQ <expr>
+             | <expr> EQ <expr> WHERE LBRACE <declaration*> RBRACE
 
 ---
 
