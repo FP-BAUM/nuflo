@@ -6,6 +6,7 @@ module Syntax.AST(
          AnnSignature(..), Signature,
          AnnEquation(..), Equation,
          AnnConstraint(..), Constraint,
+         AnnCaseBranch(..), CaseBranch,
          AnnExpr(..), Expr,
          eraseAnnotations, exprIsVariable, exprHeadVariable
        ) where
@@ -72,11 +73,18 @@ data AnnConstraint a = Constraint {
                          constraintTypeName  :: QName
                        } deriving Eq
 
+data AnnCaseBranch a = CaseBranch {
+                         annotation          :: a,
+                         caseBranchPattern   :: AnnExpr a,
+                         caseBranchResult    :: AnnExpr a
+                       } deriving Eq
+
 -- Annotated expression
 data AnnExpr a =
     EVar a QName                           -- variable
   | EInt a Integer                         -- integer constant
   | EApp a (AnnExpr a) (AnnExpr a)         -- application
+  | ECase a (AnnExpr a) [AnnCaseBranch a]  -- case
   | ELambda a (AnnExpr a) (AnnExpr a)      -- lambda
   | ELet a [AnnDeclaration a] (AnnExpr a)  -- let
   deriving Eq
@@ -85,6 +93,7 @@ type Declaration = AnnDeclaration Position
 type Constraint  = AnnConstraint Position
 type Signature   = AnnSignature Position
 type Equation    = AnnEquation Position
+type CaseBranch  = AnnCaseBranch Position
 type Expr        = AnnExpr Position
 
 --
@@ -122,16 +131,20 @@ instance EraseAnnotations AnnEquation where
 instance EraseAnnotations AnnConstraint where
   eraseAnnotations (Constraint _ x y) = Constraint () x y
 
+instance EraseAnnotations AnnCaseBranch where
+  eraseAnnotations (CaseBranch _ p r) =  CaseBranch () (eraseAnnotations p) (eraseAnnotations r)
+
 instance EraseAnnotations AnnExpr where
-  eraseAnnotations (EVar _ q)     = EVar () q
-  eraseAnnotations (EInt _ n)     = EInt () n
-  eraseAnnotations (EApp _ e1 e2) = EApp () (eraseAnnotations e1)
-                                            (eraseAnnotations e2)
+  eraseAnnotations (EVar _ q)         = EVar () q
+  eraseAnnotations (EInt _ n)         = EInt () n
+  eraseAnnotations (EApp _ e1 e2)     = EApp () (eraseAnnotations e1)
+                                                (eraseAnnotations e2)
   eraseAnnotations (ELambda _ param e) = ELambda ()
                                                  (eraseAnnotations param)
                                                  (eraseAnnotations e)
-  eraseAnnotations (ELet _ ds e)  = ELet () (map eraseAnnotations ds)
-                                            (eraseAnnotations e)
+  eraseAnnotations (ELet _ ds e)       = ELet () (map eraseAnnotations ds)
+                                                 (eraseAnnotations e)
+  eraseAnnotations (ECase _ e branchs) = ECase () (eraseAnnotations e)  (map eraseAnnotations branchs)
 
 --
 
@@ -193,6 +206,10 @@ instance Show (AnnConstraint a) where
   show (Constraint _ className typeName) =
     show className ++ " " ++ show typeName
 
+instance Show (AnnCaseBranch a) where
+  show (CaseBranch _ p r) =
+    show p ++ " -> " ++ show r
+
 showOptionalConstraints :: [AnnConstraint a] -> String
 showOptionalConstraints [] = ""
 showOptionalConstraints cs = 
@@ -201,11 +218,12 @@ showOptionalConstraints cs =
        ++ "}")
 
 instance Show (AnnExpr a) where
-  show (EVar _ qname) = show qname
-  show (EInt _ n)     = show n
-  show (EApp _ f x)   = "(" ++ show f ++ " " ++ show x ++ ")"
+  show (EVar _ qname)         = show qname
+  show (EInt _ n)             = show n
+  show (EApp _ f x)           = "(" ++ show f ++ " " ++ show x ++ ")"
   show (ELambda _ param body) =
     "\\ " ++ show param ++ " -> " ++ show body
-  show (ELet _ ds e)  =
+  show (ELet _ ds e)          =
     "(let {" ++ joinS "; " (map show ds) ++ "} in " ++ show e ++ ")"
+  show (ECase _ e branchs)      = "(case " ++ show e ++ " of {" ++ (joinS ";" (map show branchs)) ++ " })"
 

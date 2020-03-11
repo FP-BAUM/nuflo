@@ -9,6 +9,7 @@ import Syntax.AST(AnnProgram(..), AnnDeclaration(..),
                   AnnSignature(..), Signature,
                   AnnEquation(..), Equation,
                   AnnConstraint(..), Constraint,
+                  AnnCaseBranch(..), CaseBranch,
                   AnnExpr(..), Expr,
                   eraseAnnotations)
 import Lexer.Lexer(tokenize)
@@ -575,6 +576,33 @@ tests = TestSuite "PARSER" [
         ValueDeclaration (Equation () (evar "g") (evar "True"))
       ] (evar "g")))
     ] (evar "f")),
+
+  ---- Case
+  testExprOK "Case: Case without branches"
+    (unlines [
+      "x = case a of",
+      " "
+    ])
+    (ECase () (evar "a") []),
+
+  testExprOK "Case: Case with a branch"
+    (unlines [
+      "x = case a of",
+      " [] -> True"
+    ])
+    (ECase () (evar "a") [CaseBranch () (evar "[]") (evar "True")]),
+
+  testExprOK "Case: Case with two branches"
+    (unlines [
+      "x = case list of",
+      " []       -> True",
+      " (:: x xs) -> False"
+    ])
+    (ECase () (evar "list") [
+      CaseBranch () (evar "[]") (evar "True"), 
+      CaseBranch () (eapp (evar "::") [
+        (evar "x"), (evar "xs")
+      ]) (evar "False")]),
 
   ---- Imports
 

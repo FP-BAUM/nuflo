@@ -17,6 +17,7 @@ import Syntax.AST(
          AnnSignature(..), Signature,
          AnnEquation(..), Equation,
          AnnConstraint(..), Constraint,
+         AnnCaseBranch(..), CaseBranch,
          AnnExpr(..), Expr,
          exprIsVariable, exprHeadVariable
        )
@@ -666,6 +667,7 @@ parseExpr = do
   case t of
     T_Let    -> parseLet
     T_Lambda -> parseLambda
+    T_Case   -> parseCase
     _        -> do
       table <- getPrecedenceTable
       parseExprMixfix (precedenceTableLevels table) table
@@ -702,6 +704,25 @@ parseLet = do
   exitScopeM
   return $ ELet pos decls expr
 
+parseCase :: M Expr
+parseCase = do
+  pos <- currentPosition
+  match T_Case
+  expr <- parseExpr
+  match T_Of
+  match T_LBrace
+  branchs <- parseSequence peekIsRBrace (match T_Semicolon) parseCaseBranch
+  match T_RBrace
+  return $ ECase pos expr branchs
+
+parseCaseBranch :: M CaseBranch
+parseCaseBranch = do
+  pos <- currentPosition
+  pattern <- parseAtom
+  matchArrow
+  result <- parseExpr
+  return $ CaseBranch pos pattern result
+
 isEndOfExpression :: M Bool
 isEndOfExpression = do
   t <- peekType
@@ -712,6 +733,7 @@ isEndOfExpression = do
     T_RBrace    -> True
     T_Semicolon -> True
     T_Eq        -> True
+    T_Of        -> True
     T_Colon     -> True
     T_Where     -> True
     _           -> False

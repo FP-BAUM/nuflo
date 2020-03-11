@@ -18,6 +18,7 @@ data TokenType =
   | T_Id String
   -- Keywords
   | T_As
+  | T_Case
   | T_Class
   | T_Colon
   | T_Data
@@ -31,6 +32,7 @@ data TokenType =
   | T_Lambda
   | T_Let
   | T_Module
+  | T_Of
   | T_Type
   | T_Where
   -- Punctuation
