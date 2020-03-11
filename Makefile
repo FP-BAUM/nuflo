@@ -3,15 +3,20 @@
 
 BINARY=lambda-unif
 
+GHCOPTS=-fwarn-incomplete-patterns
+
 build :
-	ghc -isrc/ -itest/ --make app/Main.hs -o ${BINARY}
+	ghc -isrc/ -itest/ $(GHCOPTS) --make app/Main.hs -o ${BINARY}
 
 test : build
 	./${BINARY} -T
 
 clean :
-	rm -f app/*.o app/*.hi \
-          src/*.o src/*.hi \
-          src/Lexer/*.o src/Lexer/*.hi \
-          test/*.o test/*.hi
+	rm -f app/*.{o,hi} \
+          src/*.{o,hi} \
+          src/Syntax/*.{o,hi} \
+          src/ModuleSystem/*.{o,hi} \
+          src/Lexer/*.{o,hi} \
+          src/Parser/*.{o,hi} \
+          test/*.{o,hi}
 

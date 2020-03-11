@@ -28,12 +28,15 @@ tsSum = foldr tsPlus tsZero
 runTest :: Test -> IO TestSummary
 runTest (TestCase name obtained expected) = do
   if obtained == expected
-   then do putStrLn ("[ OK ] " ++ name)
+   then do putStrLn ("  [ OK ] " ++ name)
            return (TS 1 1)
-   else do putStrLn ("[ FAILED ] " ++ name)
-           putStrLn ("  Expected: " ++ show expected)
-           putStrLn ("  Obtained: " ++ show obtained)
+   else do putStrLn ("  [ FAILED ] " ++ name)
+           putStrLn ("    Expected: " ++ show expected)
+           putStrLn ("    Obtained: " ++ show obtained)
            return (TS 1 0)
+
+separator :: String
+separator = "----------------------------------------"
 
 runTests :: [Test] -> IO TestSummary
 runTests tests = do
@@ -44,17 +47,19 @@ runTestSuite :: TestSuite -> IO TestSummary
 runTestSuite (TestSuite name tests) = do
   putStrLn ("[Test Suite] " ++ name)
   summary <- runTests tests
+  putStrLn ""
   return summary
 
 runTestSuites :: [TestSuite] -> IO ()
 runTestSuites testSuites = do
+  putStrLn separator
   TS total ok <- tsSum <$> mapM runTestSuite testSuites
-  putStrLn ("-------------------")
+  putStrLn separator
   putStrLn (" TOTAL : " ++ show total)
   putStrLn (" OK    : " ++ show ok)
   putStrLn (" FAILED: " ++ show (total - ok))
   if total == ok
    then putStrLn "All tests OK."
    else exitFailure
-  putStrLn ("-------------------")
+  putStrLn separator
 

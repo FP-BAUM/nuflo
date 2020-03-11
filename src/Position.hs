@@ -4,7 +4,8 @@ module Position (
   positionLine, positionColumn, positionIndex,
   unknownPosition,
   initialPosition,
-  updatePosition
+  updatePosition,
+  positionRegion
 ) where
 
 data Position = Position {
@@ -14,7 +15,7 @@ data Position = Position {
                   positionColumn   :: Integer,
                   positionIndex    :: Integer -- index inside the source
                 }
-  deriving (Eq, Show)
+  deriving Eq
 
 unknownPosition :: Position
 unknownPosition = Position {
@@ -43,4 +44,29 @@ updatePosition ('\n' : cs) pos =
 updatePosition (_ : cs)   pos =
   updatePosition cs (pos { positionColumn = positionColumn pos + 1,
                            positionIndex  = positionIndex pos + 1 })
+
+instance Show Position where
+  show p = "<" ++ positionFilename p ++ ":" ++
+           show (positionLine p) ++ ":" ++
+           show (positionColumn p) ++ ">"
+
+positionRegion :: Position -> String
+positionRegion p =
+    unlines (
+      ["Near " ++ show p ++ ":"] ++
+      ithLine (i - 2) ++
+      ithLine (i - 1) ++
+      [indicator j] ++
+      ithLine i
+    )
+  where
+    sourceLines = lines (positionSource p)
+    n = length sourceLines
+    i = fromInteger (positionLine p)
+    j = fromInteger (positionColumn p)
+    inRange i = 0 <= i && i < n
+    ithLine i = if inRange i
+                 then [sourceLines !! i]
+                 else []
+    indicator j = replicate (j - 1) ' ' ++ "^"
 
