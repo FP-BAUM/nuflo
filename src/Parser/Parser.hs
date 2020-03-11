@@ -594,7 +594,17 @@ parseEquation = do
                          show lhs)
   match T_Eq
   rhs <- parseExpr
-  return $ Equation pos lhs rhs
+  t   <- peekType
+  case t of
+    T_Where -> do
+      enterScopeM
+      match T_Where
+      match T_LBrace
+      decls <- parseDeclarations
+      match T_RBrace
+      exitScopeM
+      return $ Equation pos lhs (ELet pos decls rhs)
+    _       -> return $ Equation pos lhs rhs
 
 parseOptionalConstraints :: M [Constraint]
 parseOptionalConstraints = do

@@ -534,6 +534,48 @@ tests = TestSuite "PARSER" [
      ])
      ParseError,
 
+  ---- Where
+
+  testExprOK "Where: Empty where"
+    (unlines [
+      "x = y where"
+    ])
+    (ELet () [] (evar "y")),
+
+  testExprOK "Where: with a declaration"
+    (unlines [
+      "x = f where",
+      " f = g"
+    ])
+    (ELet () [ValueDeclaration (Equation () (evar "f") (evar "g"))] (evar "f")),
+
+  testExprOK "Where: with type signature and declaration"
+    (unlines [
+      "x = f where",
+      " f : Bool",
+      " f = g"
+    ])
+    (ELet () [
+      TypeSignature (Signature () (qmain "f") (evar "Bool") []),
+      ValueDeclaration (Equation () (evar "f") (evar "g"))
+    ] (evar "f")),
+
+  testExprOK "Where: with nested wheres"
+    (unlines [
+      "x = f where",
+      " f : Bool",
+      " f = g where",
+      "  g : Bool",
+      "  g = True"
+    ])
+    (ELet () [
+      TypeSignature (Signature () (qmain "f") (evar "Bool") []),
+      ValueDeclaration (Equation () (evar "f") (ELet () [
+        TypeSignature (Signature () (qmain "g") (evar "Bool") []),
+        ValueDeclaration (Equation () (evar "g") (evar "True"))
+      ] (evar "g")))
+    ] (evar "f")),
+
   ---- Imports
 
   testExprOK "Import declared name from module"
