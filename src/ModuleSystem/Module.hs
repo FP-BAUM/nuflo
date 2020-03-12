@@ -48,11 +48,10 @@ declareName =
      })
   )
 
-
 exportAllNamesFromModule :: QName -> Module -> Either ErrorMessage Module
 exportAllNamesFromModule qname =
   liftToQName (\ _ m -> return (m { moduleExportedNames = ExportAll }))
-  (qualify qname "_")
+              (qualify qname "_")
 
 exportSingleName :: QName -> Module -> Either ErrorMessage Module
 exportSingleName =

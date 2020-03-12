@@ -284,6 +284,10 @@ tests = TestSuite "PARSER" [
      "x = y" 
      (evar "y"),
 
+  testExprOK "Variable (underscore)"
+     "x = _" 
+     (evar "_"),
+
   testExprOK "Integer constant"
      "x = 42" 
      (EInt () 42),

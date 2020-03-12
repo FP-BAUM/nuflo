@@ -7,7 +7,6 @@ module ModuleSystem.PrecedenceTable(
 
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Data.List((\\))
 
 import Error(ErrorMessage(..))
 import Syntax.Name(
