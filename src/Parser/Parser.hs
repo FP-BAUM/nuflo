@@ -1,7 +1,5 @@
 module Parser.Parser(parse) where
 
-import Debug.Trace
-
 import qualified Data.Set as S
 import Data.List(isPrefixOf)
 
@@ -12,7 +10,7 @@ import Syntax.Name(QName(..), readName, qualify, moduleNameFromQName,
                    isWellFormedOperatorName, unqualifiedName, splitParts,
                    allNameParts)
 import Syntax.AST(
-         AnnProgram(..), Program(..),
+         AnnProgram(..), Program,
          AnnDeclaration(..), Declaration,
          AnnSignature(..), Signature,
          AnnEquation(..), Equation,

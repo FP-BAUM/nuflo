@@ -18,7 +18,9 @@ import Parser.Parser(parse)
 testProgram :: String -> String -> Either ErrorType (AnnProgram ()) -> Test
 testProgram description source expected =
   TestCase description 
-           (normalizeResult (tokenize "test" source >>= parse))
+           (normalizeResult
+             (return source >>= tokenize "test"
+                            >>= parse))
            expected
   where
     normalizeResult (Left  e) = Left (errorType e)

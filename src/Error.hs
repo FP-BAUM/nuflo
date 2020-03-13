@@ -22,6 +22,7 @@ data ErrorType =
   | ReaderErrorMissingFile
   | ParseError
   | ModuleSystemError
+  | KindErrorMalformedDatatype
   deriving (Eq, Show)
 
 errorAtUnknown :: ErrorType -> String -> Error

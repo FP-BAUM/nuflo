@@ -8,7 +8,8 @@ module Syntax.AST(
          AnnConstraint(..), Constraint,
          AnnCaseBranch(..), CaseBranch,
          AnnExpr(..), Expr,
-         eraseAnnotations, exprIsVariable, exprHeadVariable
+         eraseAnnotations, exprAnnotation,
+         exprIsVariable, exprHeadVariable
        ) where
 
 import Position(Position)
@@ -89,6 +90,15 @@ data AnnExpr a =
   | ECase a (AnnExpr a) [AnnCaseBranch a]  -- case
   | EFresh a QName (AnnExpr a)             -- fresh
   deriving Eq
+
+exprAnnotation :: AnnExpr a -> a
+exprAnnotation (EVar a _)      = a
+exprAnnotation (EInt a _)      = a
+exprAnnotation (EApp a _ _)    = a
+exprAnnotation (ELambda a _ _) = a
+exprAnnotation (ELet a _ _)    = a
+exprAnnotation (ECase a _ _)   = a
+exprAnnotation (EFresh a _ _)  = a
 
 type Declaration = AnnDeclaration Position
 type Constraint  = AnnConstraint Position
