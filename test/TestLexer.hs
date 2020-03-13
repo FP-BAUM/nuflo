@@ -1,7 +1,7 @@
 
 module TestLexer(tests) where
 
-import Test(TestSuite(..), Test(..))
+import Test(Test(..))
 
 import Error(Error(..), ErrorType(..))
 import Lexer.Token(Token(..), TokenType(..))
@@ -24,7 +24,7 @@ testError :: String -> String -> ErrorType -> Test
 testError description source expected =
   test description source (Left expected)
 
-tests :: TestSuite
+tests :: Test
 tests = TestSuite "LEXER" [
 
   -- Empty program
@@ -55,18 +55,19 @@ tests = TestSuite "LEXER" [
   testOK "Keywords"
     (unlines [
       "{",
-      "as class : data = import",
+      "as case class : data fresh{} = import",
       "in", -- closing layout keyword (must be alone)
       "infix infixl infixr",
-      "instance \\ λ let{} module type where{}",
+      "instance \\ λ let{} module of{} type where{}",
       "}"
     ])
     [
       T_LBrace,
-      T_As, T_Class, T_Colon, T_Data, T_Eq, T_Import, T_In,
+      T_As, T_Case, T_Class, T_Colon, T_Data, T_Fresh, T_LBrace, T_RBrace,
+      T_Eq, T_Import, T_In,
       T_Infix, T_Infixl, T_Infixr, T_Instance, T_Lambda, T_Lambda,
-      T_Let, T_LBrace, T_RBrace, T_Module, T_Type,
-      T_Where, T_LBrace, T_RBrace,
+      T_Let, T_LBrace, T_RBrace, T_Module, T_Of, T_LBrace, T_RBrace,
+      T_Type, T_Where, T_LBrace, T_RBrace,
       T_RBrace
     ],
 

@@ -1,7 +1,7 @@
 
 module TestModuleSystem(tests) where
 
-import Test(TestSuite(..), Test(..))
+import Test(Test(..))
 
 import Error(Error(..), ErrorType(..))
 import Syntax.Name(QName(..))
@@ -33,7 +33,7 @@ testExprError description source expected =
 
 ----
 
-tests :: TestSuite
+tests :: Test
 tests = TestSuite "MODULE SYSTEM" [
   testExprOK "Export all / import all"
      "module A where { a = 1 } module B where { import A; x = a }" 
