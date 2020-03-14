@@ -23,6 +23,15 @@ data ErrorType =
   | ParseError
   | ModuleSystemError
   | KindErrorMalformedDatatype
+  | KindErrorTypeAlreadyDeclared
+  | KindErrorTypeUndeclared
+  | KindErrorClassAlreadyDeclared
+  | KindErrorClassUndeclared
+  | KindErrorConstructorShouldReturnDataType
+  | KindErrorMalformedType
+  | KindErrorUnifyOccursCheck
+  | KindErrorUnifyClash
+  | KindErrorInstanceMustBeDatatype
   deriving (Eq, Show)
 
 errorAtUnknown :: ErrorType -> String -> Error

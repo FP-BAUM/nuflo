@@ -6,9 +6,12 @@ import Data.List(isPrefixOf)
 import Error(Error(..), ErrorType(..), ErrorMessage)
 import Position(Position(..), unknownPosition)
 import FailState(FailState, getFS, modifyFS, putFS, evalFS, failFS)
-import Syntax.Name(QName(..), readName, qualify, moduleNameFromQName,
-                   isWellFormedOperatorName, unqualifiedName, splitParts,
-                   allNameParts)
+import Syntax.Name(
+         QName(..), readName, qualify, moduleNameFromQName,
+         isWellFormedOperatorName, unqualifiedName, splitParts,
+         allNameParts,
+         modulePRIM, moduleMain, arrowSymbol, operatorArrow
+       )
 import Syntax.AST(
          AnnProgram(..), Program,
          AnnDeclaration(..), Declaration,
@@ -39,8 +42,6 @@ import ModuleSystem.PrecedenceTable(
          operatorFixity
        )
 
-import Lexer.Categories(arrowSymbol)
-
 parse :: [Token] -> Either Error Program
 parse tokens = evalFS parseM initialState
   where initialState =
@@ -54,15 +55,6 @@ parse tokens = evalFS parseM initialState
           }
 
 ---- Some constants
-
-modulePRIM :: QName
-modulePRIM = Name "PRIM"
-
-moduleMain :: QName
-moduleMain = Name "Main"
-
-operatorArrow :: QName
-operatorArrow = qualify modulePRIM ("_" ++ arrowSymbol ++ "_")
 
 defaultAssociativity :: Associativity
 defaultAssociativity = NonAssoc

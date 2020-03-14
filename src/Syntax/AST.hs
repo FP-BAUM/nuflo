@@ -9,11 +9,12 @@ module Syntax.AST(
          AnnCaseBranch(..), CaseBranch,
          AnnExpr(..), Expr,
          eraseAnnotations, exprAnnotation,
-         exprIsVariable, exprHeadVariable
+         exprIsVariable, exprHeadVariable,
+         exprIsFunctionType, exprFunctionTypeCodomain, exprEqual
        ) where
 
 import Position(Position)
-import Syntax.Name(QName)
+import Syntax.Name(QName, operatorArrow)
 
 data AnnProgram a = Program {
                       programDeclarations :: [AnnDeclaration a]
@@ -26,12 +27,12 @@ type Program = AnnProgram Position
 data AnnDeclaration a = 
     DataDeclaration {
       annotation       :: a,
-      dataTypeName     :: AnnExpr a,
+      dataType         :: AnnExpr a,
       dataConstructors :: [AnnSignature a]
     }
   | TypeDeclaration {
       annotation :: a,
-      typeName   :: AnnExpr a,
+      typeType   :: AnnExpr a,
       typeValue  :: AnnExpr a
     }
   | TypeSignature {
@@ -99,6 +100,20 @@ exprAnnotation (ELambda a _ _) = a
 exprAnnotation (ELet a _ _)    = a
 exprAnnotation (ECase a _ _)   = a
 exprAnnotation (EFresh a _ _)  = a
+
+exprIsFunctionType :: AnnExpr a -> Bool
+exprIsFunctionType (EApp _ (EApp _ (EVar _ op) _) _) = op == operatorArrow
+exprIsFunctionType _                                 = False
+
+exprFunctionTypeCodomain :: AnnExpr a -> AnnExpr a
+exprFunctionTypeCodomain (EApp _ (EApp _ (EVar _ _) _) x) = x
+exprFunctionTypeCodomain _ = error "(Not a function type)"
+
+-- Check whether expressions are equal ignoring annotations
+exprEqual :: AnnExpr a -> AnnExpr a -> Bool
+exprEqual e1 e2 = eraseAnnotations e1 == eraseAnnotations e2
+
+--
 
 type Declaration = AnnDeclaration Position
 type Constraint  = AnnConstraint Position
@@ -238,8 +253,8 @@ instance Show (AnnExpr a) where
     "\\ " ++ show param ++ " -> " ++ show body
   show (ELet _ ds e)          =
     "(let {" ++ joinS "; " (map show ds) ++ "} in " ++ show e ++ ")"
-  show (ECase _ e branchs)    =
-    "(case " ++ show e ++ " of {" ++ (joinS "; " (map show branchs)) ++ "})"
+  show (ECase _ e branches)    =
+    "(case " ++ show e ++ " of {" ++ (joinS "; " (map show branches)) ++ "})"
   show (EFresh _ name e)      =
     "(fresh " ++ show name ++ " in " ++ show e ++ ")"
 
