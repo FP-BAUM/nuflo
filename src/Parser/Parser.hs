@@ -122,7 +122,7 @@ match t = do
   if t == t'
    then do getToken
            return ()
-   else failM ParseError
+   else failM ParseErrorExpectedToken
               ("Expected: " ++ show t ++ ".\n" ++
                "Got     : " ++ show t' ++ ".")
 
@@ -314,7 +314,7 @@ parseModules = do
                    ds2 <- parseModules
                    return (ds1 ++ ds2)
     T_EOF    -> return []
-    _        -> failM ParseError
+    _        -> failM ParseErrorExpectedModule
                       ("Expected a module, but got: " ++ show t ++ ".")
 
 parseModule :: M [Declaration]
@@ -410,7 +410,7 @@ parseId = do
   case t of
     T_Id id -> do getToken
                   return id
-    _       -> failM ParseError
+    _       -> failM ParseErrorExpectedId
                      ("Expected an identifier.\n" ++
                       "Got: " ++ show t ++ ".")
 
@@ -420,7 +420,7 @@ parseInt = do
   case t of
     T_Int n -> do getToken
                   return n
-    _       -> failM ParseError
+    _       -> failM ParseErrorExpectedInt
                      ("Expected an integer.\n" ++
                       "Got: " ++ show t ++ ".")
 
@@ -498,7 +498,7 @@ parseTypeDeclaration = do
   expr1 <- parseExpr
   case exprHeadVariable expr1 of
     Just name -> declareQNameM name
-    Nothing   -> failM ParseError
+    Nothing   -> failM ParseErrorTypeHasNoHead
                        ("Type name has no head variable: " ++ show expr1)
   match T_Eq
   expr2 <- parseExpr
@@ -511,7 +511,7 @@ parseDataDeclaration = do
   expr <- parseExpr
   case exprHeadVariable expr of
     Just name -> declareQNameM name
-    Nothing   -> failM ParseError
+    Nothing   -> failM ParseErrorDataHasNoHead
                        ("Type name has no head variable: " ++ show expr)
   match T_Where
   match T_LBrace
@@ -546,7 +546,7 @@ parseSignature = do
       typ <- parseExpr
       constraints <- parseOptionalConstraints
       return $ Signature pos name typ constraints
-    _ -> failM ParseError
+    _ -> failM ParseErrorExpectedNameForSignature
                 ("Expected a name. Got: " ++ show expr)
 
 parseInstanceDeclaration :: M Declaration
@@ -571,7 +571,7 @@ parseEquation = do
   lhs <- parseExpr
   case exprHeadVariable lhs of
     Just qname -> declareQNameM qname
-    Nothing    -> failM ParseError
+    Nothing    -> failM ParseErrorEquationHasNoHead
                         ("Left-hand side of equation has no head variable: " ++
                          show lhs)
   match T_Eq
@@ -779,7 +779,7 @@ parseExprInfix (currentLevel : levels) table status = do
     prematureEndOfExpression (PushArgument (EmptyStatus _) x) = return x
     prematureEndOfExpression _ =
       do t <- peekType
-         failM ParseError
+         failM ParseErrorPrematureEndOfExpression
            ("Premature end of expression.\n" ++
             "Possibly expected operator part.\n" ++
             "Got: " ++ show t ++ ".\n" ++
@@ -959,7 +959,7 @@ parseAtom = do
                    qname  <- parseAndResolveQName
                    isOp   <- isOperatorPartM qname 
                    if isOp
-                    then failM ParseError
+                    then failM ParseErrorOperatorPartUsedAsVariable
                                ("Operator part: " ++ show qname ++
                                 " cannot be used as a variable.")
                     else return $ EVar pos qname
@@ -970,7 +970,7 @@ parseAtom = do
                    expr   <- parseExpr
                    match T_RParen
                    return expr
-    _      -> failM ParseError
+    _      -> failM ParseErrorExpectedExpression
                      ("Expected an expression.\n" ++
                       "Got: " ++ show t ++ ".")
 

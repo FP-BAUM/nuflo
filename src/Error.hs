@@ -20,7 +20,17 @@ data ErrorType =
   | ReaderErrorCyclicDependencies
   | ReaderErrorModuleNameMismatch
   | ReaderErrorMissingFile
-  | ParseError
+  | ParseErrorExpectedToken
+  | ParseErrorExpectedModule
+  | ParseErrorExpectedId
+  | ParseErrorExpectedInt
+  | ParseErrorTypeHasNoHead
+  | ParseErrorDataHasNoHead
+  | ParseErrorEquationHasNoHead
+  | ParseErrorExpectedNameForSignature
+  | ParseErrorPrematureEndOfExpression
+  | ParseErrorOperatorPartUsedAsVariable
+  | ParseErrorExpectedExpression
   | ModuleSystemError
   | KindErrorMalformedDatatype
   | KindErrorTypeAlreadyDeclared
