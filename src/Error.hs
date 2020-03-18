@@ -32,6 +32,7 @@ data ErrorType =
   | KindErrorUnifyOccursCheck
   | KindErrorUnifyClash
   | KindErrorInstanceMustBeDatatype
+  | TypeErrorVariableAlreadyDeclared
   deriving (Eq, Show)
 
 errorAtUnknown :: ErrorType -> String -> Error
