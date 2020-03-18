@@ -38,7 +38,7 @@ data KindInferState =
        statePosition       :: Position
      , stateNextFresh      :: KindVariable
      , stateDataTypeNames  :: S.Set QName
-     , stateEnvironment    :: [M.Map QName Kind] -- Stack of ribs
+     , stateEnvironment    :: [M.Map QName Kind] -- Non-empty stack of ribs
      , stateSubstitution   :: M.Map KindVariable Kind
      , stateClassTypeKinds :: M.Map QName Kind
      }

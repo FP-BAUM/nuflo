@@ -14,16 +14,18 @@ import Syntax.AST(
          AnnEquation(..), Equation,
          AnnConstraint(..), Constraint,
          AnnCaseBranch(..), CaseBranch,
-         AnnExpr(..), Expr, exprAnnotation,
-         exprIsFunctionType, exprFunctionTypeCodomain, exprEqual
+         AnnExpr(..), Expr
        )
-import Calculus.Types(ConstrainedType(..))
+import Calculus.Types(
+         TypeMetavariable, TypeConstraint(..),
+         TypeScheme(..),  ConstrainedType(..), Type(..)
+       )
 
 inferTypes :: Program -> Either Error Program
 inferTypes program = evalFS (inferTypeProgramM program) initialState
   where initialState = TypeInferState {
-                         statePosition       = unknownPosition,
-                         stateEnvironment    = [ M.empty ]
+                         statePosition    = unknownPosition,
+                         stateEnvironment = [M.empty]
                          -- TODO
                       }
 
@@ -31,13 +33,36 @@ inferTypes program = evalFS (inferTypeProgramM program) initialState
 
 data TypeInferState =
      TypeInferState {
-       statePosition       :: Position,
-       stateEnvironment    :: [ M.Map QName ConstrainedType ] -- This never will be empty
+       statePosition    :: Position,
+       stateEnvironment :: [M.Map QName TypeScheme] -- Non-empty stack of ribs
        -- TODO
      }
 
 type M = FailState TypeInferState
 
+failM :: ErrorType -> String -> M a
+failM errorType msg = do
+  pos <- currentPosition
+  failFS (Error errorType pos msg)
+
+setPosition :: Position -> M ()
+setPosition pos = modifyFS (\ state -> state { statePosition = pos })
+
+currentPosition :: M Position
+currentPosition = do
+  state <- getFS
+  return $ statePosition state
+
+bindType :: QName -> TypeScheme -> M ()
+bindType varName typ = do
+  state <- getFS
+  let (rib : ribs) = stateEnvironment state in
+   if M.member varName rib
+    then failM TypeErrorVariableAlreadyDeclared
+               ("Variable \"" ++ show varName ++ "\" already declared.")
+    else putFS (state { stateEnvironment = M.insert varName typ rib : ribs })
+
+---- Type inference algorithm
 
 inferTypeProgramM :: Program -> M Program
 inferTypeProgramM (Program decls) = do
@@ -46,49 +71,48 @@ inferTypeProgramM (Program decls) = do
   decls' <- mapM inferTypeDeclM decls
   return $ Program decls
 
-collectDataDeclarationM :: Declaration -> M ()
-collectDataDeclarationM (DataDeclaration _ typ constructors) = do  -- data Something a b c d = [Cons | Cons a b ...]
-  mapM_ collectSignatureM constructors
+collectTypeDeclarationM :: Declaration -> M ()
+collectTypeDeclarationM (TypeDeclaration pos typ value) =
+  error "NOT IMPLEMENTED"
+collectTypeDeclarationM _ = return ()
 
+collectDataDeclarationM :: Declaration -> M ()
+collectDataDeclarationM (DataDeclaration pos typ constructors) = do
+  mapM_ collectSignatureM constructors
+collectDataDeclarationM _ = return ()
+
+inferTypeDeclM :: Declaration -> M Declaration
+inferTypeDeclM decl@(DataDeclaration _ _ _) =
+  -- TODO: transform constraints in constructor signatures
+  return decl
+inferTypeDeclM (TypeDeclaration pos typ value) =
+  error "NOT IMPLEMENTED"
+inferTypeDeclM (ValueDeclaration equation) = do
+  error "NOT IMPLEMENTED"
+inferTypeDeclM (TypeSignature signature) =
+  error "NOT IMPLEMENTED"
+inferTypeDeclM (ClassDeclaration pos className typeName methods) =
+  error "NOT IMPLEMENTED"
+inferTypeDeclM (InstanceDeclaration pos className typ
+                                        constraints methods) =
+  error "NOT IMPLEMENTED"
 
 collectSignatureM :: Signature -> M ()
-collectSignatureM (Signature _ name typ constraints) = do 
+collectSignatureM (Signature pos name typ constraints) = do 
+  setPosition pos
   ct <- constrainedType constraints typ
-  bindType name ct
-
-
-collectTypeDeclarationM :: Declaration -> M ()
--- collectTypeDeclarationM (DataDeclaration pos typ constructors) = do  -- data Something a b c d = [Cons | Cons a b ...]
-
-
-
--- collectTypeDeclarationM (TypeDeclaration pos typ value) = do
--- collectTypeDeclarationM (TypeSignature signature) = do
--- collectTypeDeclarationM (ClassDeclaration pos className typeName methods) = do
--- collectTypeDeclarationM (InstanceDeclaration pos className typ
---                                            constraints methods) = do
-  
-inferTypeDeclM :: Declaration -> M Declaration
-inferTypeDeclM (DataDeclaration pos typ constructors) = do
-
--- inferTypeDeclM (TypeDeclaration pos typ value) = do
--- inferTypeDeclM (TypeSignature signature) = do
--- inferTypeDeclM (ClassDeclaration pos className typeName methods) = do
--- inferTypeDeclM (InstanceDeclaration pos className typ
---                                            constraints methods) = do
-
+  bindType name (TypeScheme [] ct) -- TODO: generalize variables
 
 constrainedType :: [Constraint] -> Expr -> M ConstrainedType
-constrainedType constraints expr = do
-  typ <- exprToType
-  let cts = map constraintToTypeConstraint constraints
-  in return $ CT cts typ
+constrainedType constraints expr =
+    return $ ConstrainedType cts typ
+  where
+    typ = exprToType expr
+    cts = map constraintToTypeConstraint constraints
 
-bindType :: QName -> ConstrainedType -> M ()
-bindType varName typ = do
-  state <- getFS
-  let (rib : ribs) = stateEnvironment state in
-   if M.member varName rib
-    then failM TypeErrorVariableAlreadyDeclared
-               ("Variable \"" ++ show varName ++ "\" already declared.")
-    else putFS (state { stateEnvironment = M.insert varName typ rib : ribs })
+exprToType :: Expr -> Type
+exprToType = error "NOT IMPLEMENTED"
+
+constraintToTypeConstraint :: Constraint -> TypeConstraint
+constraintToTypeConstraint = error "NOT IMPLEMENTED"
+

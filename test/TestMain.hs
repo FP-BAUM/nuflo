@@ -6,6 +6,7 @@ import qualified TestLexer
 import qualified TestModuleSystem
 import qualified TestParser
 import qualified TestKindInference
+import qualified TestTypeInference
 
 runAllTests :: IO ()
 runAllTests = runTestsAndSummarize [
@@ -13,5 +14,6 @@ runAllTests = runTestsAndSummarize [
               , TestModuleSystem.tests
               , TestParser.tests
               , TestKindInference.tests
+              , TestTypeInference.tests
               ]
 

@@ -19,8 +19,8 @@ testProgram :: String -> String -> Either ErrorType (AnnProgram ()) -> Test
 testProgram description source expected =
   TestCase description 
            (normalizeResult
-             (return source >>= tokenize "test"
-                            >>= parse))
+             (do tokens <- tokenize "test" source
+                 parse tokens))
            expected
   where
     normalizeResult (Left  e) = Left (errorType e)
