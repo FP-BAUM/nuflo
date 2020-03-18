@@ -1,10 +1,11 @@
-module FailState(FailState, failFS, getFS, putFS, modifyFS,
+module FailState(FailState, failFS, getFS, putFS, modifyFS, logFS,
                  runFS, evalFS, execFS) where
 
 -- The FailState monad encodes two kinds of side-effects:
 --   1) state
 --   2) failure
 
+import Debug.Trace(trace)
 import Error(Error)
 
 data FailState state a = FailState (state -> Either Error (a, state))
@@ -46,6 +47,9 @@ putFS s = FailState (\ _ -> Right ((), s))
 
 modifyFS :: (state -> state) -> FailState state ()
 modifyFS f = FailState (\ s -> Right ((), f s))
+
+logFS :: String -> FailState state ()
+logFS msg = trace msg (return ())
 
 runFS :: FailState state a -> state -> Either Error (a, state)
 runFS (FailState ma) s0 = ma s0

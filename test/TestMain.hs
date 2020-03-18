@@ -1,15 +1,17 @@
 
 module TestMain(runAllTests) where
 
-import Test(runTestSuites)
+import Test(runTestsAndSummarize)
 import qualified TestLexer
-import qualified TestParser
 import qualified TestModuleSystem
+import qualified TestParser
+import qualified TestKindInference
 
 runAllTests :: IO ()
-runAllTests = runTestSuites [
+runAllTests = runTestsAndSummarize [
                 TestLexer.tests
-              , TestParser.tests
               , TestModuleSystem.tests
+              , TestParser.tests
+              , TestKindInference.tests
               ]
 

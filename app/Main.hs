@@ -8,6 +8,7 @@ import Position(positionRegion)
 import Lexer.Lexer(tokenize)
 import Parser.Reader(readSource)
 import Parser.Parser(parse)
+import Infer.KindInference(inferKinds)
 
 import TestMain(runAllTests)
 
@@ -21,6 +22,7 @@ run ["-T"]        = runAllTests
 run ["-t", input] = runTokenizer input
 run ["-r", input] = runReader input
 run ["-p", input] = runParser input
+run ["-k", input] = runKindInference input
 run _             = usage
 
 runTokenizer :: String -> IO ()
@@ -47,6 +49,19 @@ runParser filename = do
         Left e        -> die e
         Right program -> putStrLn (show program)
 
+runKindInference :: String -> IO ()
+runKindInference filename = do
+  res <- readSource filename
+  case res of
+    Left  e      -> die e
+    Right tokens -> do
+      case parse tokens of
+        Left e        -> die e
+        Right program -> do
+          case inferKinds program of
+            Left e    -> die e
+            Right ()  -> putStrLn "OK"
+
 usage :: IO ()
 usage = do
   putStrLn "Usage:"
@@ -54,6 +69,7 @@ usage = do
   putStrLn "  la -t foo.la       Tokenize file."
   putStrLn "  la -r foo.la       Tokenize file (including dependencies)."
   putStrLn "  la -p foo.la       Parse file    (including dependencies)."
+  putStrLn "  la -k foo.la       Infer kinds"
 
 die :: Error -> IO ()
 die e = do

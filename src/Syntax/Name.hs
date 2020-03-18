@@ -2,7 +2,8 @@
 module Syntax.Name(
          splitParts, allNameParts,
          isWellFormedName, isWellFormedOperatorName,
-         QName(..), readName, qualify, moduleNameFromQName, unqualifiedName
+         QName(..), readName, qualify, moduleNameFromQName, unqualifiedName,
+         modulePRIM, moduleMain, arrowSymbol, operatorArrow
        ) where
 
 import Lexer.Categories(isKeyword, isInteger)
@@ -75,4 +76,18 @@ moduleNameFromQName (Qualified id qname)    =
 unqualifiedName :: QName -> String
 unqualifiedName (Name id)           = id
 unqualifiedName (Qualified _ qname) = unqualifiedName qname
+
+----
+
+modulePRIM :: QName
+modulePRIM = Name "PRIM"
+
+moduleMain :: QName
+moduleMain = Name "Main"
+
+arrowSymbol :: String
+arrowSymbol = "→"
+
+operatorArrow :: QName
+operatorArrow = qualify modulePRIM ("_" ++ arrowSymbol ++ "_")
 

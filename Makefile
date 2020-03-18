@@ -18,5 +18,7 @@ clean :
           src/ModuleSystem/*.{o,hi} \
           src/Lexer/*.{o,hi} \
           src/Parser/*.{o,hi} \
+          src/Infer/*.{o,hi} \
+          src/Calculus/*.{o,hi} \
           test/*.{o,hi}
 
