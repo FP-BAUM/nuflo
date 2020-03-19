@@ -46,6 +46,11 @@ tests = TestSuite "TYPE INFERENCE" [
     "  True : Bool"
   ]) TypeErrorVariableAlreadyDeclared,
 
+  testProgramError "Basic signature declaration" (unlines [
+    "f : a -> b -> c",
+    "f : b -> a -> c"
+  ]) TypeErrorVariableAlreadyDeclared,
+
   testProgramOK "Empty program" ""
 
  ]

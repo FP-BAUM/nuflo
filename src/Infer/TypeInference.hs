@@ -62,12 +62,23 @@ bindType varName typ = do
                ("Variable \"" ++ show varName ++ "\" already declared.")
     else putFS (state { stateEnvironment = M.insert varName typ rib : ribs })
 
+
+enterScopeM :: M ()
+enterScopeM = modifyFS (\ state -> state {
+                stateEnvironment = M.empty : stateEnvironment state
+              })
+
+exitScopeM :: M ()
+exitScopeM = modifyFS (\ state -> state {
+               stateEnvironment = tail (stateEnvironment state)
+             })
+
 ---- Type inference algorithm
 
 inferTypeProgramM :: Program -> M Program
 inferTypeProgramM (Program decls) = do
   mapM_ collectTypeDeclarationM decls
-  mapM_ collectDataDeclarationM decls
+  mapM_ collectSignaturesM decls
   decls' <- mapM inferTypeDeclM decls
   return $ Program decls
 
@@ -76,10 +87,11 @@ collectTypeDeclarationM (TypeDeclaration pos typ value) =
   error "NOT IMPLEMENTED"
 collectTypeDeclarationM _ = return ()
 
-collectDataDeclarationM :: Declaration -> M ()
-collectDataDeclarationM (DataDeclaration pos typ constructors) = do
+collectSignaturesM :: Declaration -> M ()
+collectSignaturesM (DataDeclaration pos typ constructors) = do
   mapM_ collectSignatureM constructors
-collectDataDeclarationM _ = return ()
+collectSignaturesM (TypeSignature signature) = collectSignatureM signature
+collectSignaturesM _ = return ()
 
 inferTypeDeclM :: Declaration -> M Declaration
 inferTypeDeclM decl@(DataDeclaration _ _ _) =
@@ -88,9 +100,12 @@ inferTypeDeclM decl@(DataDeclaration _ _ _) =
 inferTypeDeclM (TypeDeclaration pos typ value) =
   error "NOT IMPLEMENTED"
 inferTypeDeclM (ValueDeclaration equation) = do
-  error "NOT IMPLEMENTED"
-inferTypeDeclM (TypeSignature signature) =
-  error "NOT IMPLEMENTED"
+  eq <- inferEquationM equation
+  return $ ValueDeclaration eq
+  
+inferTypeDeclM signature@(TypeSignature _) = 
+  -- TODO: transform constraints in signatures
+  return signature
 inferTypeDeclM (ClassDeclaration pos className typeName methods) =
   error "NOT IMPLEMENTED"
 inferTypeDeclM (InstanceDeclaration pos className typ
@@ -109,6 +124,23 @@ constrainedType constraints expr =
   where
     typ = exprToType expr
     cts = map constraintToTypeConstraint constraints
+
+inferEquationM :: Equation -> M Equation
+inferEquationM (Equation pos lhs rhs) = do
+  -- TODO: transform constraints
+  enterScopeM
+  setPosition pos
+  (ltype, lhs') <- inferExprM lhs
+  (rtype, rhs') <- inferExprM rhs
+  unifTypes ltype rtype
+  exitScopeM
+  return $ Equation pos lhs' rhs'
+
+unifTypes :: TypeScheme -> TypeScheme -> M ()
+unifTypes = error "NOT IMPLEMENTED"
+
+inferExprM :: Expr -> M (TypeScheme, Expr)
+inferExprM = error "NOT IMPLEMENTED"
 
 exprToType :: Expr -> Type
 exprToType = error "NOT IMPLEMENTED"
