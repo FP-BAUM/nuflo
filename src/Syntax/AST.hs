@@ -10,8 +10,12 @@ module Syntax.AST(
          AnnExpr(..), Expr,
          eraseAnnotations, exprAnnotation,
          exprIsVariable, exprHeadVariable,
-         exprIsFunctionType, exprFunctionTypeCodomain, exprEqual
+         exprIsFunctionType, exprFunctionTypeCodomain, exprEqual,
+         exprFreeVariables
        ) where
+
+import qualified Data.Set as S
+import Data.Maybe(fromJust)
 
 import Position(Position)
 import Syntax.Name(QName, operatorArrow)
@@ -185,6 +189,49 @@ exprHeadVariable (EVar _ q)    = return q
 exprHeadVariable (EApp _ e1 _) = exprHeadVariable e1
 exprHeadVariable _             = Nothing
 
+exprHeadArguments :: AnnExpr a -> Maybe [AnnExpr a]
+exprHeadArguments (EVar _ _)    = return []
+exprHeadArguments (EApp _ e1 e2) = do
+  args <- exprHeadArguments e1
+  return (args ++ [e2])
+exprHeadArguments _             = Nothing
+
+
+exprFreeVariables :: S.Set QName -> AnnExpr a -> S.Set QName
+exprFreeVariables bound (EVar _ x)        = if x `S.member` bound
+                                             then S.empty
+                                             else S.fromList [x]
+exprFreeVariables bound (EInt _ _)        = S.empty
+exprFreeVariables bound (EApp _ e1 e2)    = exprFreeVariables bound e1 `S.union`
+                                            exprFreeVariables bound e2
+exprFreeVariables bound (ELambda _ e1 e2) =
+  exprFreeVariables
+    (bound `S.union` exprFreeVariables bound e1)
+    e2
+exprFreeVariables bound (ELet _ declarations body) =
+  let functionNames = S.unions (map declBoundVariables declarations)
+   in S.unions (map (declFreeVariables bound functionNames) declarations)
+      `S.union`
+      exprFreeVariables (S.union bound functionNames) body
+  where
+    declFreeVariables :: S.Set QName -> S.Set QName -> AnnDeclaration a
+                      -> S.Set QName
+    declFreeVariables bound functionNames
+                      (ValueDeclaration (Equation _ lhs rhs)) =
+      let args       = fromJust (exprHeadArguments lhs)
+          freeInArgs = S.unions (map (exprFreeVariables bound) args)
+       in exprFreeVariables (S.unions [bound, functionNames, freeInArgs]) rhs
+    declFreeVariables _ _ _ = S.empty
+    --
+    declBoundVariables :: AnnDeclaration a -> S.Set QName
+    declBoundVariables (ValueDeclaration (Equation _ lhs _)) =
+      let f = fromJust (exprHeadVariable lhs)
+       in S.fromList [f]
+    declBoundVariables _ = S.empty
+exprFreeVariables bound (ECase _ _ _)     = error "NOT IMPLEMENTED"
+exprFreeVariables bound (EFresh _ x e)    = exprFreeVariables
+                                              (S.insert x bound)
+                                              e
 ---- Show
 
 joinS :: String -> [String] -> String

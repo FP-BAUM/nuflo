@@ -2,11 +2,12 @@ module Infer.TypeInference(inferTypes) where
 
 import qualified Data.Set as S
 import qualified Data.Map as M
+import Data.Maybe(fromJust)
 
 import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Error(Error(..), ErrorType(..))
 import Position(Position(..), unknownPosition)
-import Syntax.Name(QName)
+import Syntax.Name(QName(..))
 import Syntax.AST(
          AnnProgram(..), Program,
          AnnDeclaration(..), Declaration,
@@ -14,7 +15,7 @@ import Syntax.AST(
          AnnEquation(..), Equation,
          AnnConstraint(..), Constraint,
          AnnCaseBranch(..), CaseBranch,
-         AnnExpr(..), Expr
+         AnnExpr(..), Expr, exprHeadVariable, exprFreeVariables
        )
 import Calculus.Types(
          TypeMetavariable, TypeConstraint(..),
@@ -24,18 +25,18 @@ import Calculus.Types(
 inferTypes :: Program -> Either Error Program
 inferTypes program = evalFS (inferTypeProgramM program) initialState
   where initialState = TypeInferState {
-                         statePosition    = unknownPosition,
-                         stateEnvironment = [M.empty]
-                         -- TODO
-                      }
+                         statePosition    = unknownPosition
+                       , stateNextFresh   = 0
+                       , stateEnvironment = [M.empty]
+                       }
 
 ---- Type inference monad
 
 data TypeInferState =
      TypeInferState {
-       statePosition    :: Position,
-       stateEnvironment :: [M.Map QName TypeScheme] -- Non-empty stack of ribs
-       -- TODO
+       statePosition    :: Position
+     , stateNextFresh   :: Integer
+     , stateEnvironment :: [M.Map QName TypeScheme] -- Non-empty stack of ribs
      }
 
 type M = FailState TypeInferState
@@ -53,6 +54,12 @@ currentPosition = do
   state <- getFS
   return $ statePosition state
 
+freshType :: M Type
+freshType = do
+  state <- getFS
+  putFS (state { stateNextFresh = stateNextFresh state + 1 })
+  return $ TMetavar (stateNextFresh state) 
+
 bindType :: QName -> TypeScheme -> M ()
 bindType varName typ = do
   state <- getFS
@@ -62,6 +69,35 @@ bindType varName typ = do
                ("Variable \"" ++ show varName ++ "\" already declared.")
     else putFS (state { stateEnvironment = M.insert varName typ rib : ribs })
 
+bindToFreshType :: QName -> M ()
+bindToFreshType x = do
+  typ <- freshType
+  bindType x (TypeScheme [] (ConstrainedType [] typ))
+
+bindToFreshTypeIfNotLocallyBound :: QName -> M ()
+bindToFreshTypeIfNotLocallyBound x = do
+  state <- getFS
+  if M.member x (head (stateEnvironment state))
+   then return ()
+   else bindToFreshType x
+
+lookupType :: QName -> M TypeScheme
+lookupType x = do
+    state <- getFS
+    rec (stateEnvironment state)
+  where
+    rec []           =
+      failM TypeErrorUnboundVariable
+            ("Unbound variable \"" ++ show x ++ "\"")
+    rec (rib : ribs) =
+      if M.member x rib
+       then return $ M.findWithDefault undefined x rib
+       else rec ribs
+
+getAllBoundVars :: M (S.Set QName)
+getAllBoundVars = do
+  state <- getFS
+  return $ S.unions (map M.keysSet (stateEnvironment state))
 
 enterScopeM :: M ()
 enterScopeM = modifyFS (\ state -> state {
@@ -79,7 +115,7 @@ inferTypeProgramM :: Program -> M Program
 inferTypeProgramM (Program decls) = do
   mapM_ collectTypeDeclarationM decls
   mapM_ collectSignaturesM decls
-  decls' <- mapM inferTypeDeclM decls
+  decls' <- inferTypeDeclarationsM decls
   return $ Program decls
 
 collectTypeDeclarationM :: Declaration -> M ()
@@ -93,23 +129,32 @@ collectSignaturesM (DataDeclaration pos typ constructors) = do
 collectSignaturesM (TypeSignature signature) = collectSignatureM signature
 collectSignaturesM _ = return ()
 
-inferTypeDeclM :: Declaration -> M Declaration
-inferTypeDeclM decl@(DataDeclaration _ _ _) =
+inferTypeDeclarationsM :: [Declaration] -> M [Declaration]
+inferTypeDeclarationsM decls =
+    let definedVars = S.unions (map declVars decls)
+     in do mapM_ bindToFreshTypeIfNotLocallyBound (S.toList definedVars)
+           mapM inferTypeDeclarationM decls
+  where
+    declVars (ValueDeclaration (Equation _ lhs _)) =
+      S.fromList [fromJust (exprHeadVariable lhs)]
+    declVars _ = S.empty
+
+inferTypeDeclarationM :: Declaration -> M Declaration
+inferTypeDeclarationM decl@(DataDeclaration _ _ _) =
   -- TODO: transform constraints in constructor signatures
   return decl
-inferTypeDeclM (TypeDeclaration pos typ value) =
+inferTypeDeclarationM (TypeDeclaration pos typ value) =
   error "NOT IMPLEMENTED"
-inferTypeDeclM (ValueDeclaration equation) = do
-  eq <- inferEquationM equation
-  return $ ValueDeclaration eq
-  
-inferTypeDeclM signature@(TypeSignature _) = 
-  -- TODO: transform constraints in signatures
-  return signature
-inferTypeDeclM (ClassDeclaration pos className typeName methods) =
+inferTypeDeclarationM (ValueDeclaration equation) = do
+  equation' <- inferTypeEquationM equation
+  return $ ValueDeclaration equation'
+inferTypeDeclarationM decl@(TypeSignature _) = 
+  -- TODO: transform constraints in signature
+  return decl
+inferTypeDeclarationM (ClassDeclaration pos className typeName methods) =
   error "NOT IMPLEMENTED"
-inferTypeDeclM (InstanceDeclaration pos className typ
-                                        constraints methods) =
+inferTypeDeclarationM (InstanceDeclaration pos className typ
+                                               constraints methods) =
   error "NOT IMPLEMENTED"
 
 collectSignatureM :: Signature -> M ()
@@ -125,26 +170,47 @@ constrainedType constraints expr =
     typ = exprToType expr
     cts = map constraintToTypeConstraint constraints
 
-inferEquationM :: Equation -> M Equation
-inferEquationM (Equation pos lhs rhs) = do
-  -- TODO: transform constraints
-  enterScopeM
+inferTypeEquationM :: Equation -> M Equation
+inferTypeEquationM (Equation pos lhs rhs) = do
   setPosition pos
-  (ltype, lhs') <- inferExprM lhs
-  (rtype, rhs') <- inferExprM rhs
-  unifTypes ltype rtype
-  exitScopeM
-  return $ Equation pos lhs' rhs'
+  bound <- getAllBoundVars
+  let lhsFree = exprFreeVariables bound lhs
+      --rhsFree = exprFreeVariables (bound `S.union` lhsFree) rhs
+      --allFree = lhsFree `S.union` rhsFree
+   in do
+     -- TODO: transform constraints
+     enterScopeM
+     mapM_ bindToFreshType lhsFree
+     (ltype, lhs') <- inferTypeExprM lhs
+     (rtype, rhs') <- inferTypeExprM rhs
+     unifyTypes ltype rtype
+     exitScopeM
+     return $ Equation pos lhs' rhs'
 
-unifTypes :: TypeScheme -> TypeScheme -> M ()
-unifTypes = error "NOT IMPLEMENTED"
+unifyTypes :: ConstrainedType -> ConstrainedType -> M ()
+unifyTypes _ _ = return () -- TODO
 
-inferExprM :: Expr -> M (TypeScheme, Expr)
-inferExprM = error "NOT IMPLEMENTED"
+inferTypeExprM :: Expr -> M (ConstrainedType, Expr)
+inferTypeExprM (EVar pos x) = do
+  setPosition pos
+  TypeScheme gvars constrainedType <- lookupType x
+  -- TODO: instantiate
+  return (constrainedType, EVar pos x)
+inferTypeExprM (EApp pos e1 e2) = do
+  setPosition pos
+  --TODO
+  inferTypeExprM e1
+  inferTypeExprM e2
+  return (ConstrainedType [] (TVar (Name "XXX")), (EApp pos e1 e2)) --TODO
+inferTypeExprM e = return (ConstrainedType [] (TVar (Name "XXX")), e) --TODO
+-- error ("NOT IMPLEMENTED: " ++ show e)
 
 exprToType :: Expr -> Type
-exprToType = error "NOT IMPLEMENTED"
+exprToType (EVar _ x)     = TVar x
+exprToType (EApp _ t1 t2) = TApp (exprToType t1) (exprToType t2)
+exprToType _              = error "(Malformed type)"
 
 constraintToTypeConstraint :: Constraint -> TypeConstraint
-constraintToTypeConstraint = error "NOT IMPLEMENTED"
+constraintToTypeConstraint (Constraint _ className typeName) =
+  TypeConstraint className typeName
 

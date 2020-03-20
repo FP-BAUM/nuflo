@@ -87,7 +87,7 @@ bindKind typeName kind = do
 bindToFreshKind :: QName -> M ()
 bindToFreshKind x = do
   k <- freshKind
-  bindKind x k 
+  bindKind x k
 
 lookupKind :: QName -> M Kind
 lookupKind typeName = do

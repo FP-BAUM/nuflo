@@ -43,6 +43,7 @@ data ErrorType =
   | KindErrorUnifyClash
   | KindErrorInstanceMustBeDatatype
   | TypeErrorVariableAlreadyDeclared
+  | TypeErrorUnboundVariable
   deriving (Eq, Show)
 
 errorAtUnknown :: ErrorType -> String -> Error

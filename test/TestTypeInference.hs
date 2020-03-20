@@ -46,10 +46,18 @@ tests = TestSuite "TYPE INFERENCE" [
     "  True : Bool"
   ]) TypeErrorVariableAlreadyDeclared,
 
-  testProgramError "Basic signature declaration" (unlines [
+  testProgramError "Reject repeated signatures" (unlines [
     "f : a -> b -> c",
     "f : b -> a -> c"
   ]) TypeErrorVariableAlreadyDeclared,
+
+  testProgramOK "Check simple function definition" (unlines [
+    "f x = x"
+  ]),
+
+  testProgramError "Reject unbound variable" (unlines [
+    "f x = y"
+  ]) TypeErrorUnboundVariable,
 
   testProgramOK "Empty program" ""
 
