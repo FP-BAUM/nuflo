@@ -19,7 +19,8 @@ import Syntax.AST(
        )
 import Calculus.Types(
          TypeMetavariable, TypeConstraint(..),
-         TypeScheme(..),  ConstrainedType(..), Type(..)
+         TypeScheme(..),  ConstrainedType(..), Type(..),
+         constrainedTypeFreeVariables
        )
 
 inferTypes :: Program -> Either Error Program
@@ -27,6 +28,7 @@ inferTypes program = evalFS (inferTypeProgramM program) initialState
   where initialState = TypeInferState {
                          statePosition    = unknownPosition
                        , stateNextFresh   = 0
+                       , stateTypeDeclarations = S.empty
                        , stateEnvironment = [M.empty]
                        }
 
@@ -34,9 +36,10 @@ inferTypes program = evalFS (inferTypeProgramM program) initialState
 
 data TypeInferState =
      TypeInferState {
-       statePosition    :: Position
-     , stateNextFresh   :: Integer
-     , stateEnvironment :: [M.Map QName TypeScheme] -- Non-empty stack of ribs
+       statePosition         :: Position
+     , stateNextFresh        :: Integer
+     , stateTypeDeclarations :: S.Set QName 
+     , stateEnvironment      :: [M.Map QName TypeScheme] -- Non-empty stack of ribs
      }
 
 type M = FailState TypeInferState
@@ -109,6 +112,15 @@ exitScopeM = modifyFS (\ state -> state {
                stateEnvironment = tail (stateEnvironment state)
              })
 
+allTypeDeclarations :: M (S.Set QName)
+allTypeDeclarations = do
+  state <- getFS
+  return $ stateTypeDeclarations state
+
+addTypeDeclaration :: QName -> M ()
+addTypeDeclaration name =  modifyFS
+  (\ state -> state { stateTypeDeclarations = S.insert name (stateTypeDeclarations state) })
+
 ---- Type inference algorithm
 
 inferTypeProgramM :: Program -> M Program
@@ -119,8 +131,15 @@ inferTypeProgramM (Program decls) = do
   return $ Program decls
 
 collectTypeDeclarationM :: Declaration -> M ()
-collectTypeDeclarationM (TypeDeclaration pos typ value) =
-  error "NOT IMPLEMENTED"
+collectTypeDeclarationM (TypeDeclaration pos typ value) = do
+  case exprHeadVariable typ of
+    (Just dataName) -> addTypeDeclaration dataName
+    _ -> error "Type has not head variable"
+  error "NOT FULL IMPLEMENTED"
+collectTypeDeclarationM (DataDeclaration pos typ constructors) = do
+  case exprHeadVariable typ of
+    (Just dataName) -> addTypeDeclaration dataName
+    _ -> error "Type has not head variable"
 collectTypeDeclarationM _ = return ()
 
 collectSignaturesM :: Declaration -> M ()
@@ -161,7 +180,9 @@ collectSignatureM :: Signature -> M ()
 collectSignatureM (Signature pos name typ constraints) = do 
   setPosition pos
   ct <- constrainedType constraints typ
-  bindType name (TypeScheme [] ct) -- TODO: generalize variables
+  cs <- allTypeDeclarations
+  let fvariables = S.toList $ constrainedTypeFreeVariables ct S.\\ cs
+  bindType name (TypeScheme fvariables ct)
 
 constrainedType :: [Constraint] -> Expr -> M ConstrainedType
 constrainedType constraints expr =
