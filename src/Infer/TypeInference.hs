@@ -7,7 +7,7 @@ import Data.Maybe(fromJust)
 import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Error(Error(..), ErrorType(..))
 import Position(Position(..), unknownPosition)
-import Syntax.Name(QName(..))
+import Syntax.Name(QName(..), operatorArrow)
 import Syntax.AST(
          AnnProgram(..), Program,
          AnnDeclaration(..), Declaration,
@@ -26,20 +26,22 @@ import Calculus.Types(
 inferTypes :: Program -> Either Error Program
 inferTypes program = evalFS (inferTypeProgramM program) initialState
   where initialState = TypeInferState {
-                         statePosition    = unknownPosition
-                       , stateNextFresh   = 0
-                       , stateTypeDeclarations = S.empty
-                       , stateEnvironment = [M.empty]
+                         statePosition      = unknownPosition
+                       , stateNextFresh     = 0
+                       , stateTypeConstants = S.empty
+                       , stateEnvironment   = [M.empty]
                        }
 
 ---- Type inference monad
 
 data TypeInferState =
      TypeInferState {
-       statePosition         :: Position
-     , stateNextFresh        :: Integer
-     , stateTypeDeclarations :: S.Set QName 
-     , stateEnvironment      :: [M.Map QName TypeScheme] -- Non-empty stack of ribs
+       statePosition      :: Position
+     , stateNextFresh     :: Integer
+     , stateTypeConstants :: S.Set QName
+                                  -- Type constructors and type synonyms
+     , stateEnvironment   :: [M.Map QName TypeScheme]
+                                  -- Non-empty stack of ribs
      }
 
 type M = FailState TypeInferState
@@ -112,19 +114,23 @@ exitScopeM = modifyFS (\ state -> state {
                stateEnvironment = tail (stateEnvironment state)
              })
 
-allTypeDeclarations :: M (S.Set QName)
-allTypeDeclarations = do
+allTypeConstants :: M (S.Set QName)
+allTypeConstants = do
   state <- getFS
-  return $ stateTypeDeclarations state
+  return $ stateTypeConstants state
 
-addTypeDeclaration :: QName -> M ()
-addTypeDeclaration name =  modifyFS
-  (\ state -> state { stateTypeDeclarations = S.insert name (stateTypeDeclarations state) })
+addTypeConstant :: QName -> M ()
+addTypeConstant name =  modifyFS (\ state ->
+    state { stateTypeConstants = S.insert name (stateTypeConstants state) }
+  )
 
 ---- Type inference algorithm
 
 inferTypeProgramM :: Program -> M Program
 inferTypeProgramM (Program decls) = do
+  -- Declare built-in type constructors
+  addTypeConstant operatorArrow
+  -- Infer
   mapM_ collectTypeDeclarationM decls
   mapM_ collectSignaturesM decls
   decls' <- inferTypeDeclarationsM decls
@@ -133,12 +139,12 @@ inferTypeProgramM (Program decls) = do
 collectTypeDeclarationM :: Declaration -> M ()
 collectTypeDeclarationM (TypeDeclaration pos typ value) = do
   case exprHeadVariable typ of
-    (Just dataName) -> addTypeDeclaration dataName
+    Just name -> addTypeConstant name
     _ -> error "Type has not head variable"
-  error "NOT FULL IMPLEMENTED"
-collectTypeDeclarationM (DataDeclaration pos typ constructors) = do
+  error "NOT FULLY IMPLEMENTED -- TODO: RECORD TYPE SYNONYM DECLARATION"
+collectTypeDeclarationM (DataDeclaration _ typ _) = do
   case exprHeadVariable typ of
-    (Just dataName) -> addTypeDeclaration dataName
+    Just name -> addTypeConstant name
     _ -> error "Type has not head variable"
 collectTypeDeclarationM _ = return ()
 
@@ -180,7 +186,7 @@ collectSignatureM :: Signature -> M ()
 collectSignatureM (Signature pos name typ constraints) = do 
   setPosition pos
   ct <- constrainedType constraints typ
-  cs <- allTypeDeclarations
+  cs <- allTypeConstants
   let fvariables = S.toList $ constrainedTypeFreeVariables ct S.\\ cs
   bindType name (TypeScheme fvariables ct)
 
