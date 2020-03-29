@@ -1,7 +1,7 @@
 module Calculus.Types(
          TypeMetavariable, TypeConstraint(..),
          TypeScheme(..),  ConstrainedType(..), Type(..),
-         substituteContrainedType,
+         substituteConstrainedType,
          constrainedTypeFreeVariables
        ) where
 
@@ -48,9 +48,9 @@ substituteType sub (TApp t1 t2)   = TApp (substituteType sub t1)
                                          (substituteType sub t2)
 substituteType _   t@(TMetavar _) = t
 
-substituteContrainedType :: TypeSubstitution -> ConstrainedType
-                         -> ConstrainedType
-substituteContrainedType sub (ConstrainedType constraints typ) =
+substituteConstrainedType :: TypeSubstitution -> ConstrainedType
+                          -> ConstrainedType
+substituteConstrainedType sub (ConstrainedType constraints typ) =
   ConstrainedType (map (substituteConstraint sub) constraints)
                   (substituteType sub typ)
 

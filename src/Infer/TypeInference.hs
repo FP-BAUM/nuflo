@@ -20,7 +20,7 @@ import Syntax.AST(
 import Calculus.Types(
          TypeMetavariable, TypeConstraint(..),
          TypeScheme(..),  ConstrainedType(..), Type(..),
-         substituteContrainedType,
+         substituteConstrainedType,
          constrainedTypeFreeVariables
        )
 
@@ -129,7 +129,7 @@ freshenVariables :: [QName] -> ConstrainedType -> M ConstrainedType
 freshenVariables names constrainedType = do
   sub <- M.fromList <$> mapM (\ name -> do ft <- freshType 
                                            return (name, ft)) names
-  return $ substituteContrainedType sub constrainedType
+  return $ substituteConstrainedType sub constrainedType
 
 ---- Type inference algorithm
 
