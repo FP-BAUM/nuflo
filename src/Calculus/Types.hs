@@ -21,6 +21,8 @@ data Type = TMetavar TypeMetavariable
           | TVar QName
           | TApp Type Type
 
+type TypeSubstitution = M.Map QName Type
+
 typeConstraintFreeVariables :: TypeConstraint -> S.Set QName
 typeConstraintFreeVariables (TypeConstraint _ typ) = typeFreeVariables typ
 
@@ -33,20 +35,24 @@ constrainedTypeFreeVariables (ConstrainedType typeConstraints typ) =
 typeFreeVariables :: Type -> S.Set QName
 typeFreeVariables (TMetavar _) = S.empty
 typeFreeVariables (TVar name) = S.fromList [name]
-typeFreeVariables (TApp typ1 typ2) = typeFreeVariables typ1 `S.union` typeFreeVariables typ2
+typeFreeVariables (TApp typ1 typ2) =
+  typeFreeVariables typ1 `S.union` typeFreeVariables typ2
 
-substituteConstraint :: M.Map QName Type -> TypeConstraint -> TypeConstraint
-substituteConstraint dict (TypeConstraint cls typ) = TypeConstraint cls (substituteType dict typ)
+substituteConstraint :: TypeSubstitution -> TypeConstraint -> TypeConstraint
+substituteConstraint sub (TypeConstraint cls typ) =
+  TypeConstraint cls (substituteType sub typ)
 
-substituteType :: M.Map QName Type -> Type -> Type
-substituteType dict t@(TVar name)  = (M.findWithDefault t name dict)
-substituteType dict (TApp t1 t2)   = TApp (substituteType dict t1) (substituteType dict t2)
-substituteType _ t@(TMetavar meta) = t
+substituteType :: TypeSubstitution -> Type -> Type
+substituteType sub t@(TVar name)  = M.findWithDefault t name sub
+substituteType sub (TApp t1 t2)   = TApp (substituteType sub t1)
+                                         (substituteType sub t2)
+substituteType _   t@(TMetavar _) = t
 
-substituteContrainedType :: M.Map QName Type -> ConstrainedType -> ConstrainedType
-substituteContrainedType dict (ConstrainedType constraints typ) = let constraints'  = map (substituteConstraint dict) constraints
-                                                                      typ'          = substituteType dict typ
-                                                                  in ConstrainedType constraints' typ'
+substituteContrainedType :: TypeSubstitution -> ConstrainedType
+                         -> ConstrainedType
+substituteContrainedType sub (ConstrainedType constraints typ) =
+  ConstrainedType (map (substituteConstraint sub) constraints)
+                  (substituteType sub typ)
 
 ----
 

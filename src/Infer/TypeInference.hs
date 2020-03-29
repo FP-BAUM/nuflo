@@ -125,11 +125,11 @@ addTypeConstant name =  modifyFS (\ state ->
     state { stateTypeConstants = S.insert name (stateTypeConstants state) }
   )
 
-instantiateFreeVariablesTypes :: [QName] -> ConstrainedType -> M ConstrainedType
-instantiateFreeVariablesTypes names constrainedType = do
-  instantiatedVariables <- mapM (\ name -> do ft <- freshType 
-                                              return (name, ft)) names
-  return $ substituteContrainedType (M.fromList instantiatedVariables) constrainedType
+freshenVariables :: [QName] -> ConstrainedType -> M ConstrainedType
+freshenVariables names constrainedType = do
+  sub <- M.fromList <$> mapM (\ name -> do ft <- freshType 
+                                           return (name, ft)) names
+  return $ substituteContrainedType sub constrainedType
 
 ---- Type inference algorithm
 
@@ -228,7 +228,7 @@ inferTypeExprM :: Expr -> M (ConstrainedType, Expr)
 inferTypeExprM (EVar pos x) = do
   setPosition pos
   TypeScheme gvars constrainedType <- lookupType x
-  constrainedType' <- instantiateFreeVariablesTypes gvars constrainedType
+  constrainedType' <- freshenVariables gvars constrainedType -- Instantiate
   return (constrainedType', EVar pos x)
 inferTypeExprM (EApp pos e1 e2) = do
   setPosition pos
