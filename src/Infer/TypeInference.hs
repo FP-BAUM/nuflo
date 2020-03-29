@@ -20,6 +20,7 @@ import Syntax.AST(
 import Calculus.Types(
          TypeMetavariable, TypeConstraint(..),
          TypeScheme(..),  ConstrainedType(..), Type(..),
+         substituteContrainedType,
          constrainedTypeFreeVariables
        )
 
@@ -63,7 +64,7 @@ freshType :: M Type
 freshType = do
   state <- getFS
   putFS (state { stateNextFresh = stateNextFresh state + 1 })
-  return $ TMetavar (stateNextFresh state) 
+  return $ TMetavar (stateNextFresh state)
 
 bindType :: QName -> TypeScheme -> M ()
 bindType varName typ = do
@@ -123,6 +124,12 @@ addTypeConstant :: QName -> M ()
 addTypeConstant name =  modifyFS (\ state ->
     state { stateTypeConstants = S.insert name (stateTypeConstants state) }
   )
+
+instantiateFreeVariablesTypes :: [QName] -> ConstrainedType -> M ConstrainedType
+instantiateFreeVariablesTypes names constrainedType = do
+  instantiatedVariables <- mapM (\ name -> do ft <- freshType 
+                                              return (name, ft)) names
+  return $ substituteContrainedType (M.fromList instantiatedVariables) constrainedType
 
 ---- Type inference algorithm
 
@@ -221,8 +228,8 @@ inferTypeExprM :: Expr -> M (ConstrainedType, Expr)
 inferTypeExprM (EVar pos x) = do
   setPosition pos
   TypeScheme gvars constrainedType <- lookupType x
-  -- TODO: instantiate
-  return (constrainedType, EVar pos x)
+  constrainedType' <- instantiateFreeVariablesTypes gvars constrainedType
+  return (constrainedType', EVar pos x)
 inferTypeExprM (EApp pos e1 e2) = do
   setPosition pos
   --TODO
@@ -239,5 +246,4 @@ exprToType _              = error "(Malformed type)"
 
 constraintToTypeConstraint :: Constraint -> TypeConstraint
 constraintToTypeConstraint (Constraint _ className typeName) =
-  TypeConstraint className typeName
-
+  TypeConstraint className (TVar typeName)
