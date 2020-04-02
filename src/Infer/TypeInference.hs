@@ -2,6 +2,7 @@ module Infer.TypeInference(inferTypes) where
 
 import qualified Data.Set as S
 import qualified Data.Map as M
+import Data.List(union)
 import Data.Maybe(fromJust)
 
 import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
@@ -215,14 +216,15 @@ inferTypeEquationM (Equation pos lhs rhs) = do
      -- TODO: transform constraints
      enterScopeM
      mapM_ bindToFreshType lhsFree
-     (ltype, lhs') <- inferTypeExprM lhs
-     (rtype, rhs') <- inferTypeExprM rhs
-     unifyTypes ltype rtype
+     (ConstrainedType tcsl tl, lhs') <- inferTypeExprM lhs
+     (ConstrainedType tcsr tr, rhs') <- inferTypeExprM rhs
+     unifyTypes tl tr (union tcsl tcsr)
      exitScopeM
      return $ Equation pos lhs' rhs'
 
-unifyTypes :: ConstrainedType -> ConstrainedType -> M ()
-unifyTypes _ _ = return () -- TODO
+unifyTypes :: Type -> Type -> [TypeConstraint] -> M [TypeConstraint]
+  -- TODO: Solve contraints
+unifyTypes _ _ _ = return [] -- TODO
 
 inferTypeExprM :: Expr -> M (ConstrainedType, Expr)
 inferTypeExprM (EVar pos x) = do
@@ -232,10 +234,11 @@ inferTypeExprM (EVar pos x) = do
   return (constrainedType', EVar pos x)
 inferTypeExprM (EApp pos e1 e2) = do
   setPosition pos
-  --TODO
-  inferTypeExprM e1
-  inferTypeExprM e2
-  return (ConstrainedType [] (TVar (Name "XXX")), (EApp pos e1 e2)) --TODO
+  (ConstrainedType tcs1 t1, e1') <- inferTypeExprM e1
+  (ConstrainedType tcs2 t2, e2') <- inferTypeExprM e2
+  tr <- freshType
+  resolvedTypeContraints <- unifyTypes t1 (TApp (TApp (TVar operatorArrow) t2) tr) (union tcs1 tcs2)
+  return (ConstrainedType resolvedTypeContraints tr, (EApp pos e1' e2'))
 inferTypeExprM e = return (ConstrainedType [] (TVar (Name "XXX")), e) --TODO
 -- error ("NOT IMPLEMENTED: " ++ show e)
 
