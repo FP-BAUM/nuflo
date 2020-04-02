@@ -134,6 +134,9 @@ freshenVariables names constrainedType = do
                                            return (name, ft)) names
   return $ substituteConstrainedType sub constrainedType
 
+lookupMetavar :: TypeMetavariable -> M (Maybe Type)
+lookupMetavar _ = error "NOT IMPLEMENTED"
+
 ---- Type inference algorithm
 
 inferTypeProgramM :: Program -> M Program
@@ -224,16 +227,13 @@ inferTypeEquationM (Equation pos lhs rhs) = do
      exitScopeM
      return $ Equation pos lhs' rhs'
 
-substitutionType :: TypeMetavariable -> M (Maybe Type)
-substitutionType _ = error "NOT IMPLEMENTED"
-
-representativeFromType :: Type -> M Type
-representativeFromType mt@(TMetavar t) = do
-  representative <- substitutionType t
-  case representative of
-    Just t' -> representativeFromType t'
-    Nothing -> return mt
-representativeFromType t            = return t
+representative :: Type -> M Type
+representative (TMetavar x) = do
+  mt <- lookupMetavar x
+  case mt of
+    Just t  -> representative t
+    Nothing -> return (TMetavar x)
+representative t            = return t
 
 unifyTypes :: Type -> Type -> [TypeConstraint] -> M [TypeConstraint]
   -- TODO: Solve contraints
@@ -243,8 +243,6 @@ unifyTypes t1 t2 cs = do
   where
     rec :: Type -> Type -> M ()
     rec _ _ = error "NOT IMPLEMENTED"
-    
-
 
 inferTypeExprM :: Expr -> M (ConstrainedType, Expr)
 inferTypeExprM (EVar pos x) = do
@@ -257,8 +255,10 @@ inferTypeExprM (EApp pos e1 e2) = do
   (ConstrainedType tcs1 t1, e1') <- inferTypeExprM e1
   (ConstrainedType tcs2 t2, e2') <- inferTypeExprM e2
   tr <- freshType
-  resolvedTypeContraints <- unifyTypes t1 (TApp (TApp (TVar operatorArrow) t2) tr) (union tcs1 tcs2)
-  return (ConstrainedType resolvedTypeContraints tr, (EApp pos e1' e2'))
+  tcs <- unifyTypes t1
+                    (TApp (TApp (TVar operatorArrow) t2) tr)
+                    (union tcs1 tcs2)
+  return (ConstrainedType tcs tr, (EApp pos e1' e2'))
 inferTypeExprM e = return (ConstrainedType [] (TVar (Name "XXX")), e) --TODO
 -- error ("NOT IMPLEMENTED: " ++ show e)
 

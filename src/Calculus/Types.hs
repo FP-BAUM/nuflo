@@ -11,11 +11,13 @@ import qualified Data.Map as M
 
 type TypeMetavariable = Integer
 
-data TypeConstraint = TypeConstraint QName Type deriving Eq
+data TypeConstraint = TypeConstraint QName Type
+  deriving Eq
 
 data TypeScheme = TypeScheme [QName] ConstrainedType
 
-data ConstrainedType = ConstrainedType [TypeConstraint] Type deriving Eq
+data ConstrainedType = ConstrainedType [TypeConstraint] Type
+  deriving Eq
 
 data Type = TMetavar TypeMetavariable
           | TVar QName
