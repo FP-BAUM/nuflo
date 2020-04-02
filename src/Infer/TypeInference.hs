@@ -32,6 +32,7 @@ inferTypes program = evalFS (inferTypeProgramM program) initialState
                        , stateNextFresh     = 0
                        , stateTypeConstants = S.empty
                        , stateEnvironment   = [M.empty]
+                       , stateSubstitution  = M.empty
                        }
 
 ---- Type inference monad
@@ -44,6 +45,7 @@ data TypeInferState =
                                   -- Type constructors and type synonyms
      , stateEnvironment   :: [M.Map QName TypeScheme]
                                   -- Non-empty stack of ribs
+     , stateSubstitution :: M.Map TypeMetavariable Type 
      }
 
 type M = FailState TypeInferState
@@ -222,9 +224,27 @@ inferTypeEquationM (Equation pos lhs rhs) = do
      exitScopeM
      return $ Equation pos lhs' rhs'
 
+substitutionType :: TypeMetavariable -> M (Maybe Type)
+substitutionType _ = error "NOT IMPLEMENTED"
+
+representativeFromType :: Type -> M Type
+representativeFromType mt@(TMetavar t) = do
+  representative <- substitutionType t
+  case representative of
+    Just t' -> representativeFromType t'
+    Nothing -> return mt
+representativeFromType t            = return t
+
 unifyTypes :: Type -> Type -> [TypeConstraint] -> M [TypeConstraint]
   -- TODO: Solve contraints
-unifyTypes _ _ _ = return [] -- TODO
+unifyTypes t1 t2 cs = do
+  rec t1 t2
+  return cs
+  where
+    rec :: Type -> Type -> M ()
+    rec _ _ = error "NOT IMPLEMENTED"
+    
+
 
 inferTypeExprM :: Expr -> M (ConstrainedType, Expr)
 inferTypeExprM (EVar pos x) = do
