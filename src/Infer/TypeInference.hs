@@ -140,7 +140,9 @@ freshenVariables names constrainedType = do
   return $ substituteConstrainedType sub constrainedType
 
 lookupMetavar :: TypeMetavariable -> M (Maybe Type)
-lookupMetavar _ = error "NOT IMPLEMENTED"
+lookupMetavar meta = do
+  state <- getFS
+  return $ M.lookup meta (stateSubstitution state)
 
 ---- Type inference algorithm
 
@@ -253,6 +255,11 @@ unifyTypes t1 t2 cs = do
                                           if ri /= i
                                           then unify ri rj
                                           else insertRepresentativeType mi j
+    unify t1@(TVar _) i@(TMetavar mi)   = do
+                                          ri <- representative i
+                                          if ri /= i
+                                          then unify t1 ri
+                                          else insertRepresentativeType mi t1
     unify t1@(TVar a) t2@(TVar b)       = do
                                           if a == b
                                           then return ()
