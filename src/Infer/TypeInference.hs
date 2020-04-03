@@ -78,6 +78,11 @@ bindType varName typ = do
                ("Variable \"" ++ show varName ++ "\" already declared.")
     else putFS (state { stateEnvironment = M.insert varName typ rib : ribs })
 
+insertRepresentativeType :: TypeMetavariable -> Type -> M ()
+insertRepresentativeType meta typ = do
+  state <- getFS
+  putFS (state { stateSubstitution = M.insert meta typ (stateSubstitution state) })
+
 bindToFreshType :: QName -> M ()
 bindToFreshType x = do
   typ <- freshType
@@ -238,11 +243,24 @@ representative t            = return t
 unifyTypes :: Type -> Type -> [TypeConstraint] -> M [TypeConstraint]
   -- TODO: Solve contraints
 unifyTypes t1 t2 cs = do
-  rec t1 t2
+  unify t1 t2
   return cs
   where
-    rec :: Type -> Type -> M ()
-    rec _ _ = error "NOT IMPLEMENTED"
+    unify :: Type -> Type -> M ()
+    unify i@(TMetavar mi) j             = do
+                                          ri <- representative i
+                                          rj <- representative j
+                                          if ri /= i
+                                          then unify ri rj
+                                          else insertRepresentativeType mi j
+    unify t1@(TVar a) t2@(TVar b)       = do
+                                          if a == b
+                                          then return ()
+                                          else failM UnifyError ("The types" ++ show t1 ++ "and " ++ show t2 ++ "aren't unifiables")
+    unify t1@(TVar _) t2@(TApp _ _)     = failM UnifyError ("The types" ++ show t1 ++ "and " ++ show t2 ++ "aren't unifiables")
+    unify (TApp t11 t12) (TApp t21 t22) = do
+                                          unify t11 t21
+                                          unify t12 t22
 
 inferTypeExprM :: Expr -> M (ConstrainedType, Expr)
 inferTypeExprM (EVar pos x) = do

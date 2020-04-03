@@ -44,6 +44,7 @@ data ErrorType =
   | KindErrorInstanceMustBeDatatype
   | TypeErrorVariableAlreadyDeclared
   | TypeErrorUnboundVariable
+  | UnifyError
   deriving (Eq, Show)
 
 errorAtUnknown :: ErrorType -> String -> Error
