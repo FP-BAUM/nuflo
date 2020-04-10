@@ -78,10 +78,12 @@ bindType varName typ = do
                ("Variable \"" ++ show varName ++ "\" already declared.")
     else putFS (state { stateEnvironment = M.insert varName typ rib : ribs })
 
-insertRepresentativeType :: TypeMetavariable -> Type -> M ()
-insertRepresentativeType meta typ = do
+setRepresentative :: TypeMetavariable -> Type -> M ()
+setRepresentative x typ = do
   state <- getFS
-  putFS (state { stateSubstitution = M.insert meta typ (stateSubstitution state) })
+  putFS (state {
+           stateSubstitution = M.insert x typ (stateSubstitution state)
+         })
 
 bindToFreshType :: QName -> M ()
 bindToFreshType x = do
@@ -242,32 +244,44 @@ representative (TMetavar x) = do
     Nothing -> return (TMetavar x)
 representative t            = return t
 
+occursIn :: TypeMetavariable -> Type -> M Bool
+occursIn x t = do
+  t' <- representative t
+  case t of
+    TMetavar y -> return (x == y)
+    TVar _     -> return False
+    TApp t1 t2 -> do
+      b1 <- occursIn x t1
+      b2 <- occursIn x t2
+      return (b1 || b2)
+
 unifyTypes :: Type -> Type -> [TypeConstraint] -> M [TypeConstraint]
-  -- TODO: Solve contraints
 unifyTypes t1 t2 cs = do
-  unify t1 t2
+  t1' <- representative t1
+  t2' <- representative t2
+  unify t1' t2'
+  -- TODO: Solve contraints
   return cs
   where
     unify :: Type -> Type -> M ()
-    unify i@(TMetavar mi) j             = do
-                                          ri <- representative i
-                                          rj <- representative j
-                                          if ri /= i
-                                          then unify ri rj
-                                          else insertRepresentativeType mi j
-    unify t1@(TVar _) i@(TMetavar mi)   = do
-                                          ri <- representative i
-                                          if ri /= i
-                                          then unify t1 ri
-                                          else insertRepresentativeType mi t1
-    unify t1@(TVar a) t2@(TVar b)       = do
-                                          if a == b
-                                          then return ()
-                                          else failM UnifyError ("The types" ++ show t1 ++ "and " ++ show t2 ++ "aren't unifiables")
-    unify t1@(TVar _) t2@(TApp _ _)     = failM UnifyError ("The types" ++ show t1 ++ "and " ++ show t2 ++ "aren't unifiables")
+    unify (TMetavar x) t = do
+      b <- x `occursIn` t
+      if b
+       then failM TypeErrorUnificationOccursCheck
+                  ("Types do not unify (clash):\n" ++
+                   "  " ++ show t1 ++ "\n" ++
+                   "  " ++ show t2)
+       else setRepresentative x t
+    unify t (TMetavar x) = unify (TMetavar x) t
+    unify t1@(TVar a) t2@(TVar b) | a == b = return ()
     unify (TApp t11 t12) (TApp t21 t22) = do
                                           unify t11 t21
                                           unify t12 t22
+    unify t1 t2 =
+      failM TypeErrorUnificationClash
+            ("Types do not unify (clash):\n" ++
+             "  " ++ show t1 ++ "\n" ++
+             "  " ++ show t2)
 
 inferTypeExprM :: Expr -> M (ConstrainedType, Expr)
 inferTypeExprM (EVar pos x) = do
