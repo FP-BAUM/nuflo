@@ -162,12 +162,12 @@ collectTypeDeclarationM :: Declaration -> M ()
 collectTypeDeclarationM (TypeDeclaration pos typ value) = do
   case exprHeadVariable typ of
     Just name -> addTypeConstant name
-    _ -> error "Type has not head variable"
+    _ -> error "Type has no head variable"
   error "NOT FULLY IMPLEMENTED -- TODO: RECORD TYPE SYNONYM DECLARATION"
 collectTypeDeclarationM (DataDeclaration _ typ _) = do
   case exprHeadVariable typ of
     Just name -> addTypeConstant name
-    _ -> error "Type has not head variable"
+    _ -> error "Type has no head variable"
 collectTypeDeclarationM _ = return ()
 
 collectSignaturesM :: Declaration -> M ()
@@ -244,10 +244,20 @@ representative (TMetavar x) = do
     Nothing -> return (TMetavar x)
 representative t            = return t
 
+unfoldType :: Type -> M Type
+unfoldType t = do
+  t' <- representative t
+  case t' of
+    TApp t1 t2 -> do
+      t1' <- unfoldType t1
+      t2' <- unfoldType t2
+      return $ TApp t1' t2'
+    _          -> return t'
+
 occursIn :: TypeMetavariable -> Type -> M Bool
 occursIn x t = do
   t' <- representative t
-  case t of
+  case t' of
     TMetavar y -> return (x == y)
     TVar _     -> return False
     TApp t1 t2 -> do
@@ -257,31 +267,36 @@ occursIn x t = do
 
 unifyTypes :: Type -> Type -> [TypeConstraint] -> M [TypeConstraint]
 unifyTypes t1 t2 cs = do
-  t1' <- representative t1
-  t2' <- representative t2
-  unify t1' t2'
+  unify t1 t2
   -- TODO: Solve contraints
   return cs
   where
     unify :: Type -> Type -> M ()
-    unify (TMetavar x) t = do
-      b <- x `occursIn` t
-      if b
-       then failM TypeErrorUnificationOccursCheck
-                  ("Types do not unify (clash):\n" ++
-                   "  " ++ show t1 ++ "\n" ++
-                   "  " ++ show t2)
-       else setRepresentative x t
-    unify t (TMetavar x) = unify (TMetavar x) t
-    unify t1@(TVar a) t2@(TVar b) | a == b = return ()
-    unify (TApp t11 t12) (TApp t21 t22) = do
-                                          unify t11 t21
-                                          unify t12 t22
-    unify t1 t2 =
-      failM TypeErrorUnificationClash
-            ("Types do not unify (clash):\n" ++
-             "  " ++ show t1 ++ "\n" ++
-             "  " ++ show t2)
+    unify t1 t2 = do
+      t1' <- representative t1
+      t2' <- representative t2
+      case (t1', t2') of
+        (TMetavar x, TMetavar y) | x == y -> return ()
+        (TMetavar x, t) -> do
+          b <- x `occursIn` t
+          if b
+           then unifFailOccursCheck t1 t2
+           else setRepresentative x t
+        (t, TMetavar x) -> unify (TMetavar x) t
+        (TVar a, TVar b) | a == b -> return ()
+        (TApp t11 t12, TApp t21 t22) -> do unify t11 t21
+                                           unify t12 t22
+        _ -> unifFailClash t1 t2
+    --
+    unifFailOccursCheck = unifFail TypeErrorUnificationOccursCheck
+    unifFailClash       = unifFail TypeErrorUnificationClash
+    unifFail errorType t1 t2 = do
+      t1' <- unfoldType t1
+      t2' <- unfoldType t2
+      failM errorType
+            ("Types do not unify (" ++ show errorType ++ "):\n" ++
+             "  " ++ show t1' ++ "\n" ++
+             "  " ++ show t2')
 
 inferTypeExprM :: Expr -> M (ConstrainedType, Expr)
 inferTypeExprM (EVar pos x) = do

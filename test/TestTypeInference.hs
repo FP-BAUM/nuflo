@@ -55,6 +55,46 @@ tests = TestSuite "TYPE INFERENCE" [
     "f x = x"
   ]),
 
+  TestSuite "Application" [
+
+    testProgramOK "Simple application" (unlines [
+      "x = x",
+      "f = f",
+      "main = f x"
+    ]),
+
+    testProgramOK "Nested application" (unlines [
+      "x = x",
+      "f = f",
+      "g = g",
+      "main = f (f x)"
+    ]),
+
+    testProgramError "Occurs check failure" (unlines [
+      "f = f",
+      "main = f f"
+    ]) TypeErrorUnificationOccursCheck,
+
+    testProgramOK "Application with type declaration" (unlines [
+      "data Bool where",
+      "  True : Bool",
+      "f : Bool -> Bool",
+      "f = f",
+      "main = f (f True)"
+    ]),
+
+    testProgramError "Application with type declaration - clash" (unlines [
+      "data Unit where",
+      "  unit : Unit",
+      "data Bool where",
+      "  True : Bool",
+      "f : Bool -> Unit",
+      "f = f",
+      "main = f (f True)"
+    ]) TypeErrorUnificationClash
+
+  ],
+
   testProgramError "Reject unbound variable" (unlines [
     "f x = y"
   ]) TypeErrorUnboundVariable,
