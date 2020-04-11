@@ -343,8 +343,16 @@ inferTypeExprM (ELet pos decls body) = do
   (typeScheme, body') <- inferTypeExprM body
   exitScopeM
   return (typeScheme, ELet pos decls' body')
--- case a of b
-inferTypeExprM (ECase pos e1 cases) = error "NOT IMPLEMENTED"
+-- case e1 of c1 c2 .. cn
+inferTypeExprM (ECase pos e1 cases) = do
+  setPosition pos
+  e1Scheme <- inferTypeExprM e1
+  enterScopeM
+  caseSchemes <- mapM (inferCaseBranchM e1Scheme) cases
+  tr <- freshType
+  constraints <- concat <$> mapM (\(ConstrainedType cns tcase, _) -> unifyTypes tr tcase cns) caseSchemes
+  exitScopeM
+  return (ConstrainedType constraints tr, ECase pos (snd e1Scheme) (map snd caseSchemes))
 -- fresh x in a
 inferTypeExprM (EFresh pos x body) = do
   enterScopeM
@@ -352,6 +360,16 @@ inferTypeExprM (EFresh pos x body) = do
   (schema, body') <- inferTypeExprM body
   exitScopeM
   return (schema, EFresh pos x body')
+
+inferCaseBranchM :: (ConstrainedType, Expr) -> CaseBranch -> M (ConstrainedType, CaseBranch)
+inferCaseBranchM (ConstrainedType ce1 te1, e1) (CaseBranch pos pattern body) = do
+  setPosition pos
+  (ConstrainedType cpattern tpattern, pattern') <- inferTypeExprM pattern
+  enterScopeM
+  patternConstraints <- unifyTypes te1 tpattern (union ce1 cpattern)
+  (ConstrainedType cbody tbody, body') <- inferTypeExprM body
+  exitScopeM
+  return $ (ConstrainedType (union cbody patternConstraints) tbody, CaseBranch pos pattern' body')
 
 exprToType :: Expr -> Type
 exprToType (EVar _ x)     = TVar x
