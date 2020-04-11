@@ -22,7 +22,8 @@ import Calculus.Types(
          TypeMetavariable, TypeConstraint(..),
          TypeScheme(..),  ConstrainedType(..), Type(..),
          substituteConstrainedType,
-         constrainedTypeFreeVariables
+         constrainedTypeFreeVariables,
+         tFun
        )
 
 inferTypes :: Program -> Either Error Program
@@ -299,20 +300,36 @@ unifyTypes t1 t2 cs = do
              "  " ++ show t2')
 
 inferTypeExprM :: Expr -> M (ConstrainedType, Expr)
+-- x
 inferTypeExprM (EVar pos x) = do
   setPosition pos
   TypeScheme gvars constrainedType <- lookupType x
   constrainedType' <- freshenVariables gvars constrainedType -- Instantiate
   return (constrainedType', EVar pos x)
+-- e1 e2
 inferTypeExprM (EApp pos e1 e2) = do
   setPosition pos
   (ConstrainedType tcs1 t1, e1') <- inferTypeExprM e1
   (ConstrainedType tcs2 t2, e2') <- inferTypeExprM e2
   tr <- freshType
   tcs <- unifyTypes t1
-                    (TApp (TApp (TVar operatorArrow) t2) tr)
+                    (tFun t2 tr)
                     (union tcs1 tcs2)
   return (ConstrainedType tcs tr, (EApp pos e1' e2'))
+-- \ e1 -> e2
+inferTypeExprM (ELambda pos e1 e2) = do
+  setPosition pos
+  bound <- getAllBoundVars
+  let freeParamVars = exprFreeVariables bound e1
+
+   in do
+    enterScopeM
+    mapM_ bindToFreshType freeParamVars
+    (ConstrainedType ce1 te1, e1') <- inferTypeExprM e1
+    (ConstrainedType ce2 te2, e2') <- inferTypeExprM e2
+    exitScopeM
+    return $ (ConstrainedType (union ce1 ce2) (tFun te1 te2), ELambda pos e1' e2')
+-- TODO
 inferTypeExprM e = return (ConstrainedType [] (TVar (Name "XXX")), e) --TODO
 -- error ("NOT IMPLEMENTED: " ++ show e)
 

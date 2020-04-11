@@ -2,10 +2,11 @@ module Calculus.Types(
          TypeMetavariable, TypeConstraint(..),
          TypeScheme(..),  ConstrainedType(..), Type(..),
          substituteConstrainedType,
-         constrainedTypeFreeVariables
+         constrainedTypeFreeVariables,
+         tFun
        ) where
 
-import Syntax.Name(QName)
+import Syntax.Name(QName(..), operatorArrow)
 import qualified Data.Set as S
 import qualified Data.Map as M
 
@@ -56,6 +57,9 @@ substituteConstrainedType :: TypeSubstitution -> ConstrainedType
 substituteConstrainedType sub (ConstrainedType constraints typ) =
   ConstrainedType (map (substituteConstraint sub) constraints)
                   (substituteType sub typ)
+
+tFun :: Type -> Type -> Type
+tFun = TApp . TApp (TVar operatorArrow)
 
 ----
 

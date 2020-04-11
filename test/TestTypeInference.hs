@@ -95,6 +95,47 @@ tests = TestSuite "TYPE INFERENCE" [
 
   ],
 
+  TestSuite "Lambda" [
+    testProgramOK "Simple Lambda" (unlines [
+      "main = \\ x -> x"
+    ]),
+
+    testProgramOK "Lambda with simple data structures" (unlines [
+      "data Bool where { True : Bool }",
+      "main = (\\ True -> True) True"
+    ]),
+
+    testProgramOK "Lambda with complex use of data structures and pattern matching" (unlines [
+      "data Bool where",
+      " true : Bool",
+      "data List a where",
+      " nil  : List a",
+      " cons : a -> List a -> List a",
+      "main : Bool",
+      "main = (\\ (cons x xs) -> x) (cons true nil)"
+    ]),
+
+    testProgramError "Lambda with wrong function type definintion" (unlines [
+      "data Bool where",
+      " true : Bool",
+      "data List a where",
+      " nil  : List a",
+      " cons : a -> List a -> List a",
+      "main : List Bool",
+      "main = (\\ (cons x xs) -> x) (cons true nil)"
+    ]) TypeErrorUnificationClash,
+
+    testProgramError "Lambda with wrong uses of data structures" (unlines [
+      "data Bool where { True : Bool }",
+      "data Unit where { unit : Unit }",
+      "main = (\\ unit -> True) True"
+    ]) TypeErrorUnificationClash,
+
+    testProgramError "lambda with a unbounded variable" (unlines [
+      "main = \\ x -> y"
+    ]) TypeErrorUnboundVariable
+  ],
+
   testProgramError "Reject unbound variable" (unlines [
     "f x = y"
   ]) TypeErrorUnboundVariable,
