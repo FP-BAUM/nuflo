@@ -329,6 +329,18 @@ inferTypeExprM (ELambda pos e1 e2) = do
     (ConstrainedType ce2 te2, e2') <- inferTypeExprM e2
     exitScopeM
     return $ (ConstrainedType (union ce1 ce2) (tFun te1 te2), ELambda pos e1' e2')
+-- let e1 = b1 ei = ...decls'
+-- in ...body
+inferTypeExprM (ELet pos decls body) = do
+  setPosition pos
+  bound <- getAllBoundVars
+  enterScopeM
+  mapM_ collectSignaturesM decls
+  decls' <- inferTypeDeclarationsM decls
+  (typeScheme, body') <- inferTypeExprM body
+  exitScopeM
+  return (typeScheme, ELet pos decls' body')
+
 -- TODO
 inferTypeExprM e = return (ConstrainedType [] (TVar (Name "XXX")), e) --TODO
 -- error ("NOT IMPLEMENTED: " ++ show e)

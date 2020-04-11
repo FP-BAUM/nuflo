@@ -136,6 +136,50 @@ tests = TestSuite "TYPE INFERENCE" [
     ]) TypeErrorUnboundVariable
   ],
 
+  TestSuite "Let" [
+    testProgramOK "Simple let" (unlines [
+      "data Bool where",
+      " true : Bool",
+      "main = let x = true in x"
+    ]),
+
+    testProgramOK "Let defining two let variables" (unlines [
+      "data Bool where",
+      " true : Bool",
+      " false : Bool",
+      "main : Bool",
+      "main = let x = true ; y = false in x"
+    ]),
+
+    testProgramOK "Let with function declaration" (unlines [
+      "data Bool where",
+      " true : Bool",
+      " false : Bool",
+      "main : Bool",
+      "main = let f x = x ; x = true in f x"
+    ]),
+
+    testProgramOK "Let with explicit polymorphic declaration" (unlines [
+      "data Bool where true : Bool",
+      "data Unit where unit : Unit",
+      "main = let f : a -> Bool",
+      "           f x = true",
+      "        in f (f unit)"
+    ]),
+
+    -- TODO: THIS ONE SHOULD BE UNCOMMENTED WHEN WE FINISH THE INFERING SYSTEM
+    -- testProgramOK "Let with implicit polymorphic declaration" (unlines [
+    --   "data Bool where true : Bool",
+    --   "data Unit where unit : Unit",
+    --   "main = let f x = true",
+    --   "        in f (f unit)"
+    -- ]),
+
+    testProgramError "Let with non declared variable" (unlines [
+      "main = (let f x = x in f) f"
+    ]) TypeErrorUnboundVariable
+  ],
+
   testProgramError "Reject unbound variable" (unlines [
     "f x = y"
   ]) TypeErrorUnboundVariable,
