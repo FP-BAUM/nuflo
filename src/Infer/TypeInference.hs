@@ -8,7 +8,7 @@ import Data.Maybe(fromJust)
 import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Error(Error(..), ErrorType(..))
 import Position(Position(..), unknownPosition)
-import Syntax.Name(QName(..), operatorArrow)
+import Syntax.Name(QName(..), operatorArrow, primitiveInt)
 import Syntax.AST(
          AnnProgram(..), Program,
          AnnDeclaration(..), Declaration,
@@ -153,6 +153,7 @@ inferTypeProgramM :: Program -> M Program
 inferTypeProgramM (Program decls) = do
   -- Declare built-in type constructors
   addTypeConstant operatorArrow
+  addTypeConstant primitiveInt
   -- Infer
   mapM_ collectTypeDeclarationM decls
   mapM_ collectSignaturesM decls

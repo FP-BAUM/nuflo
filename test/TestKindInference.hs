@@ -74,7 +74,6 @@ tests = TestSuite "KIND INFERENCE" [
   ]) KindErrorConstructorShouldReturnDataType,
 
   testProgramOK "Allow type signature of base kind (*)" (unlines [
-    "data Int where",
     "data List a where",
     "x : Int",
     "y : List Int",
@@ -109,7 +108,6 @@ tests = TestSuite "KIND INFERENCE" [
   ]),
 
   testProgramOK "Check kinds of type declarations (1)" (unlines [
-    "data Int where",
     "data List a where",
     "type LL a = List (List a)",
     "x : LL (LL Int)",
@@ -117,14 +115,12 @@ tests = TestSuite "KIND INFERENCE" [
   ]),
 
   testProgramError "Check kinds of type declarations (2)" (unlines [
-    "data Int where",
     "data List a where",
     "type LL a = List (List a)",
     "x : LL (LL (_→_ Int))"
   ]) KindErrorUnifyClash,
 
   testProgramOK "Check kinds of type declarations (3)" (unlines [
-    "data Int where",
     "data F a b where",
     "data G a where",
     "type H a b = F (G a) (G b)",
@@ -132,7 +128,6 @@ tests = TestSuite "KIND INFERENCE" [
   ]),
 
   testProgramOK "Check kinds of type declarations (4)" (unlines [
-    "data Int where",
     "data F a b where",
     "data G a where",
     "type H a b = F (G a) (G b)",
@@ -140,7 +135,6 @@ tests = TestSuite "KIND INFERENCE" [
   ]),
 
   testProgramError "Check kinds of type declarations (5)" (unlines [
-    "data Int where",
     "data F a b where",
     "data G a where",
     "type H a b = F (G a) (G b)",
@@ -149,7 +143,6 @@ tests = TestSuite "KIND INFERENCE" [
   ]) KindErrorUnifyClash,
 
   testProgramError "Check kinds of type declarations (6)" (unlines [
-    "data Int where",
     "data F a b where",
     "data G a where",
     "type H a b = F (G a) (G b)",

@@ -38,7 +38,21 @@ tests = TestSuite "TYPE INFERENCE" [
     testProgramOK "Simple Integer" (unlines [
       "main : Int",
       "main = 1"
-    ])
+    ]),
+
+    testProgramError "failing case with wrong signature" (unlines [
+      "data Bool where",
+      "  true : Bool",
+      "main : Bool",
+      "main = 1"
+    ]) TypeErrorUnificationClash,
+
+    testProgramError "failing case with wrong Body" (unlines [
+      "data Bool where",
+      "  true : Bool",
+      "main : Int",
+      "main = true"
+    ]) TypeErrorUnificationClash
   ],
 
   testProgramOK "Basic data declaration" (unlines [
@@ -188,7 +202,24 @@ tests = TestSuite "TYPE INFERENCE" [
   ],
 
   TestSuite "Fresh" [
+    testProgramOK "Simple fresh variable" (unlines [
+      "main = fresh x in x"
+    ]),
 
+    testProgramOK "Defining fresh function" (unlines [
+      "data Pair a b where { pair : a -> b -> Pair a b }",
+      "main = fresh f in pair (f 1) (f 2)"
+    ]),
+
+    testProgramError "Fail case" (unlines [
+      "main = fresh x in x x"
+    ]) TypeErrorUnificationOccursCheck,
+
+    testProgramError "Fail fresh function" (unlines [
+      "data Bool where { true : Bool }",
+      "data Pair a b where { pair : a -> b -> Pair a b }",
+      "main = fresh f in pair (f 1) (f true)"
+    ]) TypeErrorUnificationClash
   ],
 
   testProgramError "Reject unbound variable" (unlines [
