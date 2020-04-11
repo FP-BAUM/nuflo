@@ -3,10 +3,10 @@ module Calculus.Types(
          TypeScheme(..),  ConstrainedType(..), Type(..),
          substituteConstrainedType,
          constrainedTypeFreeVariables,
-         tFun
+         tFun, tInt
        ) where
 
-import Syntax.Name(QName(..), operatorArrow)
+import Syntax.Name(QName(..), operatorArrow, primitiveInt)
 import qualified Data.Set as S
 import qualified Data.Map as M
 
@@ -60,6 +60,9 @@ substituteConstrainedType sub (ConstrainedType constraints typ) =
 
 tFun :: Type -> Type -> Type
 tFun = TApp . TApp (TVar operatorArrow)
+
+tInt :: Type
+tInt = TVar primitiveInt
 
 ----
 

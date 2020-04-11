@@ -34,6 +34,13 @@ testProgramError description source expected =
 tests :: Test
 tests = TestSuite "TYPE INFERENCE" [
 
+  TestSuite "Int" [
+    testProgramOK "Simple Integer" (unlines [
+      "main : Int",
+      "main = 1"
+    ])
+  ],
+
   testProgramOK "Basic data declaration" (unlines [
     "data Bool where",
     "  True : Bool",
@@ -178,6 +185,10 @@ tests = TestSuite "TYPE INFERENCE" [
     testProgramError "Let with non declared variable" (unlines [
       "main = (let f x = x in f) f"
     ]) TypeErrorUnboundVariable
+  ],
+
+  TestSuite "Fresh" [
+
   ],
 
   testProgramError "Reject unbound variable" (unlines [

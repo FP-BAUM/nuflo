@@ -23,7 +23,7 @@ import Calculus.Types(
          TypeScheme(..),  ConstrainedType(..), Type(..),
          substituteConstrainedType,
          constrainedTypeFreeVariables,
-         tFun
+         tFun, tInt
        )
 
 inferTypes :: Program -> Either Error Program
@@ -300,6 +300,7 @@ unifyTypes t1 t2 cs = do
              "  " ++ show t2')
 
 inferTypeExprM :: Expr -> M (ConstrainedType, Expr)
+inferTypeExprM (EInt pos i) = return (ConstrainedType [] tInt, EInt pos i)
 -- x
 inferTypeExprM (EVar pos x) = do
   setPosition pos
@@ -337,13 +338,19 @@ inferTypeExprM (ELet pos decls body) = do
   enterScopeM
   mapM_ collectSignaturesM decls
   decls' <- inferTypeDeclarationsM decls
+  -- TODO: generalize signature types
   (typeScheme, body') <- inferTypeExprM body
   exitScopeM
   return (typeScheme, ELet pos decls' body')
-
--- TODO
-inferTypeExprM e = return (ConstrainedType [] (TVar (Name "XXX")), e) --TODO
--- error ("NOT IMPLEMENTED: " ++ show e)
+-- case a of b
+inferTypeExprM (ECase pos e1 cases) = error "NOT IMPLEMENTED"
+-- fresh x in a
+inferTypeExprM (EFresh pos x body) = do
+  enterScopeM
+  bindToFreshType x
+  (schema, body') <- inferTypeExprM body
+  exitScopeM
+  return (schema, EFresh pos x body')
 
 exprToType :: Expr -> Type
 exprToType (EVar _ x)     = TVar x
