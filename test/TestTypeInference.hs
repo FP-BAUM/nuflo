@@ -201,6 +201,64 @@ tests = TestSuite "TYPE INFERENCE" [
     ]) TypeErrorUnboundVariable
   ],
 
+    TestSuite "Case of" [
+    testProgramOK "Empty case" (unlines [
+      "main x = case x of"
+    ]),
+
+    testProgramOK "Simple case with simple branch" (unlines [
+      "main x = case x of x -> x"
+    ]),
+
+    testProgramOK "Case with boolean pattern matching" (unlines [
+      "data Bool where",
+      " true : Bool",
+      " false : Bool",
+      "data List a where",
+      " nil  : List a",
+      " cons : a -> List a -> List a",
+      "main x = case x of",
+      " false   -> true",
+      " a   -> a"
+    ]),
+
+    testProgramOK "Case with list pattern matching" (unlines [
+      "data Bool where",
+      " true : Bool",
+      " false : Bool",
+      "data List a where",
+      " nil  : List a",
+      " cons : a -> List a -> List a",
+      "main x = case x of",
+      " (cons y ys)   -> false",
+      " nil   -> true"
+    ]),
+
+    testProgramError "Case when the type of the patterns don't match" (unlines [
+      "data Bool where",
+      " true : Bool",
+      " false : Bool",
+      "data List a where",
+      " nil  : List a",
+      " cons : a -> List a -> List a",
+      "main x = case x of",
+      " (cons y ys)   -> false",
+      " true   -> true"
+    ]) TypeErrorUnificationClash,
+
+    testProgramError "Case when the type of the case's bodies don't match" (unlines [
+      "data Bool where",
+      " true : Bool",
+      " false : Bool",
+      "data List a where",
+      " nil  : List a",
+      " cons : a -> List a -> List a",
+      "main x = case x of",
+      " (cons y ys)   -> nil",
+      " nil   -> true"
+    ]) TypeErrorUnificationClash
+  ],
+
   TestSuite "Fresh" [
     testProgramOK "Simple fresh variable" (unlines [
       "main = fresh x in x"

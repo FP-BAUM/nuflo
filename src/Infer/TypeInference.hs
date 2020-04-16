@@ -234,7 +234,8 @@ inferTypeEquationM (Equation pos lhs rhs) = do
      mapM_ bindToFreshType lhsFree
      (ConstrainedType tcsl tl, lhs') <- inferTypeExprM lhs
      (ConstrainedType tcsr tr, rhs') <- inferTypeExprM rhs
-     unifyTypes tl tr (union tcsl tcsr)
+     unifyTypes tl tr
+     solveConstraints (union tcsl tcsr)
      exitScopeM
      return $ Equation pos lhs' rhs'
 
@@ -267,29 +268,27 @@ occursIn x t = do
       b2 <- occursIn x t2
       return (b1 || b2)
 
-unifyTypes :: Type -> Type -> [TypeConstraint] -> M [TypeConstraint]
-unifyTypes t1 t2 cs = do
-  unify t1 t2
-  -- TODO: Solve contraints
-  return cs
+-- TODO: NO IMPLEMENTED
+solveConstraints :: [TypeConstraint] -> M [TypeConstraint]
+solveConstraints x = return x
+
+unifyTypes :: Type -> Type -> M ()
+unifyTypes t1 t2 = do
+  t1' <- representative t1
+  t2' <- representative t2
+  case (t1', t2') of
+    (TMetavar x, TMetavar y) | x == y -> return ()
+    (TMetavar x, t) -> do
+      b <- x `occursIn` t
+      if b
+        then unifFailOccursCheck t1 t2
+        else setRepresentative x t
+    (t, TMetavar x) -> unifyTypes (TMetavar x) t
+    (TVar a, TVar b) | a == b -> return ()
+    (TApp t11 t12, TApp t21 t22) -> do unifyTypes t11 t21
+                                       unifyTypes t12 t22
+    _ -> unifFailClash t1 t2
   where
-    unify :: Type -> Type -> M ()
-    unify t1 t2 = do
-      t1' <- representative t1
-      t2' <- representative t2
-      case (t1', t2') of
-        (TMetavar x, TMetavar y) | x == y -> return ()
-        (TMetavar x, t) -> do
-          b <- x `occursIn` t
-          if b
-           then unifFailOccursCheck t1 t2
-           else setRepresentative x t
-        (t, TMetavar x) -> unify (TMetavar x) t
-        (TVar a, TVar b) | a == b -> return ()
-        (TApp t11 t12, TApp t21 t22) -> do unify t11 t21
-                                           unify t12 t22
-        _ -> unifFailClash t1 t2
-    --
     unifFailOccursCheck = unifFail TypeErrorUnificationOccursCheck
     unifFailClash       = unifFail TypeErrorUnificationClash
     unifFail errorType t1 t2 = do
@@ -314,9 +313,8 @@ inferTypeExprM (EApp pos e1 e2) = do
   (ConstrainedType tcs1 t1, e1') <- inferTypeExprM e1
   (ConstrainedType tcs2 t2, e2') <- inferTypeExprM e2
   tr <- freshType
-  tcs <- unifyTypes t1
-                    (tFun t2 tr)
-                    (union tcs1 tcs2)
+  unifyTypes t1 (tFun t2 tr)
+  tcs <- solveConstraints (union tcs1 tcs2)
   return (ConstrainedType tcs tr, (EApp pos e1' e2'))
 -- \ e1 -> e2
 inferTypeExprM (ELambda pos e1 e2) = do
@@ -346,13 +344,11 @@ inferTypeExprM (ELet pos decls body) = do
 -- case e1 of c1 c2 .. cn
 inferTypeExprM (ECase pos e1 cases) = do
   setPosition pos
-  e1Scheme <- inferTypeExprM e1
-  enterScopeM
-  caseSchemes <- mapM (inferCaseBranchM e1Scheme) cases
+  (ConstrainedType ce1 t1, e1') <- inferTypeExprM e1 
   tr <- freshType
-  constraints <- concat <$> mapM (\(ConstrainedType cns tcase, _) -> unifyTypes tr tcase cns) caseSchemes
-  exitScopeM
-  return (ConstrainedType constraints tr, ECase pos (snd e1Scheme) (map snd caseSchemes))
+  tcase' <- mapM (inferCaseBranchM t1 tr) cases
+  constraints <- solveConstraints (concatMap (\(ConstrainedType cns tcase, _) -> cns) tcase' ++ ce1)
+  return (ConstrainedType constraints tr, ECase pos e1' (map snd tcase'))
 -- fresh x in a
 inferTypeExprM (EFresh pos x body) = do
   enterScopeM
@@ -361,15 +357,19 @@ inferTypeExprM (EFresh pos x body) = do
   exitScopeM
   return (schema, EFresh pos x body')
 
-inferCaseBranchM :: (ConstrainedType, Expr) -> CaseBranch -> M (ConstrainedType, CaseBranch)
-inferCaseBranchM (ConstrainedType ce1 te1, e1) (CaseBranch pos pattern body) = do
+inferCaseBranchM :: Type -> Type -> CaseBranch -> M (ConstrainedType, CaseBranch)
+inferCaseBranchM tguard tr (CaseBranch pos pattern body) = do
   setPosition pos
-  (ConstrainedType cpattern tpattern, pattern') <- inferTypeExprM pattern
   enterScopeM
-  patternConstraints <- unifyTypes te1 tpattern (union ce1 cpattern)
+  bound <- getAllBoundVars
+  let freeParamVars = exprFreeVariables bound pattern
+  mapM_ bindToFreshType freeParamVars
+  (ConstrainedType cpattern tpattern, pattern') <- inferTypeExprM pattern
+  unifyTypes tguard tpattern
   (ConstrainedType cbody tbody, body') <- inferTypeExprM body
+  unifyTypes tr tbody
   exitScopeM
-  return $ (ConstrainedType (union cbody patternConstraints) tbody, CaseBranch pos pattern' body')
+  return $ (ConstrainedType (union cbody cpattern) tbody, CaseBranch pos pattern' body')
 
 exprToType :: Expr -> Type
 exprToType (EVar _ x)     = TVar x
