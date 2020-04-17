@@ -23,7 +23,7 @@ import Calculus.Types(
          TypeScheme(..),  ConstrainedType(..), Type(..),
          substituteConstrainedType,
          constrainedTypeFreeVariables,
-         typeSchemeMetaVariables,
+         typeSchemeMetavariables,
          tFun, tInt
        )
 
@@ -75,7 +75,7 @@ freshTypeVar :: M Type
 freshTypeVar = do
   state <- getFS
   putFS (state { stateNextFresh = stateNextFresh state + 1 })
-  return $ TVar $ Name ("T#{" ++ show (stateNextFresh state) ++ "}")
+  return $ TVar $ Name ("t{" ++ show (stateNextFresh state) ++ "}")
 
 overrideType :: QName -> TypeScheme -> M ()
 overrideType varName typ = do
@@ -134,16 +134,10 @@ enterScopeM = modifyFS (\ state -> state {
                 stateEnvironment = M.empty : stateEnvironment state
               })
 
-getEnvironmentHead ::M (M.Map QName TypeScheme)
-getEnvironmentHead = do
+getEnvironment :: M [M.Map QName TypeScheme]
+getEnvironment = do
   state <- getFS
-  return $ head $ stateEnvironment state
-
-getEnvironmentTail ::M [M.Map QName TypeScheme]
-getEnvironmentTail = do
-  state <- getFS
-  return $ tail $ stateEnvironment state
-
+  return $ stateEnvironment state
 
 exitScopeM :: M ()
 exitScopeM = modifyFS (\ state -> state {
@@ -164,7 +158,8 @@ freshenVariables :: [QName] -> ConstrainedType -> M ConstrainedType
 freshenVariables names constrainedType = do
   sub <- M.fromList <$> mapM (\ name -> do ft <- freshType 
                                            return (name, ft)) names
-  return $ substituteConstrainedType sub constrainedType
+  constrainedType' <- unfoldConstrainedType constrainedType
+  return $ substituteConstrainedType sub constrainedType'
 
 lookupMetavar :: TypeMetavariable -> M (Maybe Type)
 lookupMetavar meta = do
@@ -271,22 +266,23 @@ representative (TMetavar x) = do
     Nothing -> return (TMetavar x)
 representative t            = return t
 
-headFreeMetaVars :: M (S.Set TypeMetavariable)
-headFreeMetaVars = do
-  rib <- getEnvironmentHead
-  schemesUnfolded <- mapM unfoldTypeScheme $ M.elems rib
-  return $ S.unions (map typeSchemeMetaVariables schemesUnfolded)
-
-taillFreeMetaVars :: M (S.Set TypeMetavariable)
-taillFreeMetaVars = do
-  ribs <- getEnvironmentTail
-  schemesUnfolded <- mapM unfoldTypeScheme $ (concatMap M.elems ribs)
-  return $ S.unions (map typeSchemeMetaVariables schemesUnfolded)
+generalizableMetavariables :: M [TypeMetavariable]
+generalizableMetavariables = do
+    rib  <- head <$> getEnvironment
+    ribs <- tail <$> getEnvironment
+    localMetavars <- getMetavars rib
+    fixedMetavars <- S.unions <$> mapM getMetavars ribs
+    return $ S.toList (S.difference localMetavars fixedMetavars)
+  where
+    getMetavars :: M.Map QName TypeScheme -> M (S.Set TypeMetavariable)
+    getMetavars rib = do
+      schemes <- mapM unfoldTypeScheme (M.elems rib)
+      return $ S.unions (map typeSchemeMetavariables schemes)
 
 unfoldTypeScheme :: TypeScheme -> M TypeScheme
-unfoldTypeScheme (TypeScheme names constrinedType) = do
-  constrinedType' <- unfoldConstrainedType constrinedType
-  return $ TypeScheme names constrinedType'
+unfoldTypeScheme (TypeScheme names constrainedType) = do
+  constrainedType' <- unfoldConstrainedType constrainedType
+  return $ TypeScheme names constrainedType'
 
 unfoldConstrainedType :: ConstrainedType -> M ConstrainedType
 unfoldConstrainedType (ConstrainedType typeConstraints typ) = do
@@ -300,21 +296,19 @@ unfoldTypeConstraint (TypeConstraint name typ) = do
   return $ TypeConstraint name typ'
 
 generalizeLocalVar :: [Type] -> QName -> TypeScheme -> M ()
-generalizeLocalVar genVars x (TypeScheme names constrinedType) = do
-  overrideType x (TypeScheme ((map unVar genVars) ++ names) constrinedType)
+generalizeLocalVar genVars x (TypeScheme names constrainedType) = do
+  overrideType x (TypeScheme ((map unVar genVars) ++ names) constrainedType)
   where
     unVar (TVar x) = x
-    unVar _        = error "IMPOSSIBLE"
+    unVar _        = error "(Generalized type must be a type variable)"
 
 generalizeLocalVars :: M ()
 generalizeLocalVars = do
-  headFreeMetaVars'  <- headFreeMetaVars
-  taillFreeMetaVars' <- taillFreeMetaVars
-  let genMetaVars = S.toList $ S.difference headFreeMetaVars' taillFreeMetaVars'
-  genVars <- mapM (const freshTypeVar) genMetaVars
-  mapM_ (uncurry setRepresentative) (zip genMetaVars genVars)
-  localVars <- getEnvironmentHead
-  mapM_ (uncurry $ generalizeLocalVar genVars) (M.toList localVars)
+  genMetavars <- generalizableMetavariables
+  genVars <- mapM (const freshTypeVar) genMetavars
+  mapM_ (uncurry setRepresentative) (zip genMetavars genVars)
+  rib <- head <$> getEnvironment
+  mapM_ (uncurry $ generalizeLocalVar genVars) (M.toList rib)
 
 unfoldType :: Type -> M Type
 unfoldType t = do
@@ -337,9 +331,8 @@ occursIn x t = do
       b2 <- occursIn x t2
       return (b1 || b2)
 
--- TODO: NO IMPLEMENTED
 solveConstraints :: [TypeConstraint] -> M [TypeConstraint]
-solveConstraints x = return x
+solveConstraints x = return x -- TODO: NOT IMPLEMENTED
 
 unifyTypes :: Type -> Type -> M ()
 unifyTypes t1 t2 = do
@@ -350,8 +343,8 @@ unifyTypes t1 t2 = do
     (TMetavar x, t) -> do
       b <- x `occursIn` t
       if b
-        then unifFailOccursCheck t1 t2
-        else setRepresentative x t
+       then unifFailOccursCheck t1 t2
+       else setRepresentative x t
     (t, TMetavar x) -> unifyTypes (TMetavar x) t
     (TVar a, TVar b) | a == b -> return ()
     (TApp t11 t12, TApp t21 t22) -> do unifyTypes t11 t21
@@ -378,28 +371,26 @@ inferTypeExprM (EVar pos x) = do
   return (constrainedType', EVar pos x)
 -- e1 e2
 inferTypeExprM (EApp pos e1 e2) = do
-  setPosition pos
-  (ConstrainedType tcs1 t1, e1') <- inferTypeExprM e1
-  (ConstrainedType tcs2 t2, e2') <- inferTypeExprM e2
+  (ConstrainedType c1 t1, e1') <- inferTypeExprM e1
+  (ConstrainedType c2 t2, e2') <- inferTypeExprM e2
   tr <- freshType
+  setPosition pos
   unifyTypes t1 (tFun t2 tr)
-  tcs <- solveConstraints (union tcs1 tcs2)
-  return (ConstrainedType tcs tr, (EApp pos e1' e2'))
+  constraints <- solveConstraints (union c1 c2)
+  return (ConstrainedType constraints tr, (EApp pos e1' e2'))
 -- \ e1 -> e2
 inferTypeExprM (ELambda pos e1 e2) = do
-  setPosition pos
   bound <- getAllBoundVars
   let freeParamVars = exprFreeVariables bound e1
-
    in do
     enterScopeM
     mapM_ bindToFreshType freeParamVars
     (ConstrainedType ce1 te1, e1') <- inferTypeExprM e1
     (ConstrainedType ce2 te2, e2') <- inferTypeExprM e2
     exitScopeM
-    return $ (ConstrainedType (union ce1 ce2) (tFun te1 te2), ELambda pos e1' e2')
--- let e1 = b1 ei = ...decls'
--- in ...body
+    return $ (ConstrainedType (union ce1 ce2) (tFun te1 te2),
+              ELambda pos e1' e2')
+-- let decls in body
 inferTypeExprM (ELet pos decls body) = do
   setPosition pos
   bound <- getAllBoundVars
@@ -410,15 +401,19 @@ inferTypeExprM (ELet pos decls body) = do
   (typeScheme, body') <- inferTypeExprM body
   exitScopeM
   return (typeScheme, ELet pos decls' body')
--- case e1 of c1 c2 .. cn
-inferTypeExprM (ECase pos e1 cases) = do
+-- case guard of branches
+inferTypeExprM (ECase pos guard branches) = do
   setPosition pos
-  (ConstrainedType ce1 t1, e1') <- inferTypeExprM e1 
-  tr <- freshType
-  tcase' <- mapM (inferCaseBranchM t1 tr) cases
-  constraints <- solveConstraints (concatMap (\(ConstrainedType cns tcase, _) -> cns) tcase' ++ ce1)
-  return (ConstrainedType constraints tr, ECase pos e1' (map snd tcase'))
--- fresh x in a
+  (ConstrainedType cguard tguard, guard') <- inferTypeExprM guard 
+  tresult  <- freshType
+  inferredBranches <- mapM (inferCaseBranchM tguard tresult) branches
+  let tbranches = map fst inferredBranches
+  let cbranches = concatMap (\ (ConstrainedType cns _) -> cns) tbranches
+  let branches' = map snd inferredBranches
+  constraints <- solveConstraints (cguard ++ cbranches)
+  return (ConstrainedType constraints tresult,
+          ECase pos guard' branches')
+-- fresh x in body
 inferTypeExprM (EFresh pos x body) = do
   enterScopeM
   bindToFreshType x
@@ -426,19 +421,22 @@ inferTypeExprM (EFresh pos x body) = do
   exitScopeM
   return (schema, EFresh pos x body')
 
-inferCaseBranchM :: Type -> Type -> CaseBranch -> M (ConstrainedType, CaseBranch)
-inferCaseBranchM tguard tr (CaseBranch pos pattern body) = do
-  setPosition pos
-  enterScopeM
+inferCaseBranchM :: Type -> Type -> CaseBranch
+                 -> M (ConstrainedType, CaseBranch)
+inferCaseBranchM tguard tresult (CaseBranch pos pattern body) = do
   bound <- getAllBoundVars
   let freeParamVars = exprFreeVariables bound pattern
+  enterScopeM
   mapM_ bindToFreshType freeParamVars
   (ConstrainedType cpattern tpattern, pattern') <- inferTypeExprM pattern
+  setPosition pos
   unifyTypes tguard tpattern
   (ConstrainedType cbody tbody, body') <- inferTypeExprM body
-  unifyTypes tr tbody
+  setPosition pos
+  unifyTypes tresult tbody
   exitScopeM
-  return $ (ConstrainedType (union cbody cpattern) tbody, CaseBranch pos pattern' body')
+  return $ (ConstrainedType (union cbody cpattern) tbody,
+            CaseBranch pos pattern' body')
 
 exprToType :: Expr -> Type
 exprToType (EVar _ x)     = TVar x
@@ -448,3 +446,4 @@ exprToType _              = error "(Malformed type)"
 constraintToTypeConstraint :: Constraint -> TypeConstraint
 constraintToTypeConstraint (Constraint _ className typeName) =
   TypeConstraint className (TVar typeName)
+

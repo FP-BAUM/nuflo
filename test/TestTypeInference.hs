@@ -188,20 +188,19 @@ tests = TestSuite "TYPE INFERENCE" [
       "        in f (f unit)"
     ]),
 
-    -- TODO: THIS ONE SHOULD BE UNCOMMENTED WHEN WE FINISH THE INFERING SYSTEM
-    -- testProgramOK "Let with implicit polymorphic declaration" (unlines [
-    --   "data Bool where true : Bool",
-    --   "data Unit where unit : Unit",
-    --   "main = let f x = true",
-    --   "        in f (f unit)"
-    -- ]),
+    testProgramOK "Let with implicit polymorphic declaration" (unlines [
+      "data Bool where true : Bool",
+      "data Unit where unit : Unit",
+      "main = let f x = true",
+      "        in f (f unit)"
+    ]),
 
     testProgramError "Let with non declared variable" (unlines [
       "main = (let f x = x in f) f"
     ]) TypeErrorUnboundVariable
   ],
 
-    TestSuite "Case of" [
+  TestSuite "Case" [
     testProgramOK "Empty case" (unlines [
       "main x = case x of"
     ]),

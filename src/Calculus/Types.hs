@@ -3,7 +3,7 @@ module Calculus.Types(
          TypeScheme(..),  ConstrainedType(..), Type(..),
          substituteConstrainedType,
          constrainedTypeFreeVariables,
-         typeSchemeMetaVariables,
+         typeSchemeMetavariables,
          tFun, tInt
        ) where
 
@@ -28,21 +28,28 @@ data Type = TMetavar TypeMetavariable
 
 type TypeSubstitution = M.Map QName Type
 
-typeMetaVars :: Type -> S.Set TypeMetavariable
-typeMetaVars (TVar name)        = S.empty
-typeMetaVars (TMetavar metaVar) = S.singleton metaVar
-typeMetaVars (TApp t1 t2)       = typeMetaVars t1 `S.union` typeMetaVars t2
+---- Metavariables
 
-typeConstraintMetaVariables :: TypeConstraint -> S.Set TypeMetavariable
-typeConstraintMetaVariables (TypeConstraint _ typ) = typeMetaVars typ
+typeSchemeMetavariables :: TypeScheme -> S.Set TypeMetavariable
+typeSchemeMetavariables (TypeScheme _ ctype) =
+  constrainedTypeMetavariables ctype
 
-constrainedTypeMetaVariables :: ConstrainedType -> S.Set TypeMetavariable
-constrainedTypeMetaVariables (ConstrainedType typeConstraints typ) =
-  let metaTCVars = S.unions $ map typeConstraintMetaVariables typeConstraints
-  in S.union metaTCVars (typeMetaVars typ)
+constrainedTypeMetavariables :: ConstrainedType -> S.Set TypeMetavariable
+constrainedTypeMetavariables (ConstrainedType typeConstraints typ) =
+  S.unions (map typeConstraintMetavariables typeConstraints)
+  `S.union`
+  typeMetavariables typ
 
-typeSchemeMetaVariables :: TypeScheme -> S.Set TypeMetavariable
-typeSchemeMetaVariables (TypeScheme _ ctype) = constrainedTypeMetaVariables ctype
+typeConstraintMetavariables :: TypeConstraint -> S.Set TypeMetavariable
+typeConstraintMetavariables (TypeConstraint _ typ) = typeMetavariables typ
+
+typeMetavariables :: Type -> S.Set TypeMetavariable
+typeMetavariables (TMetavar metaVar) = S.singleton metaVar
+typeMetavariables (TVar name)        = S.empty
+typeMetavariables (TApp t1 t2)       = typeMetavariables t1 `S.union`
+                                       typeMetavariables t2
+
+---- Free variables
 
 typeConstraintFreeVariables :: TypeConstraint -> S.Set QName
 typeConstraintFreeVariables (TypeConstraint _ typ) = typeFreeVariables typ
@@ -58,6 +65,8 @@ typeFreeVariables (TMetavar _) = S.empty
 typeFreeVariables (TVar name) = S.fromList [name]
 typeFreeVariables (TApp typ1 typ2) =
   typeFreeVariables typ1 `S.union` typeFreeVariables typ2
+
+---- Apply a substitution
 
 substituteConstraint :: TypeSubstitution -> TypeConstraint -> TypeConstraint
 substituteConstraint sub (TypeConstraint cls typ) =
@@ -75,13 +84,15 @@ substituteConstrainedType sub (ConstrainedType constraints typ) =
   ConstrainedType (map (substituteConstraint sub) constraints)
                   (substituteType sub typ)
 
+---- Type constants
+
 tFun :: Type -> Type -> Type
 tFun = TApp . TApp (TVar operatorArrow)
 
 tInt :: Type
 tInt = TVar primitiveInt
 
-----
+---- Show
 
 joinS :: String -> [String] -> String
 joinS _   []       = ""
