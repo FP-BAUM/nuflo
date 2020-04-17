@@ -7,7 +7,7 @@ module Calculus.Types(
          tFun, tInt
        ) where
 
-import Syntax.Name(QName(..), operatorArrow, primitiveInt)
+import Syntax.Name(QName(..), primitiveArrow, primitiveInt)
 import qualified Data.Set as S
 import qualified Data.Map as M
 
@@ -87,7 +87,7 @@ substituteConstrainedType sub (ConstrainedType constraints typ) =
 ---- Type constants
 
 tFun :: Type -> Type -> Type
-tFun = TApp . TApp (TVar operatorArrow)
+tFun = TApp . TApp (TVar primitiveArrow)
 
 tInt :: Type
 tInt = TVar primitiveInt

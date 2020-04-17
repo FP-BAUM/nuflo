@@ -18,7 +18,7 @@ import qualified Data.Set as S
 import Data.Maybe(fromJust)
 
 import Position(Position)
-import Syntax.Name(QName, operatorArrow)
+import Syntax.Name(QName, primitiveArrow)
 
 data AnnProgram a = Program {
                       programDeclarations :: [AnnDeclaration a]
@@ -106,7 +106,7 @@ exprAnnotation (ECase a _ _)   = a
 exprAnnotation (EFresh a _ _)  = a
 
 exprIsFunctionType :: AnnExpr a -> Bool
-exprIsFunctionType (EApp _ (EApp _ (EVar _ op) _) _) = op == operatorArrow
+exprIsFunctionType (EApp _ (EApp _ (EVar _ op) _) _) = op == primitiveArrow
 exprIsFunctionType _                                 = False
 
 exprFunctionTypeCodomain :: AnnExpr a -> AnnExpr a

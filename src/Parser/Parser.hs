@@ -10,7 +10,7 @@ import Syntax.Name(
          QName(..), readName, qualify, moduleNameFromQName,
          isWellFormedOperatorName, unqualifiedName, splitParts,
          allNameParts,
-         modulePRIM, moduleMain, arrowSymbol, operatorArrow, primitiveInt
+         modulePRIM, moduleMain, arrowSymbol, primitiveArrow, primitiveInt
        )
 import Syntax.AST(
          AnnProgram(..), Program,
@@ -296,7 +296,7 @@ parseM = do
   enterModule modulePRIM
   exportAllNamesFromModuleM modulePRIM
   declareQNameM primitiveInt
-  declareOperatorM RightAssoc 50 operatorArrow
+  declareOperatorM RightAssoc 50 primitiveArrow
 
   -- Parse
   decls <- parseModules 

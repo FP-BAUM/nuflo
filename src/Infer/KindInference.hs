@@ -7,7 +7,7 @@ import qualified Data.Map as M
 import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Error(Error(..), ErrorType(..))
 import Position(Position(..), unknownPosition)
-import Syntax.Name(QName, operatorArrow, primitiveInt)
+import Syntax.Name(QName, primitiveArrow, primitiveInt)
 import Syntax.AST(
          AnnProgram(..), Program,
          AnnDeclaration(..), Declaration,
@@ -142,7 +142,7 @@ getClassTypeKindM className = do
 inferKindProgramM :: Program -> M ()
 inferKindProgramM (Program decls) = do
   -- Initialize primitive types
-  bindKind operatorArrow (KFun KType (KFun KType KType))
+  bindKind primitiveArrow (KFun KType (KFun KType KType))
   bindKind primitiveInt KType
   -- Infer kinds of all declarations
   mapM_ declareTypeM decls

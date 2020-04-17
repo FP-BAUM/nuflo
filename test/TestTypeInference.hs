@@ -35,23 +35,24 @@ tests :: Test
 tests = TestSuite "TYPE INFERENCE" [
 
   TestSuite "Int" [
-    testProgramOK "Simple Integer" (unlines [
+
+    testProgramOK "Simple integer" (unlines [
       "main : Int",
       "main = 1"
     ]),
 
-    testProgramError "failing case with wrong signature" (unlines [
-      "data Bool where",
-      "  true : Bool",
-      "main : Bool",
-      "main = 1"
-    ]) TypeErrorUnificationClash,
-
-    testProgramError "failing case with wrong Body" (unlines [
+    testProgramError "Reject non-int declared as int" (unlines [
       "data Bool where",
       "  true : Bool",
       "main : Int",
       "main = true"
+    ]) TypeErrorUnificationClash,
+
+    testProgramError "Reject int declared as non-int" (unlines [
+      "data Bool where",
+      "  true : Bool",
+      "main : Bool",
+      "main = 1"
     ]) TypeErrorUnificationClash
   ],
 
@@ -117,16 +118,17 @@ tests = TestSuite "TYPE INFERENCE" [
   ],
 
   TestSuite "Lambda" [
+
     testProgramOK "Simple Lambda" (unlines [
       "main = \\ x -> x"
     ]),
 
-    testProgramOK "Lambda with simple data structures" (unlines [
+    testProgramOK "Pattern matching - constant constructor" (unlines [
       "data Bool where { True : Bool }",
       "main = (\\ True -> True) True"
     ]),
 
-    testProgramOK "Lambda with complex use of data structures and pattern matching" (unlines [
+    testProgramOK "Pattern matching - binding" (unlines [
       "data Bool where",
       " true : Bool",
       "data List a where",
@@ -136,7 +138,7 @@ tests = TestSuite "TYPE INFERENCE" [
       "main = (\\ (cons x xs) -> x) (cons true nil)"
     ]),
 
-    testProgramError "Lambda with wrong function type definintion" (unlines [
+    testProgramError "Match type with arrow" (unlines [
       "data Bool where",
       " true : Bool",
       "data List a where",
@@ -146,13 +148,13 @@ tests = TestSuite "TYPE INFERENCE" [
       "main = (\\ (cons x xs) -> x) (cons true nil)"
     ]) TypeErrorUnificationClash,
 
-    testProgramError "Lambda with wrong uses of data structures" (unlines [
+    testProgramError "Match type of argument" (unlines [
       "data Bool where { True : Bool }",
       "data Unit where { unit : Unit }",
       "main = (\\ unit -> True) True"
     ]) TypeErrorUnificationClash,
 
-    testProgramError "lambda with a unbounded variable" (unlines [
+    testProgramError "Reject unbound variable" (unlines [
       "main = \\ x -> y"
     ]) TypeErrorUnboundVariable
   ],
@@ -164,7 +166,7 @@ tests = TestSuite "TYPE INFERENCE" [
       "main = let x = true in x"
     ]),
 
-    testProgramOK "Let defining two let variables" (unlines [
+    testProgramOK "Allow many definitions" (unlines [
       "data Bool where",
       " true : Bool",
       " false : Bool",
@@ -172,7 +174,7 @@ tests = TestSuite "TYPE INFERENCE" [
       "main = let x = true ; y = false in x"
     ]),
 
-    testProgramOK "Let with function declaration" (unlines [
+    testProgramOK "Allow function definitions" (unlines [
       "data Bool where",
       " true : Bool",
       " false : Bool",
@@ -180,7 +182,7 @@ tests = TestSuite "TYPE INFERENCE" [
       "main = let f x = x ; x = true in f x"
     ]),
 
-    testProgramOK "Let with explicit polymorphic declaration" (unlines [
+    testProgramOK "Explicit polymorphic declaration" (unlines [
       "data Bool where true : Bool",
       "data Unit where unit : Unit",
       "main = let f : a -> Bool",
@@ -188,14 +190,14 @@ tests = TestSuite "TYPE INFERENCE" [
       "        in f (f unit)"
     ]),
 
-    testProgramOK "Let with implicit polymorphic declaration" (unlines [
+    testProgramOK "Implicit polymorphic declaration" (unlines [
       "data Bool where true : Bool",
       "data Unit where unit : Unit",
       "main = let f x = true",
       "        in f (f unit)"
     ]),
 
-    testProgramError "Let with non declared variable" (unlines [
+    testProgramError "Exit scope after let" (unlines [
       "main = (let f x = x in f) f"
     ]) TypeErrorUnboundVariable
   ],
@@ -205,23 +207,20 @@ tests = TestSuite "TYPE INFERENCE" [
       "main x = case x of"
     ]),
 
-    testProgramOK "Simple case with simple branch" (unlines [
+    testProgramOK "Simple case" (unlines [
       "main x = case x of x -> x"
     ]),
 
-    testProgramOK "Case with boolean pattern matching" (unlines [
+    testProgramOK "Non-binding pattern matching" (unlines [
       "data Bool where",
       " true : Bool",
       " false : Bool",
-      "data List a where",
-      " nil  : List a",
-      " cons : a -> List a -> List a",
       "main x = case x of",
-      " false   -> true",
-      " a   -> a"
+      " false -> true",
+      " a     -> a"
     ]),
 
-    testProgramOK "Case with list pattern matching" (unlines [
+    testProgramOK "Binding pattern matching" (unlines [
       "data Bool where",
       " true : Bool",
       " false : Bool",
@@ -229,11 +228,11 @@ tests = TestSuite "TYPE INFERENCE" [
       " nil  : List a",
       " cons : a -> List a -> List a",
       "main x = case x of",
-      " (cons y ys)   -> false",
-      " nil   -> true"
+      " (cons y ys) -> false",
+      " nil         -> true"
     ]),
 
-    testProgramError "Case when the type of the patterns don't match" (unlines [
+    testProgramError "Reject patterns of different types" (unlines [
       "data Bool where",
       " true : Bool",
       " false : Bool",
@@ -241,11 +240,11 @@ tests = TestSuite "TYPE INFERENCE" [
       " nil  : List a",
       " cons : a -> List a -> List a",
       "main x = case x of",
-      " (cons y ys)   -> false",
-      " true   -> true"
+      " (cons y ys) -> false",
+      " true        -> true"
     ]) TypeErrorUnificationClash,
 
-    testProgramError "Case when the type of the case's bodies don't match" (unlines [
+    testProgramError "Reject branches of different types" (unlines [
       "data Bool where",
       " true : Bool",
       " false : Bool",
@@ -253,8 +252,8 @@ tests = TestSuite "TYPE INFERENCE" [
       " nil  : List a",
       " cons : a -> List a -> List a",
       "main x = case x of",
-      " (cons y ys)   -> nil",
-      " nil   -> true"
+      " (cons y ys) -> nil",
+      " nil         -> true"
     ]) TypeErrorUnificationClash
   ],
 
@@ -263,16 +262,16 @@ tests = TestSuite "TYPE INFERENCE" [
       "main = fresh x in x"
     ]),
 
-    testProgramOK "Defining fresh function" (unlines [
+    testProgramOK "Fresh function" (unlines [
       "data Pair a b where { pair : a -> b -> Pair a b }",
       "main = fresh f in pair (f 1) (f 2)"
     ]),
 
-    testProgramError "Fail case" (unlines [
+    testProgramError "Reject fresh variable (occurs check)" (unlines [
       "main = fresh x in x x"
     ]) TypeErrorUnificationOccursCheck,
 
-    testProgramError "Fail fresh function" (unlines [
+    testProgramError "Reject fresh variable (clashing types)" (unlines [
       "data Bool where { true : Bool }",
       "data Pair a b where { pair : a -> b -> Pair a b }",
       "main = fresh f in pair (f 1) (f true)"
