@@ -3,6 +3,7 @@ module Calculus.Types(
          TypeScheme(..),  ConstrainedType(..), Type(..),
          substituteConstrainedType,
          constrainedTypeFreeVariables,
+         typeSchemeMetaVariables,
          tFun, tInt
        ) where
 
@@ -26,6 +27,22 @@ data Type = TMetavar TypeMetavariable
           deriving Eq
 
 type TypeSubstitution = M.Map QName Type
+
+typeMetaVars :: Type -> S.Set TypeMetavariable
+typeMetaVars (TVar name)        = S.empty
+typeMetaVars (TMetavar metaVar) = S.singleton metaVar
+typeMetaVars (TApp t1 t2)       = typeMetaVars t1 `S.union` typeMetaVars t2
+
+typeConstraintMetaVariables :: TypeConstraint -> S.Set TypeMetavariable
+typeConstraintMetaVariables (TypeConstraint _ typ) = typeMetaVars typ
+
+constrainedTypeMetaVariables :: ConstrainedType -> S.Set TypeMetavariable
+constrainedTypeMetaVariables (ConstrainedType typeConstraints typ) =
+  let metaTCVars = S.unions $ map typeConstraintMetaVariables typeConstraints
+  in S.union metaTCVars (typeMetaVars typ)
+
+typeSchemeMetaVariables :: TypeScheme -> S.Set TypeMetavariable
+typeSchemeMetaVariables (TypeScheme _ ctype) = constrainedTypeMetaVariables ctype
 
 typeConstraintFreeVariables :: TypeConstraint -> S.Set QName
 typeConstraintFreeVariables (TypeConstraint _ typ) = typeFreeVariables typ

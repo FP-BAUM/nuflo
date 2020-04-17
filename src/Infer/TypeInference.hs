@@ -23,6 +23,7 @@ import Calculus.Types(
          TypeScheme(..),  ConstrainedType(..), Type(..),
          substituteConstrainedType,
          constrainedTypeFreeVariables,
+         typeSchemeMetaVariables,
          tFun, tInt
        )
 
@@ -69,6 +70,18 @@ freshType = do
   state <- getFS
   putFS (state { stateNextFresh = stateNextFresh state + 1 })
   return $ TMetavar (stateNextFresh state)
+
+freshTypeVar :: M Type
+freshTypeVar = do
+  state <- getFS
+  putFS (state { stateNextFresh = stateNextFresh state + 1 })
+  return $ TVar $ Name ("T#{" ++ show (stateNextFresh state) ++ "}")
+
+overrideType :: QName -> TypeScheme -> M ()
+overrideType varName typ = do
+  state <- getFS
+  let (rib : ribs) = stateEnvironment state in
+   putFS (state { stateEnvironment = M.insert varName typ rib : ribs })
 
 bindType :: QName -> TypeScheme -> M ()
 bindType varName typ = do
@@ -121,9 +134,20 @@ enterScopeM = modifyFS (\ state -> state {
                 stateEnvironment = M.empty : stateEnvironment state
               })
 
+getEnvironmentHead ::M (M.Map QName TypeScheme)
+getEnvironmentHead = do
+  state <- getFS
+  return $ head $ stateEnvironment state
+
+getEnvironmentTail ::M [M.Map QName TypeScheme]
+getEnvironmentTail = do
+  state <- getFS
+  return $ tail $ stateEnvironment state
+
+
 exitScopeM :: M ()
 exitScopeM = modifyFS (\ state -> state {
-               stateEnvironment = tail (stateEnvironment state)
+               stateEnvironment = tail $ stateEnvironment state
              })
 
 allTypeConstants :: M (S.Set QName)
@@ -247,6 +271,51 @@ representative (TMetavar x) = do
     Nothing -> return (TMetavar x)
 representative t            = return t
 
+headFreeMetaVars :: M (S.Set TypeMetavariable)
+headFreeMetaVars = do
+  rib <- getEnvironmentHead
+  schemesUnfolded <- mapM unfoldTypeScheme $ M.elems rib
+  return $ S.unions (map typeSchemeMetaVariables schemesUnfolded)
+
+taillFreeMetaVars :: M (S.Set TypeMetavariable)
+taillFreeMetaVars = do
+  ribs <- getEnvironmentTail
+  schemesUnfolded <- mapM unfoldTypeScheme $ (concatMap M.elems ribs)
+  return $ S.unions (map typeSchemeMetaVariables schemesUnfolded)
+
+unfoldTypeScheme :: TypeScheme -> M TypeScheme
+unfoldTypeScheme (TypeScheme names constrinedType) = do
+  constrinedType' <- unfoldConstrainedType constrinedType
+  return $ TypeScheme names constrinedType'
+
+unfoldConstrainedType :: ConstrainedType -> M ConstrainedType
+unfoldConstrainedType (ConstrainedType typeConstraints typ) = do
+  typeConstraints' <- mapM unfoldTypeConstraint typeConstraints
+  typ' <- unfoldType typ
+  return $ ConstrainedType typeConstraints' typ'
+
+unfoldTypeConstraint :: TypeConstraint -> M TypeConstraint
+unfoldTypeConstraint (TypeConstraint name typ) = do
+  typ' <- unfoldType typ
+  return $ TypeConstraint name typ'
+
+generalizeLocalVar :: [Type] -> QName -> TypeScheme -> M ()
+generalizeLocalVar genVars x (TypeScheme names constrinedType) = do
+  overrideType x (TypeScheme ((map unVar genVars) ++ names) constrinedType)
+  where
+    unVar (TVar x) = x
+    unVar _        = error "IMPOSSIBLE"
+
+generalizeLocalVars :: M ()
+generalizeLocalVars = do
+  headFreeMetaVars'  <- headFreeMetaVars
+  taillFreeMetaVars' <- taillFreeMetaVars
+  let genMetaVars = S.toList $ S.difference headFreeMetaVars' taillFreeMetaVars'
+  genVars <- mapM (const freshTypeVar) genMetaVars
+  mapM_ (uncurry setRepresentative) (zip genMetaVars genVars)
+  localVars <- getEnvironmentHead
+  mapM_ (uncurry $ generalizeLocalVar genVars) (M.toList localVars)
+
 unfoldType :: Type -> M Type
 unfoldType t = do
   t' <- representative t
@@ -337,7 +406,7 @@ inferTypeExprM (ELet pos decls body) = do
   enterScopeM
   mapM_ collectSignaturesM decls
   decls' <- inferTypeDeclarationsM decls
-  -- TODO: generalize signature types
+  generalizeLocalVars
   (typeScheme, body') <- inferTypeExprM body
   exitScopeM
   return (typeScheme, ELet pos decls' body')
