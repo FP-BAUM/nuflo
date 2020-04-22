@@ -88,6 +88,7 @@ data AnnCaseBranch a = CaseBranch {
 -- Annotated expression
 data AnnExpr a =
     EVar a QName                           -- variable
+  | EUnboundVar a QName                    -- force unbound variable
   | EInt a Integer                         -- integer constant
   | EApp a (AnnExpr a) (AnnExpr a)         -- application
   | ELambda a (AnnExpr a) (AnnExpr a)      -- lambda
@@ -97,13 +98,14 @@ data AnnExpr a =
   deriving Eq
 
 exprAnnotation :: AnnExpr a -> a
-exprAnnotation (EVar a _)      = a
-exprAnnotation (EInt a _)      = a
-exprAnnotation (EApp a _ _)    = a
-exprAnnotation (ELambda a _ _) = a
-exprAnnotation (ELet a _ _)    = a
-exprAnnotation (ECase a _ _)   = a
-exprAnnotation (EFresh a _ _)  = a
+exprAnnotation (EVar a _)        = a
+exprAnnotation (EUnboundVar a _) = a
+exprAnnotation (EInt a _)        = a
+exprAnnotation (EApp a _ _)      = a
+exprAnnotation (ELambda a _ _)   = a
+exprAnnotation (ELet a _ _)      = a
+exprAnnotation (ECase a _ _)     = a
+exprAnnotation (EFresh a _ _)    = a
 
 exprIsFunctionType :: AnnExpr a -> Bool
 exprIsFunctionType (EApp _ (EApp _ (EVar _ op) _) _) = op == primitiveArrow
@@ -166,6 +168,7 @@ instance EraseAnnotations AnnCaseBranch where
 
 instance EraseAnnotations AnnExpr where
   eraseAnnotations (EVar _ q)          = EVar () q
+  eraseAnnotations (EUnboundVar _ q)   = EUnboundVar () q
   eraseAnnotations (EInt _ n)          = EInt () n
   eraseAnnotations (EApp _ e1 e2)      = EApp () (eraseAnnotations e1)
                                                  (eraseAnnotations e2)
@@ -196,11 +199,11 @@ exprHeadArguments (EApp _ e1 e2) = do
   return (args ++ [e2])
 exprHeadArguments _             = Nothing
 
-
 exprFreeVariables :: S.Set QName -> AnnExpr a -> S.Set QName
 exprFreeVariables bound (EVar _ x)        = if x `S.member` bound
                                              then S.empty
                                              else S.fromList [x]
+exprFreeVariables bound (EUnboundVar _ x) = S.fromList [x]
 exprFreeVariables bound (EInt _ _)        = S.empty
 exprFreeVariables bound (EApp _ e1 e2)    = exprFreeVariables bound e1 `S.union`
                                             exprFreeVariables bound e2
@@ -294,6 +297,7 @@ showOptionalConstraints cs =
 
 instance Show (AnnExpr a) where
   show (EVar _ qname)         = show qname
+  show (EUnboundVar _ qname)  = "." ++ show qname
   show (EInt _ n)             = show n
   show (EApp _ f x)           = "(" ++ show f ++ " " ++ show x ++ ")"
   show (ELambda _ param body) =

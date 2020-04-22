@@ -278,6 +278,38 @@ tests = TestSuite "TYPE INFERENCE" [
     ]) TypeErrorUnificationClash
   ],
 
+  TestSuite "Explicitly unbound variables" [
+
+    testProgramError "Lambda does not bind already bound variable" (unlines [
+      "data Bool where",
+      "  true : Bool",
+      "main : Bool -> Bool",
+      "main x = (\\ x -> true) 1"
+    ]) TypeErrorUnificationClash,
+
+    testProgramOK "Lambda binds explicitly unbound variable" (unlines [
+      "data Bool where",
+      "  true : Bool",
+      "main : Bool -> Bool",
+      "main x = (\\ .x -> true) 1"
+    ]),
+
+    testProgramError "Case does not bind already bound variable" (unlines [
+      "data Bool where",
+      "  true : Bool",
+      "main : Bool -> Bool",
+      "main x = case 1 of { x -> true }"
+    ]) TypeErrorUnificationClash,
+
+    testProgramOK "Case binds explicitly unbound variable" (unlines [
+      "data Bool where",
+      "  true : Bool",
+      "main : Bool -> Bool",
+      "main x = case 1 of { .x -> true }"
+    ])
+
+  ],
+
   testProgramError "Reject unbound variable" (unlines [
     "f x = y"
   ]) TypeErrorUnboundVariable,

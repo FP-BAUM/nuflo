@@ -291,6 +291,7 @@ inferKindEquationM (Equation pos lhs rhs) = do
 
 inferKindExpressionM :: Expr -> M ()
 inferKindExpressionM (EVar _ _)           = return ()
+inferKindExpressionM (EUnboundVar _ _)    = return ()
 inferKindExpressionM (EInt _ _)           = return ()
 inferKindExpressionM (EApp _ f x)         = do inferKindExpressionM f
                                                inferKindExpressionM x

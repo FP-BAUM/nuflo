@@ -387,13 +387,17 @@ parseQName = do
     _ ->
       return $ readName id
 
-parseAndResolveQName :: M QName
-parseAndResolveQName = do
-  qname <- parseQName
+resolveQName :: QName -> M QName
+resolveQName qname = do
   state <- getFS
   case resolveName (stateRootModule state) (stateNameContext state) qname of
     Left  errmsg -> failM ModuleSystemError errmsg
     Right qname' -> return qname'
+
+parseAndResolveQName :: M QName
+parseAndResolveQName = do
+  qname <- parseQName
+  resolveQName qname
 
 peekAndResolveQName :: M (Maybe QName)
 peekAndResolveQName = do
@@ -414,6 +418,11 @@ parseId = do
     _       -> failM ParseErrorExpectedId
                      ("Expected an identifier.\n" ++
                       "Got: " ++ show t ++ ".")
+
+parseAndResolveId :: M QName
+parseAndResolveId = do
+  id <- parseId
+  resolveQName (Name id)
 
 parseInt :: M Integer
 parseInt = do
@@ -956,19 +965,23 @@ parseAtom :: M Expr
 parseAtom = do
   t <- peekType
   case t of
-    T_Id _   -> do pos    <- currentPosition
-                   qname  <- parseAndResolveQName
-                   isOp   <- isOperatorPartM qname 
+    T_Id _   -> do pos   <- currentPosition
+                   qname <- parseAndResolveQName
+                   isOp  <- isOperatorPartM qname 
                    if isOp
                     then failM ParseErrorOperatorPartUsedAsVariable
                                ("Operator part: " ++ show qname ++
                                 " cannot be used as a variable.")
                     else return $ EVar pos qname
-    T_Int n  -> do pos    <- currentPosition
+    T_Dot    -> do pos   <- currentPosition
+                   match T_Dot
+                   qname <- parseAndResolveId
+                   return $ EUnboundVar pos qname
+    T_Int n  -> do pos <- currentPosition
                    getToken
                    return $ EInt pos n
     T_LParen -> do match T_LParen
-                   expr   <- parseExpr
+                   expr <- parseExpr
                    match T_RParen
                    return expr
     _      -> failM ParseErrorExpectedExpression

@@ -139,6 +139,7 @@ or
          | <atom> <expr>
 
 <atom> ::= <qname>
+         | DOT ID
          | INT
          | LPAREN <expr> RPAREN
          | LET LBRACE <declaration*> RBRACE IN <expr>

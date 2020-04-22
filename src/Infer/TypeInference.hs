@@ -369,6 +369,8 @@ inferTypeExprM (EVar pos x) = do
   TypeScheme gvars constrainedType <- lookupType x
   constrainedType' <- freshenVariables gvars constrainedType -- Instantiate
   return (constrainedType', EVar pos x)
+-- .x
+inferTypeExprM (EUnboundVar pos x) = inferTypeExprM (EVar pos x)
 -- e1 e2
 inferTypeExprM (EApp pos e1 e2) = do
   (ConstrainedType c1 t1, e1') <- inferTypeExprM e1
