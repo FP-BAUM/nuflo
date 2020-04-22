@@ -148,11 +148,6 @@ inferKindProgramM (Program decls) = do
   mapM_ declareTypeM decls
   mapM_ inferKindDeclarationM decls
 
--- Split the left-hand side in the definition of a datatype,
--- such as "Map a b" into the head "Map" and the arguments ["a", "b"]
--- checking that it is well-formed.
---
--- All the arguments should be variables.
 splitDatatypeArgs :: Expr -> M (QName, [QName])
 splitDatatypeArgs (EApp _ f (EVar _ x)) = do
   (head, args) <- splitDatatypeArgs f

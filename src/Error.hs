@@ -46,6 +46,7 @@ data ErrorType =
   | TypeErrorUnboundVariable
   | TypeErrorUnificationOccursCheck
   | TypeErrorUnificationClash
+  | TypeErrorSynonymLoop
   deriving (Eq, Show)
 
 errorAtUnknown :: ErrorType -> String -> Error

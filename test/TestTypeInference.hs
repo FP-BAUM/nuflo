@@ -310,6 +310,79 @@ tests = TestSuite "TYPE INFERENCE" [
 
   ],
 
+  TestSuite "Type synonyms" [
+
+    testProgramOK "Type synonym without parameters" (unlines [
+      "type I = Int",
+      "type II = I -> I",
+      "a : I",
+      "a = 3",
+      "z : II",
+      "z x = a",
+      "f : II -> II",
+      "f h n = h (z 10)"
+    ]),
+
+    testProgramError "Type synonym without parameters - fail" (unlines [
+      "data Bool where { true : Bool }",
+      "type I = Int",
+      "type II = I -> I",
+      "a : I",
+      "a = 3",
+      "z : II",
+      "z x = a",
+      "f : II -> II",
+      "f h n = h (z true)"
+    ]) TypeErrorUnificationClash,
+
+    testProgramOK "Type synonym with parameters" (unlines [
+      "type FF f a = f a -> f a",
+      "type GG a = a -> a",
+      "f : FF GG Int",
+      "f h n = h n"
+    ]),
+
+    testProgramOK "Partially applied type synonym" (unlines [
+      "data List a where { nil : List a ; cons : a -> List a -> List a }",
+      "data Bool where { true : Bool }",
+      "type FF f a b = f b -> f a",
+      "f : FF List Int Bool",
+      "f (cons true nil) = cons 1 nil"
+    ]),
+
+    testProgramError "Partially applied type synonym - fail" (unlines [
+      "data List a where { nil : List a ; cons : a -> List a -> List a }",
+      "data Bool where { true : Bool }",
+      "type FF f a b = f b -> f a",
+      "f : FF List Int Bool",
+      "f (cons 1 nil) = cons 1 nil"
+    ]) TypeErrorUnificationClash,
+
+    TestSuite "Reject loops" [
+      testProgramError "Reject simple loop" (unlines [
+        "type A = A",
+        "main : A",
+        "main = 1"
+      ]) TypeErrorSynonymLoop,
+
+      testProgramError "Reject indirect loop" (unlines [
+        "type A = B",
+        "type B = C",
+        "type C = A",
+        "main : B",
+        "main = 1"
+      ]) TypeErrorSynonymLoop,
+
+      testProgramError "Reject loop in functions" (unlines [
+        "type F a b = G a",
+        "type G a = F a a",
+        "main : F Int Int",
+        "main = 1"
+      ]) TypeErrorSynonymLoop
+    ]
+
+  ],
+
   testProgramError "Reject unbound variable" (unlines [
     "f x = y"
   ]) TypeErrorUnboundVariable,

@@ -16,7 +16,8 @@ import Syntax.AST(
          AnnEquation(..), Equation,
          AnnConstraint(..), Constraint,
          AnnCaseBranch(..), CaseBranch,
-         AnnExpr(..), Expr, exprHeadVariable, exprFreeVariables
+         AnnExpr(..), Expr, exprHeadVariable, exprFreeVariables,
+         splitDatatypeArgsOrFail
        )
 import Calculus.Types(
          TypeMetavariable, TypeConstraint(..),
@@ -33,6 +34,7 @@ inferTypes program = evalFS (inferTypeProgramM program) initialState
                          statePosition      = unknownPosition
                        , stateNextFresh     = 0
                        , stateTypeConstants = S.empty
+                       , stateTypeSynonyms  = M.empty
                        , stateEnvironment   = [M.empty]
                        , stateSubstitution  = M.empty
                        }
@@ -44,9 +46,11 @@ data TypeInferState =
        statePosition      :: Position
      , stateNextFresh     :: Integer
      , stateTypeConstants :: S.Set QName -- Type constructors and synonyms
+     , stateTypeSynonyms  :: TypeSynonymTable
      , stateEnvironment   :: [M.Map QName TypeScheme] -- Non-empty stack (ribs)
      , stateSubstitution :: M.Map TypeMetavariable Type 
      }
+type TypeSynonymTable = M.Map QName ([QName], Type)
 
 type M = FailState TypeInferState
 
@@ -148,7 +152,8 @@ allTypeConstants = do
   return $ stateTypeConstants state
 
 addTypeConstant :: QName -> M ()
-addTypeConstant name =  modifyFS (\ state ->
+addTypeConstant name =
+  modifyFS (\ state ->
     state { stateTypeConstants = S.insert name (stateTypeConstants state) }
   )
 
@@ -163,6 +168,13 @@ lookupMetavar :: TypeMetavariable -> M (Maybe Type)
 lookupMetavar meta = do
   state <- getFS
   return $ M.lookup meta (stateSubstitution state)
+
+defineTypeSynonym :: QName -> [QName] -> Type -> M ()
+defineTypeSynonym name args value =
+  modifyFS (\ state ->
+    state { stateTypeSynonyms = M.insert name (args, value)
+                                              (stateTypeSynonyms state) }
+  )
 
 ---- Type inference algorithm
 
@@ -182,7 +194,8 @@ collectTypeDeclarationM (TypeDeclaration pos typ value) = do
   case exprHeadVariable typ of
     Just name -> addTypeConstant name
     _ -> error "Type has no head variable"
-  error "NOT FULLY IMPLEMENTED -- TODO: RECORD TYPE SYNONYM DECLARATION"
+  let (name, args) = splitDatatypeArgsOrFail typ in
+    defineTypeSynonym name args (exprToType value)
 collectTypeDeclarationM (DataDeclaration _ typ _) = do
   case exprHeadVariable typ of
     Just name -> addTypeConstant name
@@ -209,8 +222,9 @@ inferTypeDeclarationM :: Declaration -> M Declaration
 inferTypeDeclarationM decl@(DataDeclaration _ _ _) =
   -- TODO: transform constraints in constructor signatures
   return decl
-inferTypeDeclarationM (TypeDeclaration pos typ value) =
-  error "NOT IMPLEMENTED"
+inferTypeDeclarationM decl@(TypeDeclaration _ _ _) =
+  -- TODO: transform constraints in constructor signatures
+  return decl
 inferTypeDeclarationM (ValueDeclaration equation) = do
   equation' <- inferTypeEquationM equation
   return $ ValueDeclaration equation'
@@ -263,6 +277,52 @@ representative (TMetavar x) = do
     Just t  -> representative t
     Nothing -> return (TMetavar x)
 representative t            = return t
+
+-- Normalize a type to weak head normal form (using type synonyms).
+weaklyHeadNormalizeType :: Type -> M Type
+weaklyHeadNormalizeType typ = do
+    table <- stateTypeSynonyms <$> getFS
+    typ'  <- unfoldType typ
+    rec table [] typ'
+  where
+    rec table forbidden typ = do
+      let (head, args) = splitHeadArgs typ
+      case head of
+        TVar f | canApplyT table f args
+               -> if f `elem` forbidden
+                   then failM TypeErrorSynonymLoop
+                              ("Loop in type synonyms. Chain of calls:\n" ++
+                               unlines (map (\ x -> "  " ++ show x)
+                                            (reverse forbidden)))
+                   else rec table (f : forbidden) (applyT table f args)
+        _      -> return $ foldl TApp head args
+
+    splitHeadArgs :: Type -> (Type, [Type])
+    splitHeadArgs (TMetavar x) = (TMetavar x, [])
+    splitHeadArgs (TVar x)     = (TVar x, [])
+    splitHeadArgs (TApp t1 t2) =
+      let (head, args) = splitHeadArgs t1
+       in (head, args ++ [t2])
+
+    canApplyT :: TypeSynonymTable -> QName -> [Type] -> Bool
+    canApplyT table f args =
+      M.member f table &&
+      let (params, _) = M.findWithDefault undefined f table in
+        length args >= length params
+
+    applyT :: TypeSynonymTable -> QName -> [Type] -> Type
+    applyT table f args =
+      let (params, value)        = M.findWithDefault undefined f table
+          (args', remainingArgs) = splitAt (length params) args
+       in foldl TApp
+                (instantiateT value (M.fromList (zip params args)))
+                remainingArgs
+
+    instantiateT :: Type -> M.Map QName Type -> Type
+    instantiateT (TMetavar x) _   = TMetavar x
+    instantiateT (TVar x)     sub = M.findWithDefault (TVar x) x sub
+    instantiateT (TApp t s)   sub = TApp (instantiateT t sub)
+                                         (instantiateT s sub)
 
 generalizableMetavariables :: M [TypeMetavariable]
 generalizableMetavariables = do
@@ -334,8 +394,8 @@ solveConstraints x = return x -- TODO: NOT IMPLEMENTED
 
 unifyTypes :: Type -> Type -> M ()
 unifyTypes t1 t2 = do
-  t1' <- representative t1
-  t2' <- representative t2
+  t1' <- weaklyHeadNormalizeType t1
+  t2' <- weaklyHeadNormalizeType t2
   case (t1', t2') of
     (TMetavar x, TMetavar y) | x == y -> return ()
     (TMetavar x, t) -> do
@@ -371,7 +431,7 @@ inferTypeExprM (ELet pos decls body)      = inferTypeELetM pos decls body
 inferTypeExprM (ECase pos guard branches) = inferTypeECaseM pos guard branches
 inferTypeExprM (EFresh pos x body)        = inferTypeEFreshM pos x body
 
--- Integer constant
+-- Integer constant (n)
 inferTypeEIntM :: Position -> Integer -> M InferResult
 inferTypeEIntM pos n = return (ConstrainedType [] tInt, EInt pos n)
 

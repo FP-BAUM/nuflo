@@ -11,7 +11,7 @@ module Syntax.AST(
          eraseAnnotations, exprAnnotation,
          exprIsVariable, exprHeadVariable,
          exprIsFunctionType, exprFunctionTypeCodomain, exprEqual,
-         exprFreeVariables
+         exprFreeVariables, splitDatatypeArgsOrFail
        ) where
 
 import qualified Data.Set as S
@@ -308,4 +308,16 @@ instance Show (AnnExpr a) where
     "(case " ++ show e ++ " of {" ++ (joinS "; " (map show branches)) ++ "})"
   show (EFresh _ name e)      =
     "(fresh " ++ show name ++ " in " ++ show e ++ ")"
+
+-- Split the left-hand side in the definition of a datatype,
+-- such as "Map a b" into the head "Map" and the arguments ["a", "b"]
+-- checking that it is well-formed.
+--
+-- All the arguments should be variables.
+splitDatatypeArgsOrFail :: Expr -> (QName, [QName])
+splitDatatypeArgsOrFail (EApp _ f (EVar _ x)) =
+  let (head, args) = splitDatatypeArgsOrFail f
+   in (head, args ++ [x])
+splitDatatypeArgsOrFail (EVar _ x) = (x, [])
+splitDatatypeArgsOrFail _ = error "(Malformed datatype)"
 
