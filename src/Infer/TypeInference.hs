@@ -43,10 +43,8 @@ data TypeInferState =
      TypeInferState {
        statePosition      :: Position
      , stateNextFresh     :: Integer
-     , stateTypeConstants :: S.Set QName
-                                  -- Type constructors and type synonyms
-     , stateEnvironment   :: [M.Map QName TypeScheme]
-                                  -- Non-empty stack of ribs
+     , stateTypeConstants :: S.Set QName -- Type constructors and synonyms
+     , stateEnvironment   :: [M.Map QName TypeScheme] -- Non-empty stack (ribs)
      , stateSubstitution :: M.Map TypeMetavariable Type 
      }
 
@@ -361,18 +359,33 @@ unifyTypes t1 t2 = do
              "  " ++ show t1' ++ "\n" ++
              "  " ++ show t2')
 
-inferTypeExprM :: Expr -> M (ConstrainedType, Expr)
-inferTypeExprM (EInt pos i) = return (ConstrainedType [] tInt, EInt pos i)
--- x
-inferTypeExprM (EVar pos x) = do
+type InferResult = (ConstrainedType, Expr)
+
+inferTypeExprM :: Expr -> M InferResult
+inferTypeExprM (EInt pos n)               = inferTypeEIntM pos n
+inferTypeExprM (EVar pos x)               = inferTypeEVarM pos x
+inferTypeExprM (EUnboundVar pos x)        = inferTypeEVarM pos x
+inferTypeExprM (EApp pos e1 e2)           = inferTypeEAppM pos e1 e2
+inferTypeExprM (ELambda pos e1 e2)        = inferTypeELambdaM pos e1 e2
+inferTypeExprM (ELet pos decls body)      = inferTypeELetM pos decls body
+inferTypeExprM (ECase pos guard branches) = inferTypeECaseM pos guard branches
+inferTypeExprM (EFresh pos x body)        = inferTypeEFreshM pos x body
+
+-- Integer constant
+inferTypeEIntM :: Position -> Integer -> M InferResult
+inferTypeEIntM pos n = return (ConstrainedType [] tInt, EInt pos n)
+
+-- Variable (x)
+inferTypeEVarM :: Position -> QName -> M InferResult
+inferTypeEVarM pos x = do
   setPosition pos
   TypeScheme gvars constrainedType <- lookupType x
   constrainedType' <- freshenVariables gvars constrainedType -- Instantiate
   return (constrainedType', EVar pos x)
--- .x
-inferTypeExprM (EUnboundVar pos x) = inferTypeExprM (EVar pos x)
+
 -- e1 e2
-inferTypeExprM (EApp pos e1 e2) = do
+inferTypeEAppM :: Position -> Expr -> Expr -> M InferResult
+inferTypeEAppM pos e1 e2 = do
   (ConstrainedType c1 t1, e1') <- inferTypeExprM e1
   (ConstrainedType c2 t2, e2') <- inferTypeExprM e2
   tr <- freshType
@@ -380,8 +393,10 @@ inferTypeExprM (EApp pos e1 e2) = do
   unifyTypes t1 (tFun t2 tr)
   constraints <- solveConstraints (union c1 c2)
   return (ConstrainedType constraints tr, (EApp pos e1' e2'))
+
 -- \ e1 -> e2
-inferTypeExprM (ELambda pos e1 e2) = do
+inferTypeELambdaM :: Position -> Expr -> Expr -> M InferResult
+inferTypeELambdaM pos e1 e2 = do
   bound <- getAllBoundVars
   let freeParamVars = exprFreeVariables bound e1
    in do
@@ -392,8 +407,10 @@ inferTypeExprM (ELambda pos e1 e2) = do
     exitScopeM
     return $ (ConstrainedType (union ce1 ce2) (tFun te1 te2),
               ELambda pos e1' e2')
+
 -- let decls in body
-inferTypeExprM (ELet pos decls body) = do
+inferTypeELetM :: Position -> [Declaration] -> Expr -> M InferResult
+inferTypeELetM pos decls body = do
   setPosition pos
   bound <- getAllBoundVars
   enterScopeM
@@ -403,8 +420,10 @@ inferTypeExprM (ELet pos decls body) = do
   (typeScheme, body') <- inferTypeExprM body
   exitScopeM
   return (typeScheme, ELet pos decls' body')
+
 -- case guard of branches
-inferTypeExprM (ECase pos guard branches) = do
+inferTypeECaseM :: Position -> Expr -> [CaseBranch] -> M InferResult
+inferTypeECaseM pos guard branches = do
   setPosition pos
   (ConstrainedType cguard tguard, guard') <- inferTypeExprM guard 
   tresult  <- freshType
@@ -415,13 +434,6 @@ inferTypeExprM (ECase pos guard branches) = do
   constraints <- solveConstraints (cguard ++ cbranches)
   return (ConstrainedType constraints tresult,
           ECase pos guard' branches')
--- fresh x in body
-inferTypeExprM (EFresh pos x body) = do
-  enterScopeM
-  bindToFreshType x
-  (schema, body') <- inferTypeExprM body
-  exitScopeM
-  return (schema, EFresh pos x body')
 
 inferCaseBranchM :: Type -> Type -> CaseBranch
                  -> M (ConstrainedType, CaseBranch)
@@ -439,6 +451,17 @@ inferCaseBranchM tguard tresult (CaseBranch pos pattern body) = do
   exitScopeM
   return $ (ConstrainedType (union cbody cpattern) tbody,
             CaseBranch pos pattern' body')
+
+-- fresh x in body
+inferTypeEFreshM :: Position -> QName -> Expr -> M InferResult 
+inferTypeEFreshM pos x body = do
+  enterScopeM
+  bindToFreshType x
+  (schema, body') <- inferTypeExprM body
+  exitScopeM
+  return (schema, EFresh pos x body')
+
+-----
 
 exprToType :: Expr -> Type
 exprToType (EVar _ x)     = TVar x
