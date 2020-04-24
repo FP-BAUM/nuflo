@@ -5,6 +5,8 @@ import qualified Data.Map as M
 import Data.List(union)
 import Data.Maybe(fromJust)
 
+
+import Infer.Utils()
 import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Error(Error(..), ErrorType(..))
 import Position(Position(..), unknownPosition)

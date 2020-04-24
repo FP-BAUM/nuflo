@@ -1,0 +1,26 @@
+Reduce a function with mutiple equations to a function with only an equation
+
+-- If we have a function f with mutiple equations:
+
+f args1 = body1                           
+...
+f argsN = bodyN
+---
+
+-- We obtain the maximum argument's count
+
+-- REPORT:
+
+M := max(length(args1), ..., length(argsN))
+
+-- 
+# IF M > 0:
+ 
+f = \ x1 ... xM ->
+      case tuple{M} x1 ... xM of
+        tuple{M} args1++(pad) -> body1
+        ...
+        tuple{M} argsN++(pad) -> bodyN
+        
+# IF M = 0:
+f = body1 (+) ... (+) bodyN
