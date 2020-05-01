@@ -9,7 +9,7 @@ module Syntax.AST(
          AnnCaseBranch(..), CaseBranch,
          AnnExpr(..), Expr,
          eraseAnnotations, exprAnnotation,
-         exprIsVariable, exprHeadVariable,
+         exprIsVariable, exprHeadVariable, exprHeadArguments,
          exprIsFunctionType, exprFunctionTypeCodomain, exprEqual,
          exprFreeVariables, splitDatatypeArgsOrFail
        ) where

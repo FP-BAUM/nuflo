@@ -1,29 +1,64 @@
-module Infer.Utils() where
+module Infer.Utils(mergeEquations) where
 
 import Error(Error(..), ErrorType(..))
 
-import Syntax.Name(QName(..))
+import qualified Data.Set as S
+import Syntax.Name(QName(..), primitiveAlternative)
 import Data.Maybe(fromJust)
+import Position(Position)
 import Syntax.AST(AnnEquation(..), Equation,
-                  Expr, exprHeadVariable, exprHeadArguments
+                  AnnCaseBranch(..), CaseBranch,
+                  AnnExpr(..), Expr, exprHeadVariable, exprHeadArguments
                 )
 
-f :: [Equation] -> Either Error [Equation]
-f = return . map joinEquations . groupEquations
+mergeEquations :: [Equation] -> Either String [Equation]
+mergeEquations eqs = case duplicatedNames of
+                       Right s   -> Right groupedEquations
+                       Left name -> Left ("duplicated name " ++ show name)
+  where
+    groupedEquations = map joinEquations (groupEquations eqs)
+    functionNames = map (fromJust . exprHeadVariable . equationLHS) groupedEquations
+    duplicatedNames  = foldl (\set elem ->  case set of
+                                            Right s   -> if S.member elem s
+                                                          then Left elem
+                                                          else Right $ S.insert elem s
+                                            Left name -> Left name
+                                ) (Right S.empty) functionNames
 
+-- Precondition: Each equation received as param should have the same Qname
 joinEquations :: [Equation] -> Equation
-joinEquations eqs@((Equation pos lhs rhs) : xs) =
-  case maximum (map numOfArg eqs) of
-  0 -> error "not implemented"
-  m -> let params = map (parameterName pos) [1..m]
-           head = fromJust (exprHeadVariable lhs)
+joinEquations []                                = error "equation group can't be empty"
+joinEquations eqs@((Equation pos lhs _) : _) =
+  case m of
+  0 -> let rhs' = foldl1 (\e1 e2 -> EApp pos (EApp pos (EVar pos primitiveAlternative) e1) e2) (map equationRHS eqs)
+       in Equation pos lhs rhs'
+  _ -> let params = map parameterName [1..m]
+           functionName = fromJust (exprHeadVariable lhs)
+           innerBody = composeEquations params
            body = foldr (\name e -> ELambda pos (EUnboundVar pos name) e) innerBody params 
-       in (Equation pos (EVar pos head) body)
+       in (Equation pos (EVar pos functionName) body)
+  where
+    m = maximum (map numOfArg eqs)
+    composeEquations :: [QName] -> Expr
+    composeEquations params = ECase pos guard (map branch eqs)
+      where
+        guard = makeTuple pos (map (EVar pos) params)
+        
+        pad :: [Expr] -> Int -> [Expr]
+        pad exprs n = replicate (n - length exprs) (EVar pos (Name "_"))
+        
+        branch :: Equation -> CaseBranch
+        branch (Equation pos lhs rhs) = let patterns = fromJust (exprHeadArguments lhs)
+                                            pattern  = makeTuple pos (patterns ++ pad patterns m)
+                                        in CaseBranch pos pattern rhs
 
-parameterName ::Integer -> QName
-parameterName m = Name "x{" ++ show m ++ "}"
+makeTuple :: Position -> [Expr] -> Expr
+makeTuple pos exprs = foldl (\tuple e -> EApp pos tuple e) (EVar pos (Name "{Tuple}")) exprs
 
-numOfArg :: Equation -> Integer
+parameterName ::Int -> QName
+parameterName m = Name ("x{" ++ show m ++ "}")
+
+numOfArg :: Equation -> Int
 numOfArg (Equation _ lhs _) = length $ fromJust (exprHeadArguments lhs)
 
 sameEquationHead :: QName -> Equation -> Bool

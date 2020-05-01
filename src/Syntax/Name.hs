@@ -3,7 +3,8 @@ module Syntax.Name(
          splitParts, allNameParts,
          isWellFormedName, isWellFormedOperatorName,
          QName(..), readName, qualify, moduleNameFromQName, unqualifiedName,
-         modulePRIM, moduleMain, arrowSymbol, primitiveArrow, primitiveInt
+         modulePRIM, moduleMain, arrowSymbol, primitiveArrow, primitiveInt,
+         primitiveAlternative
        ) where
 
 import Lexer.Categories(isKeyword, isInteger)
@@ -91,8 +92,14 @@ arrowSymbol = "→"
 intSymbol :: String
 intSymbol = "Int"
 
+primitiveAlternativeSymbol :: String
+primitiveAlternativeSymbol  = "<>"
+
 primitiveArrow :: QName
 primitiveArrow = qualify modulePRIM ("_" ++ arrowSymbol ++ "_")
 
 primitiveInt :: QName
 primitiveInt = qualify modulePRIM intSymbol
+
+primitiveAlternative :: QName
+primitiveAlternative = qualify modulePRIM ("_" ++ primitiveAlternativeSymbol ++ "_")
