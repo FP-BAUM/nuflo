@@ -10,7 +10,7 @@ import Infer.Utils(mergeEquations)
 import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Error(Error(..), ErrorType(..))
 import Position(Position(..), unknownPosition)
-import Syntax.Name(QName(..), primitiveArrow, primitiveInt)
+import Syntax.Name(QName(..), primitiveArrow, primitiveInt, unqualifiedName)
 import Syntax.AST(
          AnnProgram(..), Program,
          AnnDeclaration(..), Declaration,
@@ -234,7 +234,15 @@ inferTypeDeclarationM decl@(TypeSignature _) =
   -- TODO: transform constraints in signature
   return decl
 inferTypeDeclarationM (ClassDeclaration pos className typeName methods) =
-  error "NOT IMPLEMENTED"
+  -- TODO: Resolve infering
+  let signatureTypes       = map (\(Signature _ _ typ _) -> typ) methods
+      unqualifiedClassName = unqualifiedName className
+      dataName             = EVar pos (Name ("class" ++ "{" ++ unqualifiedClassName ++ "}"))
+      constraints          = concatMap (\(Signature _ _ _ cs) -> cs) methods
+      constructorType      = foldl1 (\acc typ -> EApp pos (EApp pos (EVar pos primitiveArrow) acc) typ) signatureTypes
+      classConstructor     = Signature pos (Name $ "mk" ++ "{" ++ unqualifiedClassName ++ "}") constructorType constraints
+  in return $ DataDeclaration pos (EApp pos dataName (EVar pos typeName)) [classConstructor]
+  -- error "NOT IMPLEMENTED"
 inferTypeDeclarationM (InstanceDeclaration pos className typ
                                                constraints methods) =
   error "NOT IMPLEMENTED"
