@@ -33,24 +33,26 @@ import Calculus.Types(
 inferTypes :: Program -> Either Error Program
 inferTypes program = evalFS (inferTypeProgramM program) initialState
   where initialState = TypeInferState {
-                         statePosition      = unknownPosition
-                       , stateNextFresh     = 0
-                       , stateTypeConstants = S.empty
-                       , stateTypeSynonyms  = M.empty
-                       , stateEnvironment   = [M.empty]
-                       , stateSubstitution  = M.empty
+                         statePosition          = unknownPosition
+                       , stateNextFresh         = 0
+                       , stateTypeConstants     = S.empty
+                       , stateTypeSynonyms      = M.empty
+                       , stateEnvironment       = [M.empty]
+                       , stateSubstitution      = M.empty
+                       , stateTemporaryRenaming = M.empty
                        }
 
 ---- Type inference monad
 
 data TypeInferState =
      TypeInferState {
-       statePosition      :: Position
-     , stateNextFresh     :: Integer
-     , stateTypeConstants :: S.Set QName -- Type constructors and synonyms
-     , stateTypeSynonyms  :: TypeSynonymTable
-     , stateEnvironment   :: [M.Map QName TypeScheme] -- Non-empty stack (ribs)
-     , stateSubstitution :: M.Map TypeMetavariable Type 
+       statePosition          :: Position
+     , stateNextFresh         :: Integer
+     , stateTypeConstants     :: S.Set QName -- Type constructors and synonyms
+     , stateTypeSynonyms      :: TypeSynonymTable
+     , stateEnvironment       :: [M.Map QName TypeScheme] -- Non-empty stack (ribs)
+     , stateSubstitution      :: M.Map TypeMetavariable Type
+     , stateTemporaryRenaming :: M.Map QName QName
      }
 type TypeSynonymTable = M.Map QName ([QName], Type)
 
@@ -153,6 +155,11 @@ allTypeConstants = do
   state <- getFS
   return $ stateTypeConstants state
 
+isTypeConstant :: QName -> M Bool
+isTypeConstant name = do
+  constants <- allTypeConstants
+  return $ S.member name constants
+
 addTypeConstant :: QName -> M ()
 addTypeConstant name =
   modifyFS (\ state ->
@@ -178,6 +185,25 @@ defineTypeSynonym name args value =
                                               (stateTypeSynonyms state) }
   )
 
+cleanTemporaryRenaming :: M ()
+cleanTemporaryRenaming = do
+  state <- getFS
+  putFS (state { stateTemporaryRenaming = M.empty })
+
+temporaryRenaming :: QName -> M QName
+temporaryRenaming name = do
+  state <- getFS
+  let temporaryMap = stateTemporaryRenaming state
+  if M.member name temporaryMap
+  then return $ M.findWithDefault undefined name temporaryMap
+  else do
+    tvar <- freshTypeVar
+    case tvar of
+      (TVar newName) -> do state' <- getFS 
+                           putFS (state' { stateTemporaryRenaming = M.insert name newName temporaryMap})
+                           return newName
+      _              -> error "Should be a variable name"
+
 ---- Type inference algorithm
 
 inferTypeProgramM :: Program -> M Program
@@ -189,7 +215,7 @@ inferTypeProgramM (Program decls) = do
   mapM_ collectTypeDeclarationM decls
   mapM_ collectSignaturesM decls
   decls' <- inferTypeDeclarationsM decls
-  return $ Program decls
+  return $ Program decls'
 
 collectTypeDeclarationM :: Declaration -> M ()
 collectTypeDeclarationM (TypeDeclaration pos typ value) = do
@@ -208,6 +234,8 @@ collectSignaturesM :: Declaration -> M ()
 collectSignaturesM (DataDeclaration pos typ constructors) = do
   mapM_ collectSignatureM constructors
 collectSignaturesM (TypeSignature signature) = collectSignatureM signature
+collectSignaturesM (ClassDeclaration pos className typeName methods) = do
+  mapM_ (collectMethodSignature className typeName) methods
 collectSignaturesM _ = return ()
 
 inferTypeDeclarationsM :: [Declaration] -> M [Declaration]
@@ -233,18 +261,25 @@ inferTypeDeclarationM (ValueDeclaration equation) = do
 inferTypeDeclarationM decl@(TypeSignature _) = 
   -- TODO: transform constraints in signature
   return decl
-inferTypeDeclarationM (ClassDeclaration pos className typeName methods) =
-  -- TODO: Resolve infering
-  let signatureTypes       = map (\(Signature _ _ typ _) -> typ) methods
-      unqualifiedClassName = unqualifiedName className
-      dataName             = EVar pos (Name ("class" ++ "{" ++ unqualifiedClassName ++ "}"))
-      constraints          = concatMap (\(Signature _ _ _ cs) -> cs) methods
-      constructorType      = foldl1 (\acc typ -> EApp pos (EApp pos (EVar pos primitiveArrow) acc) typ) signatureTypes
-      classConstructor     = Signature pos (Name $ "mk" ++ "{" ++ unqualifiedClassName ++ "}") constructorType constraints
-  in return $ DataDeclaration pos (EApp pos dataName (EVar pos typeName)) [classConstructor]
+inferTypeDeclarationM (ClassDeclaration pos className typeName methods) = do
+  constrainedTypes <- mapM (renameClassMethod typeName) methods
+  let constraints          = concatMap (\(ConstrainedType cs _) -> map (typeConstraintToConstraint pos) cs) constrainedTypes
+  let signatureTypes       = map (\(ConstrainedType _ typ) -> typeToExpr pos typ) constrainedTypes
+  let dataName             = EVar pos (Name ("class" ++ "{" ++ show className ++ "}"))
+  let classConstructor     = (Name $ "mk" ++ "{" ++ show className ++ "}")
+  let constructorType      = foldr (\typ acc -> EApp pos (EApp pos (EVar pos primitiveArrow) typ) acc)
+                              (EApp pos dataName (EVar pos typeName)) signatureTypes
+  let classSignature       = Signature pos classConstructor constructorType constraints
+  return $ DataDeclaration pos (EApp pos dataName (EVar pos typeName)) [classSignature]
   -- error "NOT IMPLEMENTED"
-inferTypeDeclarationM (InstanceDeclaration pos className typ
-                                               constraints methods) =
+inferTypeDeclarationM (InstanceDeclaration pos className typ constraints methods) =
+  -- instance Eq Bool where
+  -- igual    = igualBool
+  -- enumerar = enumBool
+  --  =>
+  -- igualBool{Eq}{Bool} = ...
+  -- enumBool{Eq}{Bool} =  = ...
+  -- instance{Eq}{Bool} = mk{Eq} igualBool{Eq}{Bool} enumBool{Eq}{Bool}
   error "NOT IMPLEMENTED"
 
 collectSignatureM :: Signature -> M ()
@@ -538,7 +573,49 @@ exprToType (EVar _ x)     = TVar x
 exprToType (EApp _ t1 t2) = TApp (exprToType t1) (exprToType t2)
 exprToType _              = error "(Malformed type)"
 
+typeToExpr :: Position -> Type -> Expr
+typeToExpr pos (TVar x)     = EVar pos x
+typeToExpr pos (TApp t1 t2) = EApp pos (typeToExpr pos t1) (typeToExpr pos t2)
+typeToExpr _ _              = error "(Malformed type)"
+
 constraintToTypeConstraint :: Constraint -> TypeConstraint
 constraintToTypeConstraint (Constraint _ className typeName) =
   TypeConstraint className (TVar typeName)
 
+typeConstraintToConstraint :: Position -> TypeConstraint -> Constraint
+typeConstraintToConstraint pos (TypeConstraint className typ) =
+  let (EVar _ name) = typeToExpr pos typ
+  in Constraint pos className name
+
+collectMethodSignature :: QName -> QName -> Signature -> M ()
+collectMethodSignature className typeName s@(Signature pos name typ cs) = do
+  setPosition pos
+  if (any (\(Constraint _ cClass ctype) -> typeName == ctype) cs)
+  then failM ClassErrorConstrainedParameter ("Class parameter " ++ show typeName ++ " can't be constrained")
+  else collectSignatureM (Signature pos name typ ((Constraint pos className typeName) : cs))
+
+
+renameClassMethod :: QName -> Signature -> M ConstrainedType
+renameClassMethod typeName s@(Signature pos name typ cs) = do
+  cleanTemporaryRenaming
+  typ' <- renameType (exprToType typ)
+  cs'  <- mapM (renameConstraint . constraintToTypeConstraint) cs
+  return $ ConstrainedType cs' typ'
+  where
+    renameType :: Type -> M Type
+    renameType (TVar name)       = do name' <- renameName name
+                                      return $ TVar name'
+    renameType (TApp t1 t2)      = do t1' <- renameType t1
+                                      t2' <- renameType t2
+                                      return $ TApp t1' t2'
+    renameType meta@(TMetavar _) = return meta
+
+    renameConstraint :: TypeConstraint -> M TypeConstraint
+    renameConstraint (TypeConstraint classN typ) = do typ' <- renameType typ
+                                                      return $ TypeConstraint classN typ'
+
+    renameName :: QName -> M QName
+    renameName name = do isConstant <- isTypeConstant name
+                         if name == typeName || isConstant
+                         then return name
+                         else temporaryRenaming name

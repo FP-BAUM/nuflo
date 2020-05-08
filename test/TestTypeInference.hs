@@ -383,6 +383,30 @@ tests = TestSuite "TYPE INFERENCE" [
 
   ],
 
+  TestSuite "Class constraints" [
+    testProgramOK "Emtpy class declaration" (unlines [
+      "class Eq a where"
+    ]),
+
+    testProgramError "Reject contrained class parameter" (unlines [
+      "class Show a where",
+      "class Eq a where",
+      " f : a -> b {Show a}"
+    ]) ClassErrorConstrainedParameter,
+
+    testProgramOK "main using class method" (unlines [
+      "class Eq a where",
+      " f : a -> b",
+      "main x = f x"
+    ]),
+
+    testProgramOK "main using class method in inverse eorder" (unlines [
+      "main x = f x",
+      "class Eq a where",
+      " f : a -> b"
+    ])
+  ],
+
   testProgramError "Reject unbound variable" (unlines [
     "f x = y"
   ]) TypeErrorUnboundVariable,
