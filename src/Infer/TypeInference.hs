@@ -5,10 +5,8 @@ import qualified Data.Map as M
 import Data.List(union)
 import Data.Maybe(fromJust)
 
-
-import Infer.Utils(mergeEquations)
-import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Error(Error(..), ErrorType(..))
+import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Position(Position(..), unknownPosition)
 import Syntax.Name(QName(..), primitiveArrow, primitiveInt, unqualifiedName)
 import Syntax.AST(
@@ -19,7 +17,7 @@ import Syntax.AST(
          AnnConstraint(..), Constraint,
          AnnCaseBranch(..), CaseBranch,
          AnnExpr(..), Expr, exprHeadVariable, exprFreeVariables,
-         splitDatatypeArgsOrFail
+         exprFunctionType, splitDatatypeArgsOrFail
        )
 import Calculus.Types(
          TypeMetavariable, TypeConstraint(..),
@@ -29,30 +27,31 @@ import Calculus.Types(
          typeSchemeMetavariables,
          tFun, tInt
        )
+import Infer.Utils(mergeEquations)
 
 inferTypes :: Program -> Either Error Program
 inferTypes program = evalFS (inferTypeProgramM program) initialState
   where initialState = TypeInferState {
-                         statePosition          = unknownPosition
-                       , stateNextFresh         = 0
-                       , stateTypeConstants     = S.empty
-                       , stateTypeSynonyms      = M.empty
-                       , stateEnvironment       = [M.empty]
-                       , stateSubstitution      = M.empty
-                       , stateTemporaryRenaming = M.empty
+                         statePosition        = unknownPosition
+                       , stateNextFresh       = 0
+                       , stateTypeConstants   = S.empty
+                       , stateTypeSynonyms    = M.empty
+                       , stateEnvironment     = [M.empty]
+                       , stateSubstitution    = M.empty
+                       , stateTypeVarRenaming = M.empty
                        }
 
 ---- Type inference monad
 
 data TypeInferState =
      TypeInferState {
-       statePosition          :: Position
-     , stateNextFresh         :: Integer
-     , stateTypeConstants     :: S.Set QName -- Type constructors and synonyms
-     , stateTypeSynonyms      :: TypeSynonymTable
-     , stateEnvironment       :: [M.Map QName TypeScheme] -- Non-empty stack (ribs)
-     , stateSubstitution      :: M.Map TypeMetavariable Type
-     , stateTemporaryRenaming :: M.Map QName QName
+       statePosition        :: Position
+     , stateNextFresh       :: Integer
+     , stateTypeConstants   :: S.Set QName  -- Type constructors and synonyms
+     , stateTypeSynonyms    :: TypeSynonymTable
+     , stateEnvironment     :: [M.Map QName TypeScheme]    -- Non-empty stack
+     , stateSubstitution    :: M.Map TypeMetavariable Type
+     , stateTypeVarRenaming :: M.Map QName QName
      }
 type TypeSynonymTable = M.Map QName ([QName], Type)
 
@@ -185,24 +184,58 @@ defineTypeSynonym name args value =
                                               (stateTypeSynonyms state) }
   )
 
-cleanTemporaryRenaming :: M ()
-cleanTemporaryRenaming = do
+cleanTypeVariableRenaming :: M ()
+cleanTypeVariableRenaming = do
   state <- getFS
-  putFS (state { stateTemporaryRenaming = M.empty })
+  putFS (state { stateTypeVarRenaming = M.empty })
 
-temporaryRenaming :: QName -> M QName
-temporaryRenaming name = do
-  state <- getFS
-  let temporaryMap = stateTemporaryRenaming state
-  if M.member name temporaryMap
-  then return $ M.findWithDefault undefined name temporaryMap
-  else do
-    tvar <- freshTypeVar
-    case tvar of
-      (TVar newName) -> do state' <- getFS 
-                           putFS (state' { stateTemporaryRenaming = M.insert name newName temporaryMap})
-                           return newName
-      _              -> error "Should be a variable name"
+setNewTypeVariableName :: QName -> QName -> M ()
+setNewTypeVariableName name name' = do
+  modifyFS (\ state ->
+    state { stateTypeVarRenaming =
+              M.insert name name' (stateTypeVarRenaming state) })
+
+getNewTypeVariableName :: QName -> M QName
+getNewTypeVariableName name = do
+  typeVarRenaming <- stateTypeVarRenaming <$> getFS
+  if M.member name typeVarRenaming
+   then return $ M.findWithDefault undefined name typeVarRenaming
+   else do
+     tvar <- freshTypeVar
+     case tvar of
+       TVar name' -> do setNewTypeVariableName name name'
+                        return name'
+       _          -> error "(Fresh type var is not a variable name)"
+
+---- Utility functions to convert between expressions
+---- in the AST and proper types
+
+exprToType :: Expr -> Type
+exprToType (EVar _ x)     = TVar x
+exprToType (EApp _ t1 t2) = TApp (exprToType t1) (exprToType t2)
+exprToType _              = error "(Malformed type)"
+
+typeToExpr :: Position -> Type -> Expr
+typeToExpr pos (TVar x)     = EVar pos x
+typeToExpr pos (TApp t1 t2) = EApp pos (typeToExpr pos t1) (typeToExpr pos t2)
+typeToExpr _   _            = error "(Malformed type)"
+
+constraintToTypeConstraint :: Constraint -> TypeConstraint
+constraintToTypeConstraint (Constraint _ className typeName) =
+  TypeConstraint className (TVar typeName)
+
+typeConstraintToConstraint :: Position -> TypeConstraint -> Constraint
+typeConstraintToConstraint pos (TypeConstraint className typ) =
+  let (EVar _ name) = typeToExpr pos typ
+   in Constraint pos className name
+
+---- Name mangling to avoid collisions with user names
+
+mangleClassDataType :: QName -> QName
+mangleClassDataType className = Name ("class" ++ "{" ++ show className ++ "}")
+
+mangleClassConstructor :: QName -> QName
+mangleClassConstructor className = Name ("mk" ++ "{" ++ show className ++ "}")
 
 ---- Type inference algorithm
 
@@ -235,7 +268,17 @@ collectSignaturesM (DataDeclaration pos typ constructors) = do
   mapM_ collectSignatureM constructors
 collectSignaturesM (TypeSignature signature) = collectSignatureM signature
 collectSignaturesM (ClassDeclaration pos className typeName methods) = do
-  mapM_ (collectMethodSignature className typeName) methods
+    mapM_ collectMethodSignature methods
+  where
+    collectMethodSignature :: Signature -> M ()
+    collectMethodSignature (Signature pos name typ cs) = do
+      setPosition pos
+      if (any (\(Constraint _ cClass ctype) -> typeName == ctype) cs)
+       then failM ClassErrorConstrainedParameter
+              ("Class parameter " ++ show typeName ++ " cannot be constrained")
+       else -- Add class constraint
+            let c = Constraint pos className typeName in
+              collectSignatureM (Signature pos name typ (c : cs))
 collectSignaturesM _ = return ()
 
 inferTypeDeclarationsM :: [Declaration] -> M [Declaration]
@@ -261,17 +304,8 @@ inferTypeDeclarationM (ValueDeclaration equation) = do
 inferTypeDeclarationM decl@(TypeSignature _) = 
   -- TODO: transform constraints in signature
   return decl
-inferTypeDeclarationM (ClassDeclaration pos className typeName methods) = do
-  constrainedTypes <- mapM (renameClassMethod typeName) methods
-  let constraints          = concatMap (\(ConstrainedType cs _) -> map (typeConstraintToConstraint pos) cs) constrainedTypes
-  let signatureTypes       = map (\(ConstrainedType _ typ) -> typeToExpr pos typ) constrainedTypes
-  let dataName             = EVar pos (Name ("class" ++ "{" ++ show className ++ "}"))
-  let classConstructor     = (Name $ "mk" ++ "{" ++ show className ++ "}")
-  let constructorType      = foldr (\typ acc -> EApp pos (EApp pos (EVar pos primitiveArrow) typ) acc)
-                              (EApp pos dataName (EVar pos typeName)) signatureTypes
-  let classSignature       = Signature pos classConstructor constructorType constraints
-  return $ DataDeclaration pos (EApp pos dataName (EVar pos typeName)) [classSignature]
-  -- error "NOT IMPLEMENTED"
+inferTypeDeclarationM (ClassDeclaration pos className typeName methods) =
+  inferTypeClassDeclarationM pos className typeName methods
 inferTypeDeclarationM (InstanceDeclaration pos className typ constraints methods) =
   -- instance Eq Bool where
   -- igual    = igualBool
@@ -568,54 +602,53 @@ inferTypeEFreshM pos x body = do
 
 -----
 
-exprToType :: Expr -> Type
-exprToType (EVar _ x)     = TVar x
-exprToType (EApp _ t1 t2) = TApp (exprToType t1) (exprToType t2)
-exprToType _              = error "(Malformed type)"
-
-typeToExpr :: Position -> Type -> Expr
-typeToExpr pos (TVar x)     = EVar pos x
-typeToExpr pos (TApp t1 t2) = EApp pos (typeToExpr pos t1) (typeToExpr pos t2)
-typeToExpr _ _              = error "(Malformed type)"
-
-constraintToTypeConstraint :: Constraint -> TypeConstraint
-constraintToTypeConstraint (Constraint _ className typeName) =
-  TypeConstraint className (TVar typeName)
-
-typeConstraintToConstraint :: Position -> TypeConstraint -> Constraint
-typeConstraintToConstraint pos (TypeConstraint className typ) =
-  let (EVar _ name) = typeToExpr pos typ
-  in Constraint pos className name
-
-collectMethodSignature :: QName -> QName -> Signature -> M ()
-collectMethodSignature className typeName s@(Signature pos name typ cs) = do
-  setPosition pos
-  if (any (\(Constraint _ cClass ctype) -> typeName == ctype) cs)
-  then failM ClassErrorConstrainedParameter ("Class parameter " ++ show typeName ++ " can't be constrained")
-  else collectSignatureM (Signature pos name typ ((Constraint pos className typeName) : cs))
-
-
-renameClassMethod :: QName -> Signature -> M ConstrainedType
-renameClassMethod typeName s@(Signature pos name typ cs) = do
-  cleanTemporaryRenaming
-  typ' <- renameType (exprToType typ)
-  cs'  <- mapM (renameConstraint . constraintToTypeConstraint) cs
-  return $ ConstrainedType cs' typ'
+inferTypeClassDeclarationM :: Position -> QName -> QName -> [Signature] ->
+                              M Declaration
+inferTypeClassDeclarationM pos className typeName methods = do
+    constrainedTypes <- mapM renameMethodSignature methods
+    let constraints      = concatMap
+                             (\ (ConstrainedType cs _) ->
+                               map (typeConstraintToConstraint pos) cs)
+                             constrainedTypes
+        signatureTypes   = map (\ (ConstrainedType _ typ) ->
+                                 typeToExpr pos typ)
+                               constrainedTypes
+        classDatatype    = EVar pos (mangleClassDataType className)
+        classDatatype'   = EApp pos classDatatype (EVar pos typeName)
+        classConstructor = mangleClassConstructor className
+        constructorType  = foldr exprFunctionType classDatatype' signatureTypes
+        constructorSig   = Signature pos classConstructor
+                                         constructorType
+                                         constraints
+      in return $ DataDeclaration pos classDatatype' [constructorSig]
   where
-    renameType :: Type -> M Type
-    renameType (TVar name)       = do name' <- renameName name
-                                      return $ TVar name'
-    renameType (TApp t1 t2)      = do t1' <- renameType t1
-                                      t2' <- renameType t2
-                                      return $ TApp t1' t2'
-    renameType meta@(TMetavar _) = return meta
+    -- Rename all the type variables in the method signature to fresh names,
+    -- except for the class parameter (and constants).
+    renameMethodSignature :: Signature -> M ConstrainedType
+    renameMethodSignature (Signature pos methodName typ cs) = do
+      -- TODO: declare method name
+      cleanTypeVariableRenaming
+      typ' <- renameType (exprToType typ)
+      cs'  <- mapM (renameConstraint . constraintToTypeConstraint) cs
+      return $ ConstrainedType cs' typ'
+      where
+        renameType :: Type -> M Type
+        renameType (TVar var) = TVar <$> renameTypeVariable var
+        renameType (TApp t1 t2) = do
+          t1' <- renameType t1
+          t2' <- renameType t2
+          return $ TApp t1' t2'
+        renameType meta@(TMetavar _) = return meta
 
-    renameConstraint :: TypeConstraint -> M TypeConstraint
-    renameConstraint (TypeConstraint classN typ) = do typ' <- renameType typ
-                                                      return $ TypeConstraint classN typ'
+        renameConstraint :: TypeConstraint -> M TypeConstraint
+        renameConstraint (TypeConstraint classN typ) = do
+          typ' <- renameType typ
+          return $ TypeConstraint classN typ'
 
-    renameName :: QName -> M QName
-    renameName name = do isConstant <- isTypeConstant name
-                         if name == typeName || isConstant
-                         then return name
-                         else temporaryRenaming name
+        renameTypeVariable :: QName -> M QName
+        renameTypeVariable var = do
+          b <- isTypeConstant var
+          if var == typeName || b
+           then return var
+           else getNewTypeVariableName var
+

@@ -78,7 +78,7 @@ runTypeInference filename = do
             Right () -> do
               case inferTypes program of
                 Left e -> die e
-                Right programInfered -> putStrLn (show programInfered)
+                Right program' -> putStrLn (show program')
 
 
 usage :: IO ()

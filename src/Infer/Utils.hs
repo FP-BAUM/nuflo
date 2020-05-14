@@ -1,11 +1,11 @@
 module Infer.Utils(mergeEquations) where
 
-import Error(Error(..), ErrorType(..))
-
-import qualified Data.Set as S
-import Syntax.Name(QName(..), primitiveAlternative)
 import Data.Maybe(fromJust)
+import qualified Data.Set as S
+
+import Error(Error(..), ErrorType(..))
 import Position(Position)
+import Syntax.Name(QName(..), primitiveAlternative)
 import Syntax.AST(AnnEquation(..), Equation,
                   AnnCaseBranch(..), CaseBranch,
                   AnnExpr(..), Expr, exprHeadVariable, exprHeadArguments

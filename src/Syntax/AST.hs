@@ -1,4 +1,3 @@
-{-# LANGUAGE DuplicateRecordFields #-}
 
 module Syntax.AST(
          AnnProgram(..), Program,
@@ -10,6 +9,7 @@ module Syntax.AST(
          AnnExpr(..), Expr,
          eraseAnnotations, exprAnnotation,
          exprIsVariable, exprHeadVariable, exprHeadArguments,
+         exprFunctionType,
          exprIsFunctionType, exprFunctionTypeCodomain, exprEqual,
          exprFreeVariables, splitDatatypeArgsOrFail
        ) where
@@ -30,14 +30,14 @@ type Program = AnnProgram Position
 -- Annotated declaration
 data AnnDeclaration a = 
     DataDeclaration {
-      annotation       :: a,
+      dataAnnotation   :: a,
       dataType         :: AnnExpr a,
       dataConstructors :: [AnnSignature a]
     }
   | TypeDeclaration {
-      annotation :: a,
-      typeType   :: AnnExpr a,
-      typeValue  :: AnnExpr a
+      typeAnnotation :: a,
+      typeType       :: AnnExpr a,
+      typeValue      :: AnnExpr a
     }
   | TypeSignature {
       typeSignature :: AnnSignature a
@@ -46,13 +46,13 @@ data AnnDeclaration a =
       declEquation :: AnnEquation a
     }
   | ClassDeclaration {
-      annotation    :: a,
-      className     :: QName,
-      classTypeName :: QName,
-      classMethods  :: [AnnSignature a]
+      classAnnotation :: a,
+      className       :: QName,
+      classTypeName   :: QName,
+      classMethods    :: [AnnSignature a]
     }
   | InstanceDeclaration {
-      annotation          :: a,
+      instanceAnnotation  :: a,
       instanceClassName   :: QName,
       instanceType        :: AnnExpr a,
       instanceConstraints :: [AnnConstraint a],
@@ -61,28 +61,28 @@ data AnnDeclaration a =
   deriving Eq
 
 data AnnSignature a = Signature {
-                        annotation           :: a,
+                        signatureAnnotation  :: a,
                         signatureName        :: QName,
                         signatureType        :: AnnExpr a,
                         signatureConstraints :: [AnnConstraint a]
                       } deriving Eq
 
 data AnnEquation a = Equation {
-                       annotation :: a,
-                       equationLHS  :: AnnExpr a,
-                       equationRHS  :: AnnExpr a
+                       equationAnnotation :: a,
+                       equationLHS        :: AnnExpr a,
+                       equationRHS        :: AnnExpr a
                      } deriving Eq
 
 data AnnConstraint a = Constraint {
-                         annotation          :: a,
-                         constraintClassName :: QName,
-                         constraintTypeName  :: QName
+                         constraintAnnotation :: a,
+                         constraintClassName  :: QName,
+                         constraintTypeName   :: QName
                        } deriving Eq
 
 data AnnCaseBranch a = CaseBranch {
-                         annotation          :: a,
-                         caseBranchPattern   :: AnnExpr a,
-                         caseBranchResult    :: AnnExpr a
+                         caseBranchAnnotation :: a,
+                         caseBranchPattern    :: AnnExpr a,
+                         caseBranchResult     :: AnnExpr a
                        } deriving Eq
 
 -- Annotated expression
@@ -106,6 +106,12 @@ exprAnnotation (ELambda a _ _)   = a
 exprAnnotation (ELet a _ _)      = a
 exprAnnotation (ECase a _ _)     = a
 exprAnnotation (EFresh a _ _)    = a
+
+exprFunctionType :: AnnExpr a -> AnnExpr a -> AnnExpr a
+exprFunctionType dom cod =
+    EApp ann (EApp ann (EVar ann primitiveArrow) dom) cod
+  where
+    ann = exprAnnotation dom
 
 exprIsFunctionType :: AnnExpr a -> Bool
 exprIsFunctionType (EApp _ (EApp _ (EVar _ op) _) _) = op == primitiveArrow

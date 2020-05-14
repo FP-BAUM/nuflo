@@ -92,8 +92,8 @@ arrowSymbol = "→"
 intSymbol :: String
 intSymbol = "Int"
 
-primitiveAlternativeSymbol :: String
-primitiveAlternativeSymbol  = "<>"
+alternativeSymbol :: String
+alternativeSymbol  = "<>"
 
 primitiveArrow :: QName
 primitiveArrow = qualify modulePRIM ("_" ++ arrowSymbol ++ "_")
@@ -102,4 +102,5 @@ primitiveInt :: QName
 primitiveInt = qualify modulePRIM intSymbol
 
 primitiveAlternative :: QName
-primitiveAlternative = qualify modulePRIM ("_" ++ primitiveAlternativeSymbol ++ "_")
+primitiveAlternative = qualify modulePRIM ("_" ++ alternativeSymbol ++ "_")
+
