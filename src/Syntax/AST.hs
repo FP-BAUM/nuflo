@@ -9,7 +9,7 @@ module Syntax.AST(
          AnnExpr(..), Expr,
          eraseAnnotations, exprAnnotation,
          exprIsVariable, exprHeadVariable, exprHeadArguments,
-         exprFunctionType,
+         exprFunctionType, exprAlternative,
          exprIsFunctionType, exprFunctionTypeCodomain, exprEqual,
          exprFreeVariables, splitDatatypeArgsOrFail
        ) where
@@ -18,7 +18,7 @@ import qualified Data.Set as S
 import Data.Maybe(fromJust)
 
 import Position(Position)
-import Syntax.Name(QName, primitiveArrow)
+import Syntax.Name(QName, primitiveArrow, primitiveAlternative)
 
 data AnnProgram a = Program {
                       programDeclarations :: [AnnDeclaration a]
@@ -112,6 +112,12 @@ exprFunctionType dom cod =
     EApp ann (EApp ann (EVar ann primitiveArrow) dom) cod
   where
     ann = exprAnnotation dom
+
+exprAlternative :: AnnExpr a -> AnnExpr a -> AnnExpr a
+exprAlternative e1 e2 =
+    EApp ann (EApp ann (EVar ann primitiveAlternative) e1) e2
+  where
+    ann = exprAnnotation e1
 
 exprIsFunctionType :: AnnExpr a -> Bool
 exprIsFunctionType (EApp _ (EApp _ (EVar _ op) _) _) = op == primitiveArrow

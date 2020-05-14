@@ -27,7 +27,7 @@ import Calculus.Types(
          typeSchemeMetavariables,
          tFun, tInt
        )
-import Infer.Utils(mergeEquations)
+import Infer.GroupEquations(groupEquations)
 
 inferTypes :: Program -> Either Error Program
 inferTypes program = evalFS (inferTypeProgramM program) initialState
