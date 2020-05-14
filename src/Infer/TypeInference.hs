@@ -626,7 +626,6 @@ inferTypeClassDeclarationM pos className typeName methods = do
     -- except for the class parameter (and constants).
     renameMethodSignature :: Signature -> M ConstrainedType
     renameMethodSignature (Signature pos methodName typ cs) = do
-      -- TODO: declare method name
       cleanTypeVariableRenaming
       typ' <- renameType (exprToType typ)
       cs'  <- mapM (renameConstraint . constraintToTypeConstraint) cs
