@@ -32,26 +32,28 @@ import Infer.GroupEquations(groupEquations)
 inferTypes :: Program -> Either Error Program
 inferTypes program = evalFS (inferTypeProgramM program) initialState
   where initialState = TypeInferState {
-                         statePosition        = unknownPosition
-                       , stateNextFresh       = 0
-                       , stateTypeConstants   = S.empty
-                       , stateTypeSynonyms    = M.empty
-                       , stateEnvironment     = [M.empty]
-                       , stateSubstitution    = M.empty
-                       , stateTypeVarRenaming = M.empty
+                         statePosition         = unknownPosition
+                       , stateNextFresh        = 0
+                       , stateTypeConstants    = S.empty
+                       , stateTypeSynonyms     = M.empty
+                       , stateEnvironment      = [M.empty]
+                       , stateSubstitution     = M.empty
+                       , stateClassMethodNames = M.empty
+                       , stateTypeVarRenaming  = M.empty
                        }
 
 ---- Type inference monad
 
 data TypeInferState =
      TypeInferState {
-       statePosition        :: Position
-     , stateNextFresh       :: Integer
-     , stateTypeConstants   :: S.Set QName  -- Type constructors and synonyms
-     , stateTypeSynonyms    :: TypeSynonymTable
-     , stateEnvironment     :: [M.Map QName TypeScheme]    -- Non-empty stack
-     , stateSubstitution    :: M.Map TypeMetavariable Type
-     , stateTypeVarRenaming :: M.Map QName QName
+       statePosition         :: Position
+     , stateNextFresh        :: Integer
+     , stateTypeConstants    :: S.Set QName  -- Type constructors and synonyms
+     , stateTypeSynonyms     :: TypeSynonymTable
+     , stateEnvironment      :: [M.Map QName TypeScheme]    -- Non-empty stack
+     , stateSubstitution     :: M.Map TypeMetavariable Type
+     , stateClassMethodNames :: M.Map QName [QName]
+     , stateTypeVarRenaming  :: M.Map QName QName
      }
 type TypeSynonymTable = M.Map QName ([QName], Type)
 
@@ -207,6 +209,22 @@ getNewTypeVariableName name = do
                         return name'
        _          -> error "(Fresh type var is not a variable name)"
 
+addClassMethodName :: QName -> QName -> M ()
+addClassMethodName className methodName = do
+  state <- getFS
+  let ms = stateClassMethodNames state
+  putFS (state {
+    stateClassMethodNames =
+      M.insert className
+               (M.findWithDefault [] className ms ++ [methodName])
+               ms
+  })
+
+getClassMethodNames :: QName -> M [QName]
+getClassMethodNames className = do
+  state <- getFS
+  return $ M.findWithDefault [] className (stateClassMethodNames state)
+
 ---- Utility functions to convert between expressions
 ---- in the AST and proper types
 
@@ -236,6 +254,10 @@ mangleClassDataType className = Name ("class" ++ "{" ++ show className ++ "}")
 
 mangleClassConstructor :: QName -> QName
 mangleClassConstructor className = Name ("mk" ++ "{" ++ show className ++ "}")
+
+mangleInstanceName :: QName -> QName -> QName
+mangleInstanceName className typeName =
+  Name ("instance" ++ "{" ++ show className ++ "}{" ++ show typeName ++ "}")
 
 ---- Type inference algorithm
 
@@ -271,14 +293,15 @@ collectSignaturesM (ClassDeclaration pos className typeName methods) = do
     mapM_ collectMethodSignature methods
   where
     collectMethodSignature :: Signature -> M ()
-    collectMethodSignature (Signature pos name typ cs) = do
+    collectMethodSignature (Signature pos methodName typ cs) = do
       setPosition pos
+      addClassMethodName className methodName
       if (any (\(Constraint _ cClass ctype) -> typeName == ctype) cs)
        then failM ClassErrorConstrainedParameter
               ("Class parameter " ++ show typeName ++ " cannot be constrained")
        else -- Add class constraint
             let c = Constraint pos className typeName in
-              collectSignatureM (Signature pos name typ (c : cs))
+              collectSignatureM (Signature pos methodName typ (c : cs))
 collectSignaturesM _ = return ()
 
 inferTypeDeclarationsM :: [Declaration] -> M [Declaration]
@@ -306,15 +329,9 @@ inferTypeDeclarationM decl@(TypeSignature _) =
   return decl
 inferTypeDeclarationM (ClassDeclaration pos className typeName methods) =
   inferTypeClassDeclarationM pos className typeName methods
-inferTypeDeclarationM (InstanceDeclaration pos className typ constraints methods) =
-  -- instance Eq Bool where
-  -- igual    = igualBool
-  -- enumerar = enumBool
-  --  =>
-  -- igualBool{Eq}{Bool} = ...
-  -- enumBool{Eq}{Bool} =  = ...
-  -- instance{Eq}{Bool} = mk{Eq} igualBool{Eq}{Bool} enumBool{Eq}{Bool}
-  error "NOT IMPLEMENTED"
+inferTypeDeclarationM (InstanceDeclaration pos className typ
+                                           constraints methods) =
+  inferTypeInstanceDeclarationM pos className typ constraints methods
 
 collectSignatureM :: Signature -> M ()
 collectSignatureM (Signature pos name typ constraints) = do 
@@ -605,6 +622,7 @@ inferTypeEFreshM pos x body = do
 inferTypeClassDeclarationM :: Position -> QName -> QName -> [Signature] ->
                               M Declaration
 inferTypeClassDeclarationM pos className typeName methods = do
+    setPosition pos
     constrainedTypes <- mapM renameMethodSignature methods
     let constraints      = concatMap
                              (\ (ConstrainedType cs _) ->
@@ -650,4 +668,49 @@ inferTypeClassDeclarationM pos className typeName methods = do
           if var == typeName || b
            then return var
            else getNewTypeVariableName var
+
+inferTypeInstanceDeclarationM :: Position -> QName -> Expr
+                                 -> [Constraint] -> [Equation]
+                                 -> M Declaration
+inferTypeInstanceDeclarationM pos className typ constraints methodEqs = do
+    setPosition pos
+    rhs <- buildRHS
+    return $ ValueDeclaration (Equation pos lhs rhs)
+  where
+    (typeConstructor, typeParams) = splitDatatypeArgsOrFail typ
+    lhs = EVar pos $ mangleInstanceName className typeConstructor
+    qnameFromEVar (EVar _ qname) = qname
+    qnameFromEVar _              = error "(Not a variable)"
+
+
+    buildRHS = do
+      classMethodNames <- getClassMethodNames className
+      case groupEquations methodEqs of
+        Left  errmsg -> failM InstanceErrorDuplicatedMethodefinition errmsg
+        Right methodEqs' -> do
+          let instanceMethodNames  = map (qnameFromEVar . equationLHS)
+                                         methodEqs'
+          let classMethodNamesS    = S.fromList classMethodNames
+          let instanceMethodNamesS = S.fromList instanceMethodNames
+          if classMethodNamesS /= instanceMethodNamesS
+           then failM InstanceErrorMethodMismatch
+                      (methodMismatchMessage classMethodNamesS
+                                             instanceMethodNamesS)
+           else
+             return $ ELet pos
+                        (map ValueDeclaration methodEqs')
+                        (foldl (EApp pos)
+                               (EVar pos (mangleClassConstructor className))
+                               (map (EVar pos) classMethodNames))
+
+    methodMismatchMessage cs is =
+      "Instance methods do not match class methods."
+       ++ (if cs `S.isSubsetOf` is
+            then ""
+            else "\nNot in instance: " ++
+                  unwords (map show (S.toList (cs S.\\ is))))
+       ++ (if is `S.isSubsetOf` cs
+            then ""
+            else "\nNot in class: " ++
+                  unwords (map show (S.toList (is S.\\ cs))))
 

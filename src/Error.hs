@@ -48,6 +48,8 @@ data ErrorType =
   | TypeErrorUnificationClash
   | TypeErrorSynonymLoop
   | ClassErrorConstrainedParameter
+  | InstanceErrorDuplicatedMethodefinition
+  | InstanceErrorMethodMismatch
   deriving (Eq, Show)
 
 errorAtUnknown :: ErrorType -> String -> Error
