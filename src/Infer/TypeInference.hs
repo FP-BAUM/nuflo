@@ -16,8 +16,8 @@ import Syntax.AST(
          AnnEquation(..), Equation,
          AnnConstraint(..), Constraint,
          AnnCaseBranch(..), CaseBranch,
-         AnnExpr(..), Expr, exprHeadVariable, exprFreeVariables,
-         exprFunctionType, splitDatatypeArgsOrFail
+         AnnExpr(..), Expr, exprHeadVariable, exprHeadArguments,
+         exprFreeVariables, exprFunctionType, splitDatatypeArgsOrFail
        )
 import Calculus.Types(
          TypeMetavariable, TypeConstraint(..),
@@ -308,7 +308,22 @@ inferTypeDeclarationsM :: [Declaration] -> M [Declaration]
 inferTypeDeclarationsM decls =
     let definedVars = S.unions (map declVars decls)
      in do mapM_ bindToFreshTypeIfNotLocallyBound (S.toList definedVars)
-           mapM inferTypeDeclarationM decls
+           result <- mapM inferTypeDeclarationM decls
+           --TODO:
+           --
+           -- Problema:
+           --
+           --  f : a -> a
+           --  f 1 = 2
+           --
+           -- TIPA
+           --
+           --logFS ("Defined vars: " ++ show definedVars)
+           --definedVarTypes <- mapM (\ x -> do (TypeScheme _ (ConstrainedType _ typ)) <- lookupType x
+           --                                   unfoldType typ)
+           --                        (S.toList definedVars)
+           --logFS ("Real type   : " ++ unwords (map show definedVarTypes))
+           return result
   where
     declVars (ValueDeclaration (Equation _ lhs _)) =
       S.fromList [fromJust (exprHeadVariable lhs)]
@@ -451,7 +466,7 @@ unfoldTypeConstraint (TypeConstraint name typ) = do
 
 generalizeLocalVar :: [Type] -> QName -> TypeScheme -> M ()
 generalizeLocalVar genVars x (TypeScheme names constrainedType) = do
-  overrideType x (TypeScheme ((map unVar genVars) ++ names) constrainedType)
+    overrideType x (TypeScheme ((map unVar genVars) ++ names) constrainedType)
   where
     unVar (TVar x) = x
     unVar _        = error "(Generalized type must be a type variable)"
@@ -568,7 +583,6 @@ inferTypeELambdaM pos e1 e2 = do
 inferTypeELetM :: Position -> [Declaration] -> Expr -> M InferResult
 inferTypeELetM pos decls body = do
   setPosition pos
-  bound <- getAllBoundVars
   enterScopeM
   mapM_ collectSignaturesM decls
   decls' <- inferTypeDeclarationsM decls
@@ -674,20 +688,26 @@ inferTypeInstanceDeclarationM :: Position -> QName -> Expr
                                  -> M Declaration
 inferTypeInstanceDeclarationM pos className typ constraints methodEqs = do
     setPosition pos
-    rhs <- buildRHS
+    ------
+    enterScopeM
+    methodEqs' <- mapM (inferTypeMethodEquationM className typ) methodEqs
+    exitScopeM
+    ------
+    rhs <- buildRHS methodEqs'
     return $ ValueDeclaration (Equation pos lhs rhs)
   where
     (typeConstructor, typeParams) = splitDatatypeArgsOrFail typ
+
     lhs = EVar pos $ mangleInstanceName className typeConstructor
+
     qnameFromEVar (EVar _ qname) = qname
     qnameFromEVar _              = error "(Not a variable)"
 
-
-    buildRHS = do
+    buildRHS methodEqs' = do
       classMethodNames <- getClassMethodNames className
-      case groupEquations methodEqs of
+      case groupEquations methodEqs' of
         Left  errmsg -> failM InstanceErrorDuplicatedMethodefinition errmsg
-        Right methodEqs' -> do
+        Right methodEqs'' -> do
           let instanceMethodNames  = map (qnameFromEVar . equationLHS)
                                          methodEqs'
           let classMethodNamesS    = S.fromList classMethodNames
@@ -713,4 +733,27 @@ inferTypeInstanceDeclarationM pos className typ constraints methodEqs = do
             then ""
             else "\nNot in class: " ++
                   unwords (map show (S.toList (is S.\\ cs))))
+
+inferTypeMethodEquationM :: QName -> Expr -> Equation -> M Equation
+inferTypeMethodEquationM className typ (Equation pos lhs rhs) = do
+  error "not implemented"
+{-
+  bound <- getAllBoundVars
+  let lhsFree = exprFreeVariables bound lhs
+      function  = exprHeadVariable lhs
+      arguments = exprHeadArguments lhs
+   in do
+     enterScopeM
+     mapM_ bindToFreshType lhsFree
+     tl <- freshType
+     argResults <- mapM inferTypeExprM arguments
+     (ConstrainedType tcsr tr, rhs') <- inferTypeExprM rhs
+-}
+
+     {-
+     unifyTypes tl tr
+     solveConstraints (union tcsl tcsr)
+     exitScopeM
+     return $ Equation pos lhs' rhs'
+     -}
 
