@@ -454,7 +454,6 @@ unfoldTypeConstraint (TypeConstraint name typ) = do
 generalizeLocalVars :: M ()
 generalizeLocalVars = do
     genVars <- generalizableVariables
-    logFS ("GENERALIZABLE:" ++ show genVars)
     rib <- head <$> getEnvironment
     mapM_ (uncurry $ generalizeLocalVar genVars) (M.toList rib)
   where
