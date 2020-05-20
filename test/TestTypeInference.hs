@@ -197,6 +197,12 @@ tests = TestSuite "TYPE INFERENCE" [
       "        in f (f unit)"
     ]),
 
+    testProgramError "Disallow instantiation of rigid variable" (unlines [
+      "main = let f : a -> a",
+      "           f 1 = 2",
+      "        in 3"
+    ]) TypeErrorUnificationClash,
+
     testProgramError "Exit scope after let" (unlines [
       "main = (let f x = x in f) f"
     ]) TypeErrorUnboundVariable

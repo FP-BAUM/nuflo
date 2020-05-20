@@ -3,7 +3,7 @@ module Calculus.Types(
          TypeScheme(..),  ConstrainedType(..), Type(..),
          substituteConstrainedType,
          constrainedTypeFreeVariables,
-         typeSchemeMetavariables,
+         typeSchemeMetavariables, typeSchemeFreeVariables,
          tFun, tInt
        ) where
 
@@ -50,6 +50,10 @@ typeMetavariables (TApp t1 t2)       = typeMetavariables t1 `S.union`
                                        typeMetavariables t2
 
 ---- Free variables
+
+typeSchemeFreeVariables :: TypeScheme -> S.Set QName
+typeSchemeFreeVariables (TypeScheme vs ctype) =
+  constrainedTypeFreeVariables ctype S.\\ S.fromList vs
 
 typeConstraintFreeVariables :: TypeConstraint -> S.Set QName
 typeConstraintFreeVariables (TypeConstraint _ typ) = typeFreeVariables typ

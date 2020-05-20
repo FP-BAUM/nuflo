@@ -24,7 +24,7 @@ import Calculus.Types(
          TypeScheme(..),  ConstrainedType(..), Type(..),
          substituteConstrainedType,
          constrainedTypeFreeVariables,
-         typeSchemeMetavariables,
+         typeSchemeMetavariables, typeSchemeFreeVariables,
          tFun, tInt
        )
 import Infer.GroupEquations(groupEquations)
@@ -84,12 +84,6 @@ freshTypeVar = do
   putFS (state { stateNextFresh = stateNextFresh state + 1 })
   return $ TVar $ Name ("t{" ++ show (stateNextFresh state) ++ "}")
 
-overrideType :: QName -> TypeScheme -> M ()
-overrideType varName typ = do
-  state <- getFS
-  let (rib : ribs) = stateEnvironment state in
-   putFS (state { stateEnvironment = M.insert varName typ rib : ribs })
-
 bindType :: QName -> TypeScheme -> M ()
 bindType varName typ = do
   state <- getFS
@@ -98,6 +92,25 @@ bindType varName typ = do
     then failM TypeErrorVariableAlreadyDeclared
                ("Variable \"" ++ show varName ++ "\" already declared.")
     else putFS (state { stateEnvironment = M.insert varName typ rib : ribs })
+
+lookupType :: QName -> M TypeScheme
+lookupType x = do
+    state <- getFS
+    rec (stateEnvironment state)
+  where
+    rec []           =
+      failM TypeErrorUnboundVariable
+            ("Unbound variable \"" ++ show x ++ "\"")
+    rec (rib : ribs) =
+      if M.member x rib
+       then return $ M.findWithDefault undefined x rib
+       else rec ribs
+
+overrideType :: QName -> TypeScheme -> M ()
+overrideType varName typ = do
+  state <- getFS
+  let (rib : ribs) = stateEnvironment state in
+   putFS (state { stateEnvironment = M.insert varName typ rib : ribs })
 
 setRepresentative :: TypeMetavariable -> Type -> M ()
 setRepresentative x typ = do
@@ -117,19 +130,6 @@ bindToFreshTypeIfNotLocallyBound x = do
   if M.member x (head (stateEnvironment state))
    then return ()
    else bindToFreshType x
-
-lookupType :: QName -> M TypeScheme
-lookupType x = do
-    state <- getFS
-    rec (stateEnvironment state)
-  where
-    rec []           =
-      failM TypeErrorUnboundVariable
-            ("Unbound variable \"" ++ show x ++ "\"")
-    rec (rib : ribs) =
-      if M.member x rib
-       then return $ M.findWithDefault undefined x rib
-       else rec ribs
 
 getAllBoundVars :: M (S.Set QName)
 getAllBoundVars = do
@@ -250,14 +250,14 @@ typeConstraintToConstraint pos (TypeConstraint className typ) =
 ---- Name mangling to avoid collisions with user names
 
 mangleClassDataType :: QName -> QName
-mangleClassDataType className = Name ("class" ++ "{" ++ show className ++ "}")
+mangleClassDataType className = Name ("class{" ++ show className ++ "}")
 
 mangleClassConstructor :: QName -> QName
-mangleClassConstructor className = Name ("mk" ++ "{" ++ show className ++ "}")
+mangleClassConstructor className = Name ("mk{" ++ show className ++ "}")
 
 mangleInstanceName :: QName -> QName -> QName
 mangleInstanceName className typeName =
-  Name ("instance" ++ "{" ++ show className ++ "}{" ++ show typeName ++ "}")
+  Name ("instance{" ++ show className ++ "}{" ++ show typeName ++ "}")
 
 ---- Type inference algorithm
 
@@ -287,7 +287,7 @@ collectTypeDeclarationM _ = return ()
 
 collectSignaturesM :: Declaration -> M ()
 collectSignaturesM (DataDeclaration pos typ constructors) = do
-  mapM_ collectSignatureM constructors
+  mapM_ collectGenericSignatureM constructors
 collectSignaturesM (TypeSignature signature) = collectSignatureM signature
 collectSignaturesM (ClassDeclaration pos className typeName methods) = do
     mapM_ collectMethodSignature methods
@@ -301,33 +301,41 @@ collectSignaturesM (ClassDeclaration pos className typeName methods) = do
               ("Class parameter " ++ show typeName ++ " cannot be constrained")
        else -- Add class constraint
             let c = Constraint pos className typeName in
-              collectSignatureM (Signature pos methodName typ (c : cs))
+              collectGenericSignatureM (Signature pos methodName typ (c : cs))
 collectSignaturesM _ = return ()
+
+collectGenericSignatureM :: Signature -> M ()
+collectGenericSignatureM (Signature pos name typ constraints) = do 
+  setPosition pos
+  ct <- constrainedType constraints typ
+  cs <- allTypeConstants
+  let fvariables = S.toList $ constrainedTypeFreeVariables ct S.\\ cs
+  bindType name (TypeScheme fvariables ct)
+
+collectSignatureM :: Signature -> M ()
+collectSignatureM sig@(Signature pos name typ constraints) = do 
+  collectGenericSignatureM sig
+  TypeScheme fvariables ct <- lookupType name
+  newVariables <- mapM (const freshTypeVar) fvariables
+  overrideType name (TypeScheme []
+                      (substituteConstrainedType
+                        (M.fromList (zip fvariables newVariables))
+                        ct))
 
 inferTypeDeclarationsM :: [Declaration] -> M [Declaration]
 inferTypeDeclarationsM decls =
-    let definedVars = S.unions (map declVars decls)
+    let definedVars   = S.unions (map declarationHeadVar decls)
+        declaredTypes = concatMap declarationVarType decls
      in do mapM_ bindToFreshTypeIfNotLocallyBound (S.toList definedVars)
-           result <- mapM inferTypeDeclarationM decls
-           --TODO:
-           --
-           -- Problema:
-           --
-           --  f : a -> a
-           --  f 1 = 2
-           --
-           -- TIPA
-           --
-           --logFS ("Defined vars: " ++ show definedVars)
-           --definedVarTypes <- mapM (\ x -> do (TypeScheme _ (ConstrainedType _ typ)) <- lookupType x
-           --                                   unfoldType typ)
-           --                        (S.toList definedVars)
-           --logFS ("Real type   : " ++ unwords (map show definedVarTypes))
-           return result
+           mapM inferTypeDeclarationM decls
   where
-    declVars (ValueDeclaration (Equation _ lhs _)) =
+    declarationHeadVar (ValueDeclaration (Equation _ lhs _)) =
       S.fromList [fromJust (exprHeadVariable lhs)]
-    declVars _ = S.empty
+    declarationHeadVar _ = S.empty
+
+    declarationVarType (TypeSignature (Signature _ name typ constraints)) =
+      error "TODO"
+    declarationVarType _ = []
 
 inferTypeDeclarationM :: Declaration -> M Declaration
 inferTypeDeclarationM decl@(DataDeclaration _ _ _) =
@@ -347,14 +355,6 @@ inferTypeDeclarationM (ClassDeclaration pos className typeName methods) =
 inferTypeDeclarationM (InstanceDeclaration pos className typ
                                            constraints methods) =
   inferTypeInstanceDeclarationM pos className typ constraints methods
-
-collectSignatureM :: Signature -> M ()
-collectSignatureM (Signature pos name typ constraints) = do 
-  setPosition pos
-  ct <- constrainedType constraints typ
-  cs <- allTypeConstants
-  let fvariables = S.toList $ constrainedTypeFreeVariables ct S.\\ cs
-  bindType name (TypeScheme fvariables ct)
 
 constrainedType :: [Constraint] -> Expr -> M ConstrainedType
 constrainedType constraints expr =
@@ -435,19 +435,6 @@ weaklyHeadNormalizeType typ = do
     instantiateT (TApp t s)   sub = TApp (instantiateT t sub)
                                          (instantiateT s sub)
 
-generalizableMetavariables :: M [TypeMetavariable]
-generalizableMetavariables = do
-    rib  <- head <$> getEnvironment
-    ribs <- tail <$> getEnvironment
-    localMetavars <- getMetavars rib
-    fixedMetavars <- S.unions <$> mapM getMetavars ribs
-    return $ S.toList (S.difference localMetavars fixedMetavars)
-  where
-    getMetavars :: M.Map QName TypeScheme -> M (S.Set TypeMetavariable)
-    getMetavars rib = do
-      schemes <- mapM unfoldTypeScheme (M.elems rib)
-      return $ S.unions (map typeSchemeMetavariables schemes)
-
 unfoldTypeScheme :: TypeScheme -> M TypeScheme
 unfoldTypeScheme (TypeScheme names constrainedType) = do
   constrainedType' <- unfoldConstrainedType constrainedType
@@ -464,20 +451,43 @@ unfoldTypeConstraint (TypeConstraint name typ) = do
   typ' <- unfoldType typ
   return $ TypeConstraint name typ'
 
-generalizeLocalVar :: [Type] -> QName -> TypeScheme -> M ()
-generalizeLocalVar genVars x (TypeScheme names constrainedType) = do
-    overrideType x (TypeScheme ((map unVar genVars) ++ names) constrainedType)
-  where
-    unVar (TVar x) = x
-    unVar _        = error "(Generalized type must be a type variable)"
-
 generalizeLocalVars :: M ()
 generalizeLocalVars = do
-  genMetavars <- generalizableMetavariables
-  genVars <- mapM (const freshTypeVar) genMetavars
-  mapM_ (uncurry setRepresentative) (zip genMetavars genVars)
-  rib <- head <$> getEnvironment
-  mapM_ (uncurry $ generalizeLocalVar genVars) (M.toList rib)
+    genVars <- generalizableVariables
+    logFS ("GENERALIZABLE:" ++ show genVars)
+    rib <- head <$> getEnvironment
+    mapM_ (uncurry $ generalizeLocalVar genVars) (M.toList rib)
+  where
+    generalizableVariables :: M [QName]
+    generalizableVariables = do
+      rib  <- head <$> getEnvironment
+      ribs <- tail <$> getEnvironment
+      -- Generalizable type variables
+      localVars <- getVars rib
+      fixedVars <- S.unions <$> mapM getVars ribs
+      constantVars <- allTypeConstants
+      let genVars = S.difference localVars (fixedVars `S.union` constantVars)
+      -- Generalizable type metavariables
+      localMetavars <- getMetavars rib
+      fixedMetavars <- S.unions <$> mapM getMetavars ribs
+      let genMetavars = S.toList (S.difference localMetavars fixedMetavars)
+      genVars' <- mapM (const freshTypeVar) genMetavars
+      mapM_ (uncurry setRepresentative) (zip genMetavars genVars')
+      --
+      return (S.toList genVars ++ map unVar genVars')
+    getVars :: M.Map QName TypeScheme -> M (S.Set QName)
+    getVars rib = do
+      schemes <- mapM unfoldTypeScheme (M.elems rib)
+      return $ S.unions (map typeSchemeFreeVariables schemes)
+    getMetavars :: M.Map QName TypeScheme -> M (S.Set TypeMetavariable)
+    getMetavars rib = do
+      schemes <- mapM unfoldTypeScheme (M.elems rib)
+      return $ S.unions (map typeSchemeMetavariables schemes)
+    generalizeLocalVar :: [QName] -> QName -> TypeScheme -> M ()
+    generalizeLocalVar genVars x (TypeScheme vars constrainedType) = do
+      overrideType x (TypeScheme (genVars ++ vars) constrainedType)
+    unVar (TVar x) = x
+    unVar _        = error "(Generalized type must be a type variable)"
 
 unfoldType :: Type -> M Type
 unfoldType t = do
