@@ -80,7 +80,6 @@ runTypeInference filename = do
                 Left e -> die e
                 Right program' -> putStrLn (show program')
 
-
 usage :: IO ()
 usage = do
   putStrLn "Usage:"

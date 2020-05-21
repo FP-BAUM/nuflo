@@ -143,7 +143,9 @@ inferKindProgramM :: Program -> M ()
 inferKindProgramM (Program decls) = do
   -- Initialize primitive types
   bindKind primitiveArrow (KFun KType (KFun KType KType))
+  addDataTypeM primitiveArrow
   bindKind primitiveInt KType
+  addDataTypeM primitiveInt
   -- Infer kinds of all declarations
   mapM_ declareTypeM decls
   mapM_ inferKindDeclarationM decls
