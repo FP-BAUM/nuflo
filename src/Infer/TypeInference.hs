@@ -38,6 +38,7 @@ inferTypes program = evalFS (inferTypeProgramM program) initialState
                        , stateTypeSynonyms          = M.empty
                        , stateEnvironment           = [M.empty]
                        , stateSubstitution          = M.empty
+                       , stateClassParameters       = M.empty
                        , stateClassMethodSignatures = M.empty
                        , stateTypeVarRenaming       = M.empty
                        }
@@ -54,6 +55,7 @@ data TypeInferState =
      -- stateEnvironment is a non-empty stack of ribs
      , stateEnvironment           :: [M.Map QName TypeScheme]
      , stateSubstitution          :: M.Map TypeMetavariable Type
+     , stateClassParameters       :: M.Map QName QName
      , stateClassMethodSignatures :: M.Map QName (M.Map QName Signature)
      , stateTypeVarRenaming       :: M.Map QName QName
      }
@@ -243,6 +245,21 @@ getClassMethodSignature className methodName = do
    else failM TypeErrorUndefinedClassMethod
               ("Undefined class method \"" ++ show methodName ++ "\". ")
 
+setClassParameter :: QName -> QName -> M ()
+setClassParameter className parameter =
+  modifyFS (\ state -> state {
+    stateClassParameters = M.insert className parameter
+                                    (stateClassParameters state)
+  })
+
+getClassParameter :: QName -> M QName
+getClassParameter className = do
+  state <- getFS
+  if M.member className (stateClassParameters state)
+   then return $
+        M.findWithDefault undefined className (stateClassParameters state)
+   else error ("(Undeclared class \"" ++ show className ++ "\")")
+
 ---- Utility functions to convert between expressions
 ---- in the AST and proper types
 
@@ -308,6 +325,7 @@ collectSignaturesM (DataDeclaration pos typ constructors) = do
   mapM_ collectGenericSignatureM constructors
 collectSignaturesM (TypeSignature signature) = collectSignatureM signature
 collectSignaturesM (ClassDeclaration pos className typeName methods) = do
+    setClassParameter className typeName
     mapM_ collectMethodSignature methods
   where
     collectMethodSignature :: Signature -> M ()
@@ -764,13 +782,19 @@ inferTypeInstanceDeclarationM pos className typ constraints methodEqs = do
 
 inferTypeMethodEquationM :: QName -> Expr -> [Constraint] -> Equation
                          -> M Equation
-inferTypeMethodEquationM className typ constraints (Equation pos lhs rhs) = do
+inferTypeMethodEquationM className instantiatedTyp constraints
+            (Equation pos lhs rhs) = do
   setPosition pos
   bound <- getAllBoundVars
   let lhsFree = exprFreeVariables bound lhs
       methodName = fromJust $ exprHeadVariable lhs
       arguments  = fromJust $ exprHeadArguments lhs
    in do
+     -- ---TODO---
+     ---instance Eq (List a) {Eq a} where
+     ---  f [] x = true   -- aceptar
+     ---  f x  1 = true   -- rechazar
+     classParameter <- getClassParameter className
      (ConstrainedType sigConstraints sigType) <-
        classMethodFreshType className methodName
      -- TODO: add sigConstraints
@@ -780,10 +804,10 @@ inferTypeMethodEquationM className typ constraints (Equation pos lhs rhs) = do
      let argTypes           = map (ctType . fst) argResults
      let argConstraints     = map (ctConstraints . fst) argResults
      let arguments'         = map snd argResults
-     (ConstrainedType tcsr tRHS, rhs') <- inferTypeExprM rhs
+     (ConstrainedType rhsConstraints tRHS, rhs') <- inferTypeExprM rhs
      setPosition pos
      unifyTypes sigType (foldr tFun tRHS argTypes)
-     solveConstraints (union (unions argConstraints) tcsr)
+     solveConstraints (union (unions argConstraints) rhsConstraints)
      exitScopeM
      let lhs' = foldl (EApp pos) (EVar pos methodName) arguments'
      return $ Equation pos lhs' rhs'
