@@ -366,18 +366,13 @@ collectSignatureM sig@(Signature pos name typ constraints) = do
 
 inferTypeDeclarationsM :: [Declaration] -> M [Declaration]
 inferTypeDeclarationsM decls =
-    let definedVars   = S.unions (map declarationHeadVar decls)
-        declaredTypes = concatMap declarationVarType decls
+    let definedVars = S.unions (map declarationHeadVar decls)
      in do mapM_ bindToFreshTypeIfNotLocallyBound (S.toList definedVars)
            mapM inferTypeDeclarationM decls
   where
     declarationHeadVar (ValueDeclaration (Equation _ lhs _)) =
       S.fromList [fromJust (exprHeadVariable lhs)]
     declarationHeadVar _ = S.empty
-
-    declarationVarType (TypeSignature (Signature _ name typ constraints)) =
-      error "TODO"
-    declarationVarType _ = []
 
 inferTypeDeclarationM :: Declaration -> M Declaration
 inferTypeDeclarationM decl@(DataDeclaration _ _ _) =
