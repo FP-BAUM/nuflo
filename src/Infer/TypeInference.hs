@@ -8,7 +8,8 @@ import Data.Maybe(fromJust)
 import Error(Error(..), ErrorType(..))
 import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Position(Position(..), unknownPosition)
-import Syntax.Name(QName(..), primitiveArrow, primitiveInt, unqualifiedName)
+import Syntax.Name(QName(..), primitiveArrow, primitiveInt,
+                   primitiveAlternative, unqualifiedName)
 import Syntax.AST(
          AnnProgram(..), Program,
          AnnDeclaration(..), Declaration,
@@ -301,6 +302,11 @@ inferTypeProgramM (Program decls) = do
   -- Declare built-in type constructors
   addTypeConstant primitiveArrow
   addTypeConstant primitiveInt
+  -- Declare types of built-in functions
+  let tA = Name "{a}"
+  bindType primitiveAlternative
+           (TypeScheme [tA] (ConstrainedType []
+             (tFun (TVar tA) (tFun (TVar tA) (TVar tA)))))
   -- Infer
   mapM_ collectTypeDeclarationM decls
   mapM_ collectSignaturesM decls
@@ -753,7 +759,7 @@ inferTypeInstanceDeclarationM pos className typ constraints methodEqs = do
     buildRHS methodEqs' = do
       classMethodNames <- getClassMethodNames className
       case groupEquations methodEqs' of
-        Left  errmsg -> failM InstanceErrorDuplicatedMethodefinition errmsg
+        Left  errmsg -> failM InstanceErrorDuplicatedMethodDefinition errmsg
         Right methodEqs'' -> do
           let instanceMethodNames  = map (unEVar . equationLHS) methodEqs''
           let classMethodNamesS    = S.fromList classMethodNames

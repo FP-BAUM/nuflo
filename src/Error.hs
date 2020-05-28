@@ -49,7 +49,7 @@ data ErrorType =
   | TypeErrorSynonymLoop
   | TypeErrorUndefinedClassMethod
   | ClassErrorConstrainedParameter
-  | InstanceErrorDuplicatedMethodefinition
+  | InstanceErrorDuplicatedMethodDefinition
   | InstanceErrorMethodMismatch
   deriving (Eq, Show)
 

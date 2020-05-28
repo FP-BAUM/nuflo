@@ -389,28 +389,113 @@ tests = TestSuite "TYPE INFERENCE" [
 
   ],
 
-  TestSuite "Class constraints" [
+  TestSuite "Class declarations" [
+
     testProgramOK "Emtpy class declaration" (unlines [
       "class Eq a where"
     ]),
 
-    testProgramError "Reject contrained class parameter" (unlines [
+    testProgramError "Reject constrained class parameter" (unlines [
       "class Show a where",
       "class Eq a where",
       " f : a -> b {Show a}"
     ]) ClassErrorConstrainedParameter,
 
-    testProgramOK "main using class method" (unlines [
+    testProgramOK "Use class method" (unlines [
       "class Eq a where",
       " f : a -> b",
       "main x = f x"
     ]),
 
-    testProgramOK "main using class method in inverse eorder" (unlines [
+    testProgramOK "Use class method before declaration" (unlines [
       "main x = f x",
       "class Eq a where",
       " f : a -> b"
     ])
+  ],
+
+  TestSuite "Instance declarations" [
+
+    testProgramOK "Basic instance declaration" (unlines [
+      "data Bool where",
+      "  True  : Bool",
+      "  False : Bool",
+      "class Eq a where",
+      "  == : a -> a -> Bool",
+      "instance Eq Bool where",
+      "  == True  True  = True",
+      "  == True  False = False",
+      "  == False True  = False",
+      "  == False False = True"
+    ]),
+
+    testProgramOK "Accept method declarations in different order" (unlines [
+      "data Bool where",
+      "  True  : Bool",
+      "  False : Bool",
+      "class F a where",
+      "  f : a",
+      "  g : a",
+      "instance F Bool where",
+      "  g = True",
+      "  f = True",
+      "  f = False"
+    ]),
+
+    testProgramOK "Instance declaration with parameter" (unlines [
+      "data Bool where",
+      "  True  : Bool",
+      "  False : Bool",
+      "data List a where",
+      "  Nil   : List a",
+      "  Cons  : a -> List a -> List a",
+      "class Eq a where",
+      "  == : a -> a -> Bool",
+      "instance Eq Bool where",
+      "  == x y = True",
+      "instance Eq (List a) where",
+      "  == Nil         Nil         = True",
+      "  == (Cons x xs) (Cons y ys) = True"
+    ]),
+
+    testProgramError "Reject instance declaration missing methods" (unlines [
+      "data Bool where",
+      "  True  : Bool",
+      "  False : Bool",
+      "class F a where",
+      "  f : a",
+      "  g : a",
+      "instance F Bool where",
+      "  g = True"
+    ]) InstanceErrorMethodMismatch,
+
+    testProgramError "Reject duplicated method definitions" (unlines [
+      "data Bool where",
+      "  True  : Bool",
+      "  False : Bool",
+      "class F a where",
+      "  f : a",
+      "  g : a",
+      "instance F Bool where",
+      "  f = True",
+      "  g = True",
+      "  f = False"
+    ]) InstanceErrorDuplicatedMethodDefinition,
+
+    testProgramError "Reject definition of method not declared in class"
+      (unlines [
+        "data Bool where",
+        "  True  : Bool",
+        "  False : Bool",
+        "class F a where",
+        "  f : a",
+        "  g : a",
+        "instance F Bool where",
+        "  f = True",
+        "  g = True",
+        "  h = True"
+      ]) TypeErrorUndefinedClassMethod
+
   ],
 
   testProgramError "Reject unbound variable" (unlines [
