@@ -782,8 +782,8 @@ inferTypeInstanceDeclarationM pos className typ constraints methodEqs = do
 
 inferTypeMethodEquationM :: QName -> Expr -> [Constraint] -> Equation
                          -> M Equation
-inferTypeMethodEquationM className instantiatedTyp constraints
-            (Equation pos lhs rhs) = do
+inferTypeMethodEquationM className instantiatedType instantiatedTypeConstraints
+                         (Equation pos lhs rhs) = do
   setPosition pos
   bound <- getAllBoundVars
   let lhsFree = exprFreeVariables bound lhs
@@ -797,6 +797,8 @@ inferTypeMethodEquationM className instantiatedTyp constraints
      classParameter <- getClassParameter className
      (ConstrainedType sigConstraints sigType) <-
        classMethodFreshType className methodName
+                            classParameter
+                            instantiatedType instantiatedTypeConstraints
      -- TODO: add sigConstraints
      enterScopeM
      mapM_ bindToFreshType lhsFree
@@ -815,8 +817,10 @@ inferTypeMethodEquationM className instantiatedTyp constraints
     ctType        (ConstrainedType _ t) = t
     ctConstraints (ConstrainedType c _) = c
 
-classMethodFreshType :: QName -> QName -> M ConstrainedType
-classMethodFreshType className methodName = do
+classMethodFreshType :: QName -> QName -> QName -> Expr -> [Constraint]
+                              -> M ConstrainedType
+classMethodFreshType className methodName classParameter
+                     instantiatedType instantiatedTypeConstraints = do
   methodSignature <- getClassMethodSignature className methodName
   let sigType        = exprToType (signatureType methodSignature)
   let sigConstraints = map constraintToTypeConstraint
@@ -825,10 +829,29 @@ classMethodFreshType className methodName = do
   constants <- allTypeConstants
   let fvariables = S.toList
                      (constrainedTypeFreeVariables sigConstrainedType
-                      S.\\ constants)
+                      S.\\ (constants `S.union` S.singleton classParameter))
+  newVariables <- mapM (const freshTypeVar) fvariables
+  (ConstrainedType instantiatedTypeConstraints' instantiatedType') <-
+    refreshConstrainedType instantiatedType instantiatedTypeConstraints
+  let substitution = M.fromList ((classParameter, instantiatedType')
+                                : zip fvariables newVariables)
+  let (ConstrainedType sigConstraints' sigType') = substituteConstrainedType
+                                                     substitution
+                                                     sigConstrainedType
+  return $ ConstrainedType (sigConstraints' ++ instantiatedTypeConstraints')
+                           sigType'
+
+refreshConstrainedType :: Expr -> [Constraint] -> M ConstrainedType
+refreshConstrainedType typ constraints = do
+  let constrainedType = ConstrainedType
+                          (map constraintToTypeConstraint constraints)
+                          (exprToType typ)
+  constants <- allTypeConstants
+  let fvariables = S.toList (constrainedTypeFreeVariables constrainedType
+                            S.\\ constants)
   newVariables <- mapM (const freshTypeVar) fvariables
   let substitution = M.fromList (zip fvariables newVariables)
-  return $ substituteConstrainedType substitution sigConstrainedType
+  return $ substituteConstrainedType substitution constrainedType
 
 unions :: Eq a => [[a]] -> [a]
 unions = foldr union []

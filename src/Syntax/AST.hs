@@ -176,7 +176,8 @@ instance EraseAnnotations AnnConstraint where
   eraseAnnotations (Constraint _ x y) = Constraint () x y
 
 instance EraseAnnotations AnnCaseBranch where
-  eraseAnnotations (CaseBranch _ p r) =  CaseBranch () (eraseAnnotations p) (eraseAnnotations r)
+  eraseAnnotations (CaseBranch _ p r) =
+    CaseBranch () (eraseAnnotations p) (eraseAnnotations r)
 
 instance EraseAnnotations AnnExpr where
   eraseAnnotations (EVar _ q)          = EVar () q
@@ -217,7 +218,8 @@ exprFreeVariables bound (EVar _ x)        = if x `S.member` bound
                                              else S.fromList [x]
 exprFreeVariables bound (EUnboundVar _ x) = S.fromList [x]
 exprFreeVariables bound (EInt _ _)        = S.empty
-exprFreeVariables bound (EApp _ e1 e2)    = exprFreeVariables bound e1 `S.union`
+exprFreeVariables bound (EApp _ e1 e2)    = exprFreeVariables bound e1
+                                            `S.union`
                                             exprFreeVariables bound e2
 exprFreeVariables bound (ELambda _ e1 e2) =
   exprFreeVariables
