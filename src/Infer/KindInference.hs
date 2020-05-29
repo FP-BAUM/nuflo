@@ -300,6 +300,8 @@ inferKindExpressionM (ECase _ e branches) = do
   inferKindExpressionM e
   mapM_ inferKindBranchM branches
 inferKindExpressionM (EFresh _ _ e)       = inferKindExpressionM e
+inferKindExpressionM (EPlaceHolder _ _)   =
+  error "(Impossible: kind inference of instance PlaceHolder)"
 
 inferKindBranchM :: CaseBranch -> M ()
 inferKindBranchM (CaseBranch _ p e) = do

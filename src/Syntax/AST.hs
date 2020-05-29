@@ -7,6 +7,7 @@ module Syntax.AST(
          AnnConstraint(..), Constraint,
          AnnCaseBranch(..), CaseBranch,
          AnnExpr(..), Expr,
+         PlaceHolderId,
          eraseAnnotations, exprAnnotation,
          exprIsVariable, exprHeadVariable, exprHeadArguments,
          exprFunctionType, exprAlternative,
@@ -86,6 +87,7 @@ data AnnCaseBranch a = CaseBranch {
                        } deriving Eq
 
 -- Annotated expression
+type PlaceHolderId = Int
 data AnnExpr a =
     EVar a QName                           -- variable
   | EUnboundVar a QName                    -- force unbound variable
@@ -95,17 +97,19 @@ data AnnExpr a =
   | ELet a [AnnDeclaration a] (AnnExpr a)  -- let
   | ECase a (AnnExpr a) [AnnCaseBranch a]  -- case
   | EFresh a QName (AnnExpr a)             -- fresh
+  | EPlaceHolder a PlaceHolderId           -- placeholder for instances
   deriving Eq
 
 exprAnnotation :: AnnExpr a -> a
-exprAnnotation (EVar a _)        = a
-exprAnnotation (EUnboundVar a _) = a
-exprAnnotation (EInt a _)        = a
-exprAnnotation (EApp a _ _)      = a
-exprAnnotation (ELambda a _ _)   = a
-exprAnnotation (ELet a _ _)      = a
-exprAnnotation (ECase a _ _)     = a
-exprAnnotation (EFresh a _ _)    = a
+exprAnnotation (EVar a _)         = a
+exprAnnotation (EUnboundVar a _)  = a
+exprAnnotation (EInt a _)         = a
+exprAnnotation (EApp a _ _)       = a
+exprAnnotation (ELambda a _ _)    = a
+exprAnnotation (ELet a _ _)       = a
+exprAnnotation (ECase a _ _)      = a
+exprAnnotation (EFresh a _ _)     = a
+exprAnnotation (EPlaceHolder a _) = a
 
 exprFunctionType :: AnnExpr a -> AnnExpr a -> AnnExpr a
 exprFunctionType dom cod =
@@ -193,6 +197,7 @@ instance EraseAnnotations AnnExpr where
   eraseAnnotations (ECase _ e bs)      = ECase () (eraseAnnotations e)
                                                   (map eraseAnnotations bs)
   eraseAnnotations (EFresh _ name e)   = EFresh () name (eraseAnnotations e)
+  eraseAnnotations (EPlaceHolder _ id) = EPlaceHolder () id
 
 --
 
@@ -245,10 +250,13 @@ exprFreeVariables bound (ELet _ declarations body) =
       let f = fromJust (exprHeadVariable lhs)
        in S.fromList [f]
     declBoundVariables _ = S.empty
-exprFreeVariables bound (ECase _ _ _)     = error "NOT IMPLEMENTED"
-exprFreeVariables bound (EFresh _ x e)    = exprFreeVariables
-                                              (S.insert x bound)
-                                              e
+exprFreeVariables bound (ECase _ _ _)      = error "NOT IMPLEMENTED"
+exprFreeVariables bound (EFresh _ x e)     = exprFreeVariables
+                                               (S.insert x bound)
+                                               e
+exprFreeVariables bound (EPlaceHolder _ _) =
+  error "(Free variables of a placeholder should not be requested)"
+
 ---- Show
 
 joinS :: String -> [String] -> String
@@ -322,6 +330,8 @@ instance Show (AnnExpr a) where
     "(case " ++ show e ++ " of {" ++ (joinS "; " (map show branches)) ++ "})"
   show (EFresh _ name e)      =
     "(fresh " ++ show name ++ " in " ++ show e ++ ")"
+  show (EPlaceHolder _ id)      =
+    "{PLACEHOLDER_" ++ show id ++ "}"
 
 -- Split the left-hand side in the definition of a datatype,
 -- such as "Map a b" into the head "Map" and the arguments ["a", "b"]

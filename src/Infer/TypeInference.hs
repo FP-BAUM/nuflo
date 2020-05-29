@@ -17,7 +17,9 @@ import Syntax.AST(
          AnnEquation(..), Equation,
          AnnConstraint(..), Constraint,
          AnnCaseBranch(..), CaseBranch,
-         AnnExpr(..), Expr, exprHeadVariable, exprHeadArguments,
+         AnnExpr(..), Expr,
+         PlaceHolderId,
+         exprHeadVariable, exprHeadArguments,
          exprFreeVariables, exprFunctionType, splitDatatypeArgsOrFail
        )
 import Calculus.Types(
@@ -42,6 +44,9 @@ inferTypes program = evalFS (inferTypeProgramM program) initialState
                        , stateClassParameters       = M.empty
                        , stateClassMethodSignatures = M.empty
                        , stateTypeVarRenaming       = M.empty
+                       ---- Constraints
+                       , stateMethodInfo            = M.empty
+                       , statePendingConstraints    = [M.empty]
                        }
 
 ---- Type inference monad
@@ -59,8 +64,15 @@ data TypeInferState =
      , stateClassParameters       :: M.Map QName QName
      , stateClassMethodSignatures :: M.Map QName (M.Map QName Signature)
      , stateTypeVarRenaming       :: M.Map QName QName
+     ---- Constraints
+     , stateMethodInfo            :: M.Map QName MethodInfo
+     -- statePendingConstraints is a non-empty stack of ribs
+     , statePendingConstraints    :: [M.Map ConstrainedType PlaceHolderId]
      }
 type TypeSynonymTable = M.Map QName ([QName], Type)
+data MethodInfo = MethodInfo { methodInfoClassName :: QName
+                             , methodSignature     :: Signature
+                             }
 
 type M = FailState TypeInferState
 
@@ -225,6 +237,11 @@ addClassMethodSignature className methodSignature = do
                          methodSignature
                          (M.findWithDefault M.empty className ms))
                ms
+    ,
+    stateMethodInfo =
+      M.insert (signatureName methodSignature)
+               (MethodInfo className methodSignature)
+               (stateMethodInfo state)
   })
 
 getClassMethodNames :: QName -> M [QName]
@@ -245,6 +262,11 @@ getClassMethodSignature className methodName = do
    then return $ M.findWithDefault undefined methodName ms
    else failM TypeErrorUndefinedClassMethod
               ("Undefined class method \"" ++ show methodName ++ "\". ")
+
+isMethod :: QName -> M Bool
+isMethod methodName = do
+  state <- getFS
+  return $ M.member methodName (stateMethodInfo state)
 
 setClassParameter :: QName -> QName -> M ()
 setClassParameter className parameter =
@@ -587,6 +609,8 @@ inferTypeExprM (ELambda pos e1 e2)        = inferTypeELambdaM pos e1 e2
 inferTypeExprM (ELet pos decls body)      = inferTypeELetM pos decls body
 inferTypeExprM (ECase pos guard branches) = inferTypeECaseM pos guard branches
 inferTypeExprM (EFresh pos x body)        = inferTypeEFreshM pos x body
+inferTypeExprM (EPlaceHolder _ _)         =
+  error "(Impossible: type inference of an instance placeholder)"
 
 -- Integer constant (n)
 inferTypeEIntM :: Position -> Integer -> M InferResult
@@ -598,7 +622,10 @@ inferTypeEVarM pos x = do
   setPosition pos
   TypeScheme gvars constrainedType <- lookupType x
   constrainedType' <- freshenVariables gvars constrainedType -- Instantiate
-  return (constrainedType', EVar pos x)
+  b <- isMethod x
+  if b
+   then error "TODO: inferencia de variable cuando es un método"
+   else return (constrainedType', EVar pos x)
 
 -- e1 e2
 inferTypeEAppM :: Position -> Expr -> Expr -> M InferResult
@@ -791,10 +818,6 @@ inferTypeMethodEquationM className instantiatedType instantiatedTypeConstraints
       methodName = fromJust $ exprHeadVariable lhs
       arguments  = fromJust $ exprHeadArguments lhs
    in do
-     -- ---TODO---
-     ---instance Eq (List a) {Eq a} where
-     ---  f [] x = true   -- aceptar
-     ---  f x  1 = true   -- rechazar
      classParameter <- getClassParameter className
      (ConstrainedType sigConstraints sigType) <-
        classMethodFreshType className methodName
