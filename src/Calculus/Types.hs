@@ -1,7 +1,9 @@
 module Calculus.Types(
          TypeMetavariable, TypeConstraint(..),
          TypeScheme(..),  ConstrainedType(..), Type(..),
+         TypeSubstitution(..),
          substituteConstrainedType,
+         substituteType,
          constrainedTypeFreeVariables,
          typeSchemeMetavariables, typeSchemeFreeVariables,
          tFun, tInt

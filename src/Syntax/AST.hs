@@ -87,7 +87,7 @@ data AnnCaseBranch a = CaseBranch {
                        } deriving Eq
 
 -- Annotated expression
-type PlaceHolderId = Int
+type PlaceHolderId = Integer
 data AnnExpr a =
     EVar a QName                           -- variable
   | EUnboundVar a QName                    -- force unbound variable

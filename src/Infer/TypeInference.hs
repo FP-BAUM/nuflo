@@ -25,7 +25,9 @@ import Syntax.AST(
 import Calculus.Types(
          TypeMetavariable, TypeConstraint(..),
          TypeScheme(..),  ConstrainedType(..), Type(..),
+         TypeSubstitution(..),
          substituteConstrainedType,
+         substituteType,
          typeSchemeMetavariables, typeSchemeFreeVariables,
          constrainedTypeFreeVariables,
          tFun, tInt
@@ -47,6 +49,8 @@ inferTypes program = evalFS (inferTypeProgramM program) initialState
                        ---- Constraints
                        , stateMethodInfo            = M.empty
                        , statePendingConstraints    = [M.empty]
+                       , stateFreshPlaceHolder      = 0
+                       , stateLocalConstraints      = M.empty
                        }
 
 ---- Type inference monad
@@ -68,6 +72,8 @@ data TypeInferState =
      , stateMethodInfo            :: M.Map QName MethodInfo
      -- statePendingConstraints is a non-empty stack of ribs
      , statePendingConstraints    :: [M.Map ConstrainedType PlaceHolderId]
+     , stateFreshPlaceHolder      :: Integer
+     , stateLocalConstraints      :: M.Map (QName, TypeMetavariable) PlaceHolderId
      }
 type TypeSynonymTable = M.Map QName ([QName], Type)
 data MethodInfo = MethodInfo { methodInfoClassName :: QName
@@ -184,12 +190,32 @@ addTypeConstant name =
     state { stateTypeConstants = S.insert name (stateTypeConstants state) }
   )
 
-freshenVariables :: [QName] -> ConstrainedType -> M ConstrainedType
+freshenVariables :: [QName] -> ConstrainedType -> M ([PlaceHolderId], ConstrainedType)
 freshenVariables names constrainedType = do
   sub <- M.fromList <$> mapM (\ name -> do ft <- freshType 
                                            return (name, ft)) names
   constrainedType' <- unfoldConstrainedType constrainedType
-  return $ substituteConstrainedType sub constrainedType'
+  freshenConstrainedType sub constrainedType'
+  where
+    freshenConstrainedType :: TypeSubstitution ->  ConstrainedType -> M ([PlaceHolderId], ConstrainedType)
+    freshenConstrainedType sub (ConstrainedType typeConstraints typ) = do
+      (placeholders, remainingConstraints) <- splitConstriants sub typeConstraints
+      return (placeholders, ConstrainedType remainingConstraints (substituteType sub typ))
+    
+    unMetaVar :: Type -> TypeMetavariable
+    unMetaVar (TMetavar metaVar) = metaVar
+    unMetaVar _ = error "not a meta variable"
+
+    splitConstriants :: TypeSubstitution -> [TypeConstraint] -> M ([PlaceHolderId], [TypeConstraint])
+    splitConstriants _ [] = return ([], [])
+    splitConstriants sub ((TypeConstraint className typ) : typeConstraints) = do
+      (placeholderIds, remainingConstraints) <- splitConstriants sub typeConstraints
+      case typ of
+        (TVar typeName) | elem typeName names -> do
+          let metaVar = unMetaVar $ M.findWithDefault undefined typeName sub
+          p <- freshPlaceHolder className metaVar
+          return (p : placeholderIds, remainingConstraints)
+        _             -> return (placeholderIds, (TypeConstraint className typ) : remainingConstraints)
 
 lookupMetavar :: TypeMetavariable -> M (Maybe Type)
 lookupMetavar meta = do
@@ -304,6 +330,17 @@ typeConstraintToConstraint :: Position -> TypeConstraint -> Constraint
 typeConstraintToConstraint pos (TypeConstraint className typ) =
   let (EVar _ name) = typeToExpr pos typ
    in Constraint pos className name
+
+freshPlaceHolder :: QName -> TypeMetavariable -> M PlaceHolderId
+freshPlaceHolder className metaVar = do 
+  state <- getFS
+  let id = stateFreshPlaceHolder state
+  putFS (state {
+    stateFreshPlaceHolder = stateFreshPlaceHolder state + 1,
+    stateLocalConstraints = M.insert (className, metaVar) id (stateLocalConstraints state)
+    })
+
+  return id
 
 ---- Name mangling to avoid collisions with user names
 
@@ -621,11 +658,8 @@ inferTypeEVarM :: Position -> QName -> M InferResult
 inferTypeEVarM pos x = do
   setPosition pos
   TypeScheme gvars constrainedType <- lookupType x
-  constrainedType' <- freshenVariables gvars constrainedType -- Instantiate
-  b <- isMethod x
-  if b
-   then error "TODO: inferencia de variable cuando es un método"
-   else return (constrainedType', EVar pos x)
+  (placeholderIds, constrainedType') <- freshenVariables gvars constrainedType -- Instantiate
+  return (constrainedType', foldl (\exp pId -> EApp pos exp (EPlaceHolder pos pId)) (EVar pos x) placeholderIds)
 
 -- e1 e2
 inferTypeEAppM :: Position -> Expr -> Expr -> M InferResult
