@@ -49,8 +49,11 @@ data ErrorType =
   | TypeErrorSynonymLoop
   | TypeErrorUndefinedClassMethod
   | ClassErrorConstrainedParameter
+  | InstanceErrorDuplicateInstance
   | InstanceErrorDuplicatedMethodDefinition
   | InstanceErrorMethodMismatch
+  | ConstraintErrorUnresolvedPlaceholder
+  | ConstraintErrorUndeclaredInstance
   deriving (Eq, Show)
 
 errorAtUnknown :: ErrorType -> String -> Error

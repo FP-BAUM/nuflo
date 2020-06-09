@@ -402,15 +402,17 @@ tests = TestSuite "TYPE INFERENCE" [
     ]) ClassErrorConstrainedParameter,
 
     testProgramOK "Use class method" (unlines [
-      "class Eq a where",
-      " f : a -> b",
+      "class F a where",
+      " f : a -> a",
+      "main : a -> a  {F a}",
       "main x = f x"
     ]),
 
     testProgramOK "Use class method before declaration" (unlines [
+      "main : a -> a  {F a}",
       "main x = f x",
-      "class Eq a where",
-      " f : a -> b"
+      "class F a where",
+      " f : a -> a"
     ])
   ],
 
@@ -428,6 +430,17 @@ tests = TestSuite "TYPE INFERENCE" [
       "  == False True  = False",
       "  == False False = True"
     ]),
+
+    testProgramError "Reject duplicate instance declarations" (unlines [
+      "data Bool where",
+      "  True  : Bool",
+      "class Eq a where",
+      "  == : a -> a -> Bool",
+      "instance Eq Bool where",
+      "  == True  True  = True",
+      "instance Eq Bool where",
+      "  == True  False = True"
+    ]) InstanceErrorDuplicateInstance,
 
     testProgramOK "Accept method declarations in different order" (unlines [
       "data Bool where",
@@ -498,6 +511,32 @@ tests = TestSuite "TYPE INFERENCE" [
 
   ],
 
+  TestSuite "Constraint solving" [
+
+    testProgramOK "Instantiate metavariable in constrained metavariable"
+      (unlines [
+        "class F a where",
+        "  f : a -> a -> Bool",
+        "main : a -> Bool {F a}",
+        "main y = (let x : a {F a}",
+        "              x = x",
+        "           in f x) y"
+      ]),
+
+    testProgramError "Fail upon unresolved instance placeholder" (unlines [
+      "class F a where",
+      " f : a -> a",
+      "main = f"
+    ]) ConstraintErrorUnresolvedPlaceholder,
+
+    testProgramError "Unsolvable constraint (undeclared instance)" (unlines [
+      "class F a where",
+      "  f : a -> a",
+      "main = f 1"
+    ]) ConstraintErrorUndeclaredInstance
+
+  ],
+  
   testProgramError "Reject unbound variable" (unlines [
     "f x = y"
   ]) TypeErrorUnboundVariable,

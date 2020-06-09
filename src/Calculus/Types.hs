@@ -2,11 +2,10 @@ module Calculus.Types(
          TypeMetavariable, TypeConstraint(..),
          TypeScheme(..),  ConstrainedType(..), Type(..),
          TypeSubstitution(..),
-         substituteConstrainedType,
-         substituteType,
+         substituteConstrainedType, substituteType,
          constrainedTypeFreeVariables,
          typeSchemeMetavariables, typeSchemeFreeVariables,
-         tFun, tInt
+         tFun, tInt, typeHead, typeArgs, unTVar
        ) where
 
 import Syntax.Name(QName(..), primitiveArrow, primitiveInt)
@@ -97,6 +96,24 @@ tFun = TApp . TApp (TVar primitiveArrow)
 
 tInt :: Type
 tInt = TVar primitiveInt
+
+----
+
+typeHead :: Type -> Type
+typeHead (TMetavar x) = TMetavar x
+typeHead (TVar x)     = TVar x
+typeHead (TApp t _)   = typeHead t
+
+typeArgs :: Type -> [Type]
+typeArgs (TMetavar _) = []
+typeArgs (TVar _)     = []
+typeArgs (TApp t1 t2) = typeArgs t1 ++ [t2]
+
+----
+
+unTVar :: Type -> QName
+unTVar (TVar x) = x
+unTVar _        = error "(unTVar: type must be a type variable)"
 
 ---- Show
 

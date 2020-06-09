@@ -18,9 +18,11 @@ import Syntax.AST(
          AnnConstraint(..), Constraint,
          AnnCaseBranch(..), CaseBranch,
          AnnExpr(..), Expr,
-         PlaceHolderId,
+         PlaceholderId,
+         exprAnnotation,
          exprHeadVariable, exprHeadArguments,
-         exprFreeVariables, exprFunctionType, splitDatatypeArgsOrFail
+         exprFreeVariables, exprFunctionType, splitDatatypeArgsOrFail,
+         unfoldPlaceholders
        )
 import Calculus.Types(
          TypeMetavariable, TypeConstraint(..),
@@ -30,7 +32,7 @@ import Calculus.Types(
          substituteType,
          typeSchemeMetavariables, typeSchemeFreeVariables,
          constrainedTypeFreeVariables,
-         tFun, tInt
+         tFun, tInt, typeHead, typeArgs, unTVar
        )
 import Infer.GroupEquations(groupEquations)
 
@@ -48,12 +50,34 @@ inferTypes program = evalFS (inferTypeProgramM program) initialState
                        , stateTypeVarRenaming       = M.empty
                        ---- Constraints
                        , stateMethodInfo            = M.empty
-                       , statePendingConstraints    = [M.empty]
-                       , stateFreshPlaceHolder      = 0
-                       , stateLocalConstraints      = M.empty
+                       , stateFreshPlaceholder      = 0
+                       , stateGlobalInstances       = M.empty
+                       , stateConstraintEnv         = M.empty
+                       , statePlaceholderHeap       = M.empty
                        }
 
 ---- Type inference monad
+
+--
+-- stateGlobalInstances:
+--   Has the rules given by instance declarations.
+--   For example, the instance declaration
+--   "instance Eq (List a) {Eq a}"
+--   corresponds to an entry
+--     (<Eq>, <List>) ~~>
+--       GlobalInstance <Eq> <List a> [(<Eq>, <a>)].
+--
+-- stateConstraintEnv:
+--   Has the placeholders for the current pending constraints.
+--   For example, each time we use a function:
+--       f : a -> a -> String   {Show a, Eq a}
+--   Its type variables are instantiated in fresh metavariables:
+--       <?1> -> <?1> -> String
+--   Two new instance placeholders are created and set in this map:
+--       (<Show>, <?1>) ~~> PLACEHOLDER_91
+--       (<Eq>, <?1>)   ~~> PLACEHOLDER_92
+--   And the resulting expression is:
+--       (f PLACEHOLDER_91 PLACEHOLDER_92)
 
 data TypeInferState =
      TypeInferState {
@@ -70,15 +94,22 @@ data TypeInferState =
      , stateTypeVarRenaming       :: M.Map QName QName
      ---- Constraints
      , stateMethodInfo            :: M.Map QName MethodInfo
-     -- statePendingConstraints is a non-empty stack of ribs
-     , statePendingConstraints    :: [M.Map ConstrainedType PlaceHolderId]
-     , stateFreshPlaceHolder      :: Integer
-     , stateLocalConstraints      :: M.Map (QName, TypeMetavariable) PlaceHolderId
+     , stateFreshPlaceholder      :: Integer
+     , stateGlobalInstances       :: M.Map (QName, QName) GlobalInstance
+     , stateConstraintEnv         :: M.Map (QName, TypeMetavariable)
+                                           PlaceholderId
+     , statePlaceholderHeap       :: M.Map PlaceholderId Expr
      }
 type TypeSynonymTable = M.Map QName ([QName], Type)
 data MethodInfo = MethodInfo { methodInfoClassName :: QName
                              , methodSignature     :: Signature
                              }
+data GlobalInstance = GlobalInstance {
+                        globalInstanceClass           :: QName
+                      , globalInstanceTypeConstructor :: QName
+                      , globalInstanceTypeParameters  :: [QName]
+                      , globalInstanceConstraints     :: [(QName, QName)]
+                      }
 
 type M = FailState TypeInferState
 
@@ -161,18 +192,18 @@ getAllBoundVars = do
 
 enterScopeM :: M ()
 enterScopeM = modifyFS (\ state -> state {
-                stateEnvironment = M.empty : stateEnvironment state
+                stateEnvironment   = M.empty : stateEnvironment state
               })
+
+exitScopeM :: M ()
+exitScopeM = modifyFS (\ state -> state {
+               stateEnvironment   = tail $ stateEnvironment state
+             })
 
 getEnvironment :: M [M.Map QName TypeScheme]
 getEnvironment = do
   state <- getFS
   return $ stateEnvironment state
-
-exitScopeM :: M ()
-exitScopeM = modifyFS (\ state -> state {
-               stateEnvironment = tail $ stateEnvironment state
-             })
 
 allTypeConstants :: M (S.Set QName)
 allTypeConstants = do
@@ -190,32 +221,48 @@ addTypeConstant name =
     state { stateTypeConstants = S.insert name (stateTypeConstants state) }
   )
 
-freshenVariables :: [QName] -> ConstrainedType -> M ([PlaceHolderId], ConstrainedType)
-freshenVariables names constrainedType = do
+freshenVariables :: [QName] -> ConstrainedType
+                 -> M ([PlaceholderId], ConstrainedType)
+freshenVariables genVarNames constrainedType = do
   sub <- M.fromList <$> mapM (\ name -> do ft <- freshType 
-                                           return (name, ft)) names
+                                           return (name, ft))
+                             genVarNames
   constrainedType' <- unfoldConstrainedType constrainedType
   freshenConstrainedType sub constrainedType'
   where
-    freshenConstrainedType :: TypeSubstitution ->  ConstrainedType -> M ([PlaceHolderId], ConstrainedType)
+    freshenConstrainedType :: TypeSubstitution ->  ConstrainedType
+                           -> M ([PlaceholderId], ConstrainedType)
     freshenConstrainedType sub (ConstrainedType typeConstraints typ) = do
-      (placeholders, remainingConstraints) <- splitConstriants sub typeConstraints
-      return (placeholders, ConstrainedType remainingConstraints (substituteType sub typ))
+      (plhs, remainingConstraints) <-
+        freshenConstraints sub typeConstraints
+      return (plhs,
+              ConstrainedType remainingConstraints (substituteType sub typ))
     
     unMetaVar :: Type -> TypeMetavariable
-    unMetaVar (TMetavar metaVar) = metaVar
+    unMetaVar (TMetavar metavar) = metavar
     unMetaVar _ = error "not a meta variable"
 
-    splitConstriants :: TypeSubstitution -> [TypeConstraint] -> M ([PlaceHolderId], [TypeConstraint])
-    splitConstriants _ [] = return ([], [])
-    splitConstriants sub ((TypeConstraint className typ) : typeConstraints) = do
-      (placeholderIds, remainingConstraints) <- splitConstriants sub typeConstraints
+    -- Given a substitution mapping (some) type variables to fresh type
+    -- metavariables, and given a list of type constraints,
+    -- split the list of type constraints into:
+    -- - Those constraining variables refreshed by the substitution.
+    --   For each of these we create a new placeholder for the instance.
+    -- - Those constraining other variables or metavariables.
+    --   These are kept and returned in the second element of the result.
+    freshenConstraints :: TypeSubstitution
+                       -> [TypeConstraint]
+                       -> M ([PlaceholderId], [TypeConstraint])
+    freshenConstraints _   [] = return ([], [])
+    freshenConstraints sub (TypeConstraint className typ : tcs) = do
+      (plhs, remainingConstraints) <- freshenConstraints sub tcs
       case typ of
-        (TVar typeName) | elem typeName names -> do
-          let metaVar = unMetaVar $ M.findWithDefault undefined typeName sub
-          p <- freshPlaceHolder className metaVar
-          return (p : placeholderIds, remainingConstraints)
-        _             -> return (placeholderIds, (TypeConstraint className typ) : remainingConstraints)
+        TVar typeName | M.member typeName sub -> do
+          let metavar = unMetaVar $ M.findWithDefault undefined typeName sub
+          plh <- freshPlaceholder
+          setMetavarPlaceholder className metavar plh
+          return (plh : plhs, remainingConstraints)
+        _  -> return (plhs,
+                      (TypeConstraint className typ) : remainingConstraints)
 
 lookupMetavar :: TypeMetavariable -> M (Maybe Type)
 lookupMetavar meta = do
@@ -331,17 +378,6 @@ typeConstraintToConstraint pos (TypeConstraint className typ) =
   let (EVar _ name) = typeToExpr pos typ
    in Constraint pos className name
 
-freshPlaceHolder :: QName -> TypeMetavariable -> M PlaceHolderId
-freshPlaceHolder className metaVar = do 
-  state <- getFS
-  let id = stateFreshPlaceHolder state
-  putFS (state {
-    stateFreshPlaceHolder = stateFreshPlaceHolder state + 1,
-    stateLocalConstraints = M.insert (className, metaVar) id (stateLocalConstraints state)
-    })
-
-  return id
-
 ---- Name mangling to avoid collisions with user names
 
 mangleClassDataType :: QName -> QName
@@ -353,6 +389,97 @@ mangleClassConstructor className = Name ("mk{" ++ show className ++ "}")
 mangleInstanceName :: QName -> QName -> QName
 mangleInstanceName className typeName =
   Name ("instance{" ++ show className ++ "}{" ++ show typeName ++ "}")
+
+---- Constraints
+
+freshPlaceholder :: M PlaceholderId
+freshPlaceholder = do 
+  state <- getFS
+  putFS (state {
+    stateFreshPlaceholder = stateFreshPlaceholder state + 1
+  })
+  return $ stateFreshPlaceholder state
+
+setMetavarPlaceholder :: QName -> TypeMetavariable -> PlaceholderId -> M ()
+setMetavarPlaceholder className metavar plh = do
+  modifyFS (\ state -> state {
+    stateConstraintEnv =
+      M.insert (className, metavar) plh (stateConstraintEnv state)
+  })
+
+getConstraints :: M (S.Set (QName, TypeMetavariable))
+getConstraints = do
+  state <- getFS
+  return $ M.keysSet (stateConstraintEnv state)
+
+getConstraintsForMetavar :: TypeMetavariable
+                         -> M [(QName, PlaceholderId)]
+getConstraintsForMetavar metavar = do
+  state <- getFS
+  return $
+    concatMap (\ ((className, metavar'), plh) ->
+                if metavar == metavar'
+                  then [(className, plh)]
+                  else [])
+              (M.toList (stateConstraintEnv state))
+
+getConstraintPlaceholder :: QName -> TypeMetavariable
+                         -> M (Maybe PlaceholderId)
+getConstraintPlaceholder className metavar = do
+  state <- getFS
+  return $ M.lookup (className, metavar) (stateConstraintEnv state)
+
+instantiatePlaceholder :: PlaceholderId -> Expr -> M ()
+instantiatePlaceholder plh expr = do
+  modifyFS (\ state -> state {
+    statePlaceholderHeap = M.insert plh expr (statePlaceholderHeap state)
+  })
+
+unfoldProgramPlaceholdersM :: Program -> M Program
+unfoldProgramPlaceholdersM program = do
+  state <- getFS
+  case unfoldPlaceholders (statePlaceholderHeap state) program of
+    Right program' -> return program'
+    Left  expr     -> do
+      setPosition (exprAnnotation expr)
+      failM ConstraintErrorUnresolvedPlaceholder
+            ("Unresolved instance constraint.\n" ++
+             "Pending instance placeholder: " ++ show expr)
+
+addGlobalInstance :: QName -> Type -> [(QName, QName)] -> M ()
+addGlobalInstance className typ constraints = do
+  state <- getFS
+  case typeHead typ of
+    TVar typeConstructor ->
+      let typeParameters = map unTVar (typeArgs typ) in
+        if M.member (className, typeConstructor) (stateGlobalInstances state)
+         then failM InstanceErrorDuplicateInstance
+                    ("Instance \"" ++ show className ++ "\"" ++
+                     " for \"" ++ show typeConstructor ++ "\"" ++
+                     " already declared.")
+         else putFS (state {
+                stateGlobalInstances   =
+                  M.insert (className, typeConstructor)
+                           (GlobalInstance className
+                                           typeConstructor
+                                           typeParameters
+                                           constraints)
+                           (stateGlobalInstances state)
+              })
+    _ -> error "(Head of instance declaration must be a type variable)"
+
+lookupGlobalInstance :: QName -> QName -> M GlobalInstance
+lookupGlobalInstance className typeConstructor = do
+    state <- getFS
+    if M.member key (stateGlobalInstances state)
+     then return $ M.findWithDefault undefined key (stateGlobalInstances state)
+     else failM ConstraintErrorUndeclaredInstance
+                ("Unsolvable constraint.\n" ++
+                 "Undeclared instance \"" ++ show className ++ "\"" ++
+                 " for \"" ++ show typeConstructor ++ "\".")
+  where key = (className, typeConstructor)
+
+-------------------------------------------------------------------------------
 
 ---- Type inference algorithm
 
@@ -370,7 +497,7 @@ inferTypeProgramM (Program decls) = do
   mapM_ collectTypeDeclarationM decls
   mapM_ collectSignaturesM decls
   decls' <- inferTypeDeclarationsM decls
-  return $ Program decls'
+  unfoldProgramPlaceholdersM (Program decls')
 
 collectTypeDeclarationM :: Declaration -> M ()
 collectTypeDeclarationM (TypeDeclaration pos typ value) = do
@@ -403,6 +530,11 @@ collectSignaturesM (ClassDeclaration pos className typeName methods) = do
        else -- Add class constraint
             let c = Constraint pos className typeName in
               collectGenericSignatureM (Signature pos methodName typ (c : cs))
+collectSignaturesM (InstanceDeclaration pos cls typ constraints _) = do
+  setPosition pos
+  addGlobalInstance cls (exprToType typ) 
+                    (map (\ (Constraint _ c v) -> (c, v))
+                         constraints)
 collectSignaturesM _ = return ()
 
 collectGenericSignatureM :: Signature -> M ()
@@ -463,19 +595,16 @@ inferTypeEquationM :: Equation -> M Equation
 inferTypeEquationM (Equation pos lhs rhs) = do
   setPosition pos
   bound <- getAllBoundVars
-  let lhsFree = exprFreeVariables bound lhs
-      --rhsFree = exprFreeVariables (bound `S.union` lhsFree) rhs
-      --allFree = lhsFree `S.union` rhsFree
-   in do
-     -- TODO: transform constraints
-     enterScopeM
-     mapM_ bindToFreshType lhsFree
-     (ConstrainedType tcsl tl, lhs') <- inferTypeExprM lhs
-     (ConstrainedType tcsr tr, rhs') <- inferTypeExprM rhs
-     unifyTypes tl tr
-     solveConstraints (union tcsl tcsr)
-     exitScopeM
-     return $ Equation pos lhs' rhs'
+  let lhsFree = exprFreeVariables bound lhs in do
+    -- TODO: transform constraints
+    enterScopeM
+    mapM_ bindToFreshType lhsFree
+    (ConstrainedType tcsl tl, lhs') <- inferTypeExprM lhs
+    (ConstrainedType tcsr tr, rhs') <- inferTypeExprM rhs
+    unifyTypes tl tr
+    --TODO: ----solveConstraints (union tcsl tcsr)
+    exitScopeM
+    return $ Equation pos lhs' rhs'
 
 representative :: Type -> M Type
 representative (TMetavar x) = do
@@ -547,13 +676,17 @@ unfoldTypeConstraint (TypeConstraint name typ) = do
   typ' <- unfoldType typ
   return $ TypeConstraint name typ'
 
-generalizeLocalVars :: M ()
-generalizeLocalVars = do
-    genVars <- generalizableVariables
+-- Identify all the type variables and type metavariables in the local
+-- environment that can be generalized with a forall. Update all the
+-- bindings in the local environment so that all these type variables
+-- become generalized.
+generalizeLocalBindings :: M ()
+generalizeLocalBindings = do
+    (genMetavars, genVars) <- generalizableVariables
     rib <- head <$> getEnvironment
-    mapM_ (uncurry $ generalizeLocalVar genVars) (M.toList rib)
+    mapM_ (uncurry $ generalizeLocalBinding genMetavars genVars) (M.toList rib)
   where
-    generalizableVariables :: M [QName]
+    generalizableVariables :: M (S.Set TypeMetavariable, S.Set QName)
     generalizableVariables = do
       rib  <- head <$> getEnvironment
       ribs <- tail <$> getEnvironment
@@ -565,11 +698,12 @@ generalizeLocalVars = do
       -- Generalizable type metavariables
       localMetavars <- getMetavars rib
       fixedMetavars <- S.unions <$> mapM getMetavars ribs
-      let genMetavars = S.toList (S.difference localMetavars fixedMetavars)
-      genVars' <- mapM (const freshTypeVar) genMetavars
-      mapM_ (uncurry setRepresentative) (zip genMetavars genVars')
+      let genMetavars  = S.difference localMetavars fixedMetavars
+      let genMetavarsL = S.toList genMetavars
+      genVars' <- mapM (const freshTypeVar) genMetavarsL
+      mapM_ (uncurry setRepresentative) (zip genMetavarsL genVars')
       --
-      return (S.toList genVars ++ map unTVar genVars')
+      return (genMetavars, genVars `S.union` S.fromList (map unTVar genVars'))
     getVars :: M.Map QName TypeScheme -> M (S.Set QName)
     getVars rib = do
       schemes <- mapM unfoldTypeScheme (M.elems rib)
@@ -578,11 +712,26 @@ generalizeLocalVars = do
     getMetavars rib = do
       schemes <- mapM unfoldTypeScheme (M.elems rib)
       return $ S.unions (map typeSchemeMetavariables schemes)
-    generalizeLocalVar :: [QName] -> QName -> TypeScheme -> M ()
-    generalizeLocalVar genVars x (TypeScheme vars constrainedType) = do
-      overrideType x (TypeScheme (genVars ++ vars) constrainedType)
-    unTVar (TVar x) = x
-    unTVar _        = error "(Generalized type must be a type variable)"
+    generalizeLocalBinding :: S.Set TypeMetavariable -> S.Set QName
+                           -> QName -> TypeScheme -> M ()
+    generalizeLocalBinding genMetavars genVars x scheme = do
+      scheme'@(TypeScheme vars (ConstrainedType constraints typ)) <-
+              unfoldTypeScheme scheme
+      constraints' <- constraintsFor genMetavars
+      let genVars' = S.toList (S.intersection
+                                genVars
+                                (typeSchemeFreeVariables scheme'))
+       in overrideType x (TypeScheme (genVars' ++ vars)
+                            (ConstrainedType (constraints' ++ constraints) typ))
+    constraintsFor :: S.Set TypeMetavariable -> M [TypeConstraint]
+    constraintsFor genMetavars = do
+      cs <- getConstraints
+      let cs' = filter (\ (_, metavar) -> S.member metavar genMetavars)
+                       (S.toList cs)
+      mapM (\ (className, metavar) -> do
+             typ <- unfoldType (TMetavar metavar)
+             return $ TypeConstraint className typ)
+           cs'
 
 unfoldType :: Type -> M Type
 unfoldType t = do
@@ -605,9 +754,6 @@ occursIn x t = do
       b2 <- occursIn x t2
       return (b1 || b2)
 
-solveConstraints :: [TypeConstraint] -> M [TypeConstraint]
-solveConstraints x = return x -- TODO: NOT IMPLEMENTED
-
 unifyTypes :: Type -> Type -> M ()
 unifyTypes t1 t2 = do
   t1' <- weaklyHeadNormalizeType t1
@@ -618,7 +764,7 @@ unifyTypes t1 t2 = do
       b <- x `occursIn` t
       if b
        then unifFailOccursCheck t1 t2
-       else setRepresentative x t
+       else instantiateAndSolveConstraints x t 
     (t, TMetavar x) -> unifyTypes (TMetavar x) t
     (TVar a, TVar b) | a == b -> return ()
     (TApp t11 t12, TApp t21 t22) -> do unifyTypes t11 t21
@@ -635,6 +781,48 @@ unifyTypes t1 t2 = do
              "  " ++ show t1' ++ "\n" ++
              "  " ++ show t2')
 
+    instantiateAndSolveConstraints :: TypeMetavariable -> Type -> M ()
+    instantiateAndSolveConstraints x t0 = do
+      t <- unfoldType t0
+      setRepresentative x t
+      cs <- getConstraintsForMetavar x
+      mapM_ (\ (cls, plh) -> solveConstraint cls plh t) cs
+      -- TODO
+      return ()
+
+    solveConstraint :: QName -> PlaceholderId -> Type -> M ()
+    solveConstraint className plh (TMetavar metavar) = do
+      mq  <- getConstraintPlaceholder className metavar
+      pos <- currentPosition
+      case mq of
+        Just q  -> instantiatePlaceholder plh (EPlaceholder pos q)
+        Nothing -> setMetavarPlaceholder className metavar plh
+    solveConstraint className plh typ =
+      case typeHead typ of
+        TVar typeConstructor -> do
+          pos <- currentPosition
+          inst <- lookupGlobalInstance className typeConstructor
+          -- Create placeholders plh1, ..., plhN, one per subgoal
+          plhs <- mapM (const freshPlaceholder)
+                       (globalInstanceConstraints inst)
+          -- Instantiate the main placeholder in
+          --   instance{className}{typeConstructor} plh1 ... plhN
+          instantiatePlaceholder plh
+              (foldl (EApp pos)
+                     (EVar pos (mangleInstanceName className typeConstructor))
+                     (map (EPlaceholder pos) plhs))
+          let typeArguments = typeArgs typ
+          let paramDict = M.fromList
+                            (zip (globalInstanceTypeParameters inst)
+                                 typeArguments)
+          -- Recursively solve subgoals
+          mapM_ (\ ((cls, param), plh) ->
+                  solveConstraint cls plh
+                    (M.findWithDefault undefined param paramDict)) 
+                (zip (globalInstanceConstraints inst) plhs)
+          return ()
+        _ -> error "(Head of constrained type must be a type variable)"
+
 type InferResult = (ConstrainedType, Expr)
 
 inferTypeExprM :: Expr -> M InferResult
@@ -646,7 +834,7 @@ inferTypeExprM (ELambda pos e1 e2)        = inferTypeELambdaM pos e1 e2
 inferTypeExprM (ELet pos decls body)      = inferTypeELetM pos decls body
 inferTypeExprM (ECase pos guard branches) = inferTypeECaseM pos guard branches
 inferTypeExprM (EFresh pos x body)        = inferTypeEFreshM pos x body
-inferTypeExprM (EPlaceHolder _ _)         =
+inferTypeExprM (EPlaceholder _ _)         =
   error "(Impossible: type inference of an instance placeholder)"
 
 -- Integer constant (n)
@@ -657,9 +845,17 @@ inferTypeEIntM pos n = return (ConstrainedType [] tInt, EInt pos n)
 inferTypeEVarM :: Position -> QName -> M InferResult
 inferTypeEVarM pos x = do
   setPosition pos
-  TypeScheme gvars constrainedType <- lookupType x
-  (placeholderIds, constrainedType') <- freshenVariables gvars constrainedType -- Instantiate
-  return (constrainedType', foldl (\exp pId -> EApp pos exp (EPlaceHolder pos pId)) (EVar pos x) placeholderIds)
+  -- Lookup the type scheme.
+  TypeScheme gvars constrainedType   <- lookupType x
+  -- Instantiate all general variables into fresh metavariables.
+  -- Each general variable affected by a class constraint
+  -- produces a new placeholder for the instance.
+  (plhs, constrainedType') <- freshenVariables gvars constrainedType
+  -- Return the variable applied to all the placeholders.
+  return (constrainedType',
+          foldl (\ e p -> EApp pos e (EPlaceholder pos p))
+                (EVar pos x)
+                plhs)
 
 -- e1 e2
 inferTypeEAppM :: Position -> Expr -> Expr -> M InferResult
@@ -669,8 +865,7 @@ inferTypeEAppM pos e1 e2 = do
   tr <- freshType
   setPosition pos
   unifyTypes t1 (tFun t2 tr)
-  constraints <- solveConstraints (union c1 c2)
-  return (ConstrainedType constraints tr, (EApp pos e1' e2'))
+  return (ConstrainedType (union c1 c2) tr, (EApp pos e1' e2'))
 
 -- \ e1 -> e2
 inferTypeELambdaM :: Position -> Expr -> Expr -> M InferResult
@@ -693,7 +888,7 @@ inferTypeELetM pos decls body = do
   enterScopeM
   mapM_ collectSignaturesM decls
   decls' <- inferTypeDeclarationsM decls
-  generalizeLocalVars
+  generalizeLocalBindings
   (typeScheme, body') <- inferTypeExprM body
   exitScopeM
   return (typeScheme, ELet pos decls' body')
@@ -708,8 +903,7 @@ inferTypeECaseM pos guard branches = do
   let tbranches = map fst inferredBranches
   let cbranches = concatMap (\ (ConstrainedType cns _) -> cns) tbranches
   let branches' = map snd inferredBranches
-  constraints <- solveConstraints (cguard ++ cbranches)
-  return (ConstrainedType constraints tresult,
+  return (ConstrainedType (cguard ++ cbranches) tresult,
           ECase pos guard' branches')
 
 inferCaseBranchM :: Type -> Type -> CaseBranch
@@ -805,13 +999,10 @@ inferTypeInstanceDeclarationM pos className typ constraints methodEqs = do
     return $ ValueDeclaration (Equation pos lhs rhs)
   where
     (typeConstructor, typeParams) = splitDatatypeArgsOrFail typ
-
     lhs = EVar pos $ mangleInstanceName className typeConstructor
-
     unEVar :: Expr -> QName
     unEVar (EVar _ x) = x
     unEVar _          = error "(Not a variable)"
-
     buildRHS methodEqs' = do
       classMethodNames <- getClassMethodNames className
       case groupEquations methodEqs' of
@@ -830,7 +1021,6 @@ inferTypeInstanceDeclarationM pos className typ constraints methodEqs = do
                         (foldl (EApp pos)
                                (EVar pos (mangleClassConstructor className))
                                (map (EVar pos) classMethodNames))
-
     methodMismatchMessage cs is =
       "Instance methods do not match class methods."
        ++ (if cs `S.isSubsetOf` is
@@ -867,7 +1057,7 @@ inferTypeMethodEquationM className instantiatedType instantiatedTypeConstraints
      (ConstrainedType rhsConstraints tRHS, rhs') <- inferTypeExprM rhs
      setPosition pos
      unifyTypes sigType (foldr tFun tRHS argTypes)
-     solveConstraints (union (unions argConstraints) rhsConstraints)
+     --TODO: ----solveConstraints (union (unions argConstraints) rhsConstraints)
      exitScopeM
      let lhs' = foldl (EApp pos) (EVar pos methodName) arguments'
      return $ Equation pos lhs' rhs'
