@@ -62,10 +62,10 @@ inferTypes program = evalFS (inferTypeProgramM program) initialState
 -- stateGlobalInstances:
 --   Has the rules given by instance declarations.
 --   For example, the instance declaration
---   "instance Eq (List a) {Eq a}"
+--   "instance Eq (List a b) {Eq a, Show b}"
 --   corresponds to an entry
 --     (<Eq>, <List>) ~~>
---       GlobalInstance <Eq> <List a> [(<Eq>, <a>)].
+--       GlobalInstance <Eq> <List> [<a>, <b>] [(<Eq>, <a>), (<Show>, <b>)].
 --
 -- stateConstraintEnv:
 --   Has the placeholders for the current pending constraints.
