@@ -787,8 +787,6 @@ unifyTypes t1 t2 = do
       setRepresentative x t
       cs <- getConstraintsForMetavar x
       mapM_ (\ (cls, plh) -> solveConstraint cls plh t) cs
-      -- TODO
-      return ()
 
     solveConstraint :: QName -> PlaceholderId -> Type -> M ()
     solveConstraint className plh (TMetavar metavar) = do
