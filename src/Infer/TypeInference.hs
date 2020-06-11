@@ -138,6 +138,13 @@ freshTypeVar = do
   putFS (state { stateNextFresh = stateNextFresh state + 1 })
   return $ TVar $ Name ("t{" ++ show (stateNextFresh state) ++ "}")
 
+freshEVar :: M Expr
+freshEVar = do
+  state <- getFS
+  pos <- currentPosition
+  putFS (state { stateNextFresh = stateNextFresh state + 1 })
+  return $ EVar pos (Name ("x{" ++ show (stateNextFresh state) ++ "}"))
+
 bindType :: QName -> TypeScheme -> M ()
 bindType varName typ = do
   state <- getFS
@@ -559,27 +566,23 @@ inferTypeDeclarationsM :: [Declaration] -> M [Declaration]
 inferTypeDeclarationsM decls =
     let definedVars = S.unions (map declarationHeadVar decls)
      in do mapM_ bindToFreshTypeIfNotLocallyBound (S.toList definedVars)
-           mapM inferTypeDeclarationM decls
+           decls' <- mapM inferTypeDeclarationM decls
+           return $ concat decls'
   where
     declarationHeadVar (ValueDeclaration (Equation _ lhs _)) =
       S.fromList [fromJust (exprHeadVariable lhs)]
     declarationHeadVar _ = S.empty
 
-inferTypeDeclarationM :: Declaration -> M Declaration
-inferTypeDeclarationM decl@(DataDeclaration _ _ _) =
-  -- TODO: transform constraints in constructor signatures
-  return decl
-inferTypeDeclarationM decl@(TypeDeclaration _ _ _) =
-  -- TODO: transform constraints in constructor signatures
-  return decl
+inferTypeDeclarationM :: Declaration -> M [Declaration]
+inferTypeDeclarationM decl@(DataDeclaration _ _ _) = return [decl]
+inferTypeDeclarationM decl@(TypeDeclaration _ _ _) = return [decl]
 inferTypeDeclarationM (ValueDeclaration equation) = do
   equation' <- inferTypeEquationM equation
-  return $ ValueDeclaration equation'
-inferTypeDeclarationM decl@(TypeSignature _) = 
-  -- TODO: transform constraints in signature
-  return decl
-inferTypeDeclarationM (ClassDeclaration pos className typeName methods) =
-  inferTypeClassDeclarationM pos className typeName methods
+  return [ValueDeclaration equation']
+inferTypeDeclarationM decl@(TypeSignature _) = return [decl]
+inferTypeDeclarationM (ClassDeclaration pos className typeName methods) = do
+  decl <- inferTypeClassDeclarationM pos className typeName methods
+  return [decl]
 inferTypeDeclarationM (InstanceDeclaration pos className typ
                                            constraints methods) =
   inferTypeInstanceDeclarationM pos className typ constraints methods
@@ -825,8 +828,8 @@ type InferResult = (ConstrainedType, Expr)
 
 inferTypeExprM :: Expr -> M InferResult
 inferTypeExprM (EInt pos n)               = inferTypeEIntM pos n
-inferTypeExprM (EVar pos x)               = inferTypeEVarM pos x
-inferTypeExprM (EUnboundVar pos x)        = inferTypeEVarM pos x
+inferTypeExprM (EVar pos x)               = inferTypeEVarM EVar pos x
+inferTypeExprM (EUnboundVar pos x)        = inferTypeEVarM EUnboundVar pos x
 inferTypeExprM (EApp pos e1 e2)           = inferTypeEAppM pos e1 e2
 inferTypeExprM (ELambda pos e1 e2)        = inferTypeELambdaM pos e1 e2
 inferTypeExprM (ELet pos decls body)      = inferTypeELetM pos decls body
@@ -840,8 +843,9 @@ inferTypeEIntM :: Position -> Integer -> M InferResult
 inferTypeEIntM pos n = return (ConstrainedType [] tInt, EInt pos n)
 
 -- Variable (x)
-inferTypeEVarM :: Position -> QName -> M InferResult
-inferTypeEVarM pos x = do
+inferTypeEVarM :: (Position -> QName -> Expr)
+               -> Position -> QName -> M InferResult
+inferTypeEVarM eVar pos x = do
   setPosition pos
   -- Lookup the type scheme.
   TypeScheme gvars constrainedType   <- lookupType x
@@ -852,7 +856,7 @@ inferTypeEVarM pos x = do
   -- Return the variable applied to all the placeholders.
   return (constrainedType',
           foldl (\ e p -> EApp pos e (EPlaceholder pos p))
-                (EVar pos x)
+                (eVar pos x)
                 plhs)
 
 -- e1 e2
@@ -984,23 +988,28 @@ inferTypeClassDeclarationM pos className typeName methods = do
 
 inferTypeInstanceDeclarationM :: Position -> QName -> Expr
                                  -> [Constraint] -> [Equation]
-                                 -> M Declaration
+                                 -> M [Declaration]
 inferTypeInstanceDeclarationM pos className typ constraints methodEqs = do
     setPosition pos
-    ------
-    enterScopeM
-    methodEqs' <- mapM (inferTypeMethodEquationM className typ constraints)
-                       methodEqs
-    exitScopeM
-    ------
-    rhs <- buildRHS methodEqs'
-    return $ ValueDeclaration (Equation pos lhs rhs)
+    instanceDecl <- buildInstanceRecordDeclaration
+    methodDecls  <- buildMethodDeclarations
+    return (instanceDecl : methodDecls)
   where
     (typeConstructor, typeParams) = splitDatatypeArgsOrFail typ
-    lhs = EVar pos $ mangleInstanceName className typeConstructor
     unEVar :: Expr -> QName
     unEVar (EVar _ x) = x
     unEVar _          = error "(Not a variable)"
+
+    buildInstanceRecordDeclaration =
+      let lhs = EVar pos $ mangleInstanceName className typeConstructor
+       in do
+         enterScopeM
+         methodEqs' <-
+           mapM (inferTypeMethodEquationM className typ constraints)
+                methodEqs
+         exitScopeM
+         rhs <- buildRHS methodEqs'
+         return $ ValueDeclaration (Equation pos lhs rhs)
     buildRHS methodEqs' = do
       classMethodNames <- getClassMethodNames className
       case groupEquations methodEqs' of
@@ -1013,12 +1022,19 @@ inferTypeInstanceDeclarationM pos className typ constraints methodEqs = do
            then failM InstanceErrorMethodMismatch
                       (methodMismatchMessage classMethodNamesS
                                              instanceMethodNamesS)
-           else
+           else do
+             -- Create a fresh name for each method in the instance structure 
+             localMethodNames <- mapM (const freshEVar) classMethodNames
+             let methodDictionary = M.fromList (map unEquation methodEqs'')
+             let localMethods = [
+                    Equation pos lm
+                      (M.findWithDefault undefined cm methodDictionary)
+                    | (cm, lm) <- zip classMethodNames localMethodNames ]
              return $ ELet pos
-                        (map ValueDeclaration methodEqs')
+                        (map ValueDeclaration localMethods)
                         (foldl (EApp pos)
                                (EVar pos (mangleClassConstructor className))
-                               (map (EVar pos) classMethodNames))
+                               localMethodNames)
     methodMismatchMessage cs is =
       "Instance methods do not match class methods."
        ++ (if cs `S.isSubsetOf` is
@@ -1029,6 +1045,26 @@ inferTypeInstanceDeclarationM pos className typ constraints methodEqs = do
             then ""
             else "\nNot in class: " ++
                   unwords (map show (S.toList (is S.\\ cs))))
+    unEquation :: Equation -> (QName, Expr)
+    unEquation eq = (unEVar (equationLHS eq), equationRHS eq)
+    buildMethodDeclarations = do
+      pos <- currentPosition
+      classMethodNames <- getClassMethodNames className
+      let n = length classMethodNames
+      let params = map (\ i -> EUnboundVar pos (Name ("x{" ++ show i ++ "}")))
+                       [1..n]
+      return $ map
+        (\ (methodName, index) -> ValueDeclaration
+          (Equation pos
+            (EApp pos (EVar pos methodName) (EUnboundVar pos (Name "{inst}")))
+            (ECase pos (EVar pos (Name "{inst}")) [
+              CaseBranch pos
+                (foldl (EApp pos)
+                  (EVar pos (mangleInstanceName className typeConstructor))
+                  params)
+                (EVar pos (Name ("x{" ++ show index ++ "}")))
+            ])))
+        (zip classMethodNames [1..n])
 
 inferTypeMethodEquationM :: QName -> Expr -> [Constraint] -> Equation
                          -> M Equation

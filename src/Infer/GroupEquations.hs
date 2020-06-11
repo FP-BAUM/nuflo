@@ -63,7 +63,7 @@ mangleTupleConstructor :: QName
 mangleTupleConstructor = Name "{Tuple}"
 
 mangleParameterName :: Int -> QName
-mangleParameterName i = Name ("x{" ++ show i ++ "}")
+mangleParameterName i = Name ("param{" ++ show i ++ "}")
 
 makeTuple :: Position -> [Expr] -> Expr
 makeTuple pos exprs = foldl (EApp pos) (EVar pos mangleTupleConstructor) exprs
