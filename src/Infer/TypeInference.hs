@@ -598,16 +598,27 @@ inferTypeEquationM :: Equation -> M Equation
 inferTypeEquationM (Equation pos lhs rhs) = do
   setPosition pos
   bound <- getAllBoundVars
-  let lhsFree = exprFreeVariables bound lhs in do
+  let lhsFree = exprFreeVariables bound lhs 
+      lfunction = fromJust $ exprHeadVariable lhs
+      largs     = fromJust $ exprHeadArguments lhs in do
     -- TODO: transform constraints
     enterScopeM
     mapM_ bindToFreshType lhsFree
-    (ConstrainedType tcsl tl, lhs') <- inferTypeExprM lhs
+    (TypeScheme names (ConstrainedType lfuncConstraints lfuncType)) <- lookupType lfunction
+    if not(null names)
+      then error "local variable must not be generalized."
+      else return ()
+    (lconstraints, ltypes, largs') <- splitResults <$> mapM inferTypeExprM largs
     (ConstrainedType tcsr tr, rhs') <- inferTypeExprM rhs
-    unifyTypes tl tr
+    unifyTypes lfuncType (foldr tFun tr ltypes)
     --TODO: ----solveConstraints (union tcsl tcsr)
     exitScopeM
-    return $ Equation pos lhs' rhs'
+    return $ Equation pos (foldl (EApp pos) (EVar pos lfunction) largs') rhs'
+  where
+    splitResults :: [InferResult] -> ([TypeConstraint], [Type], [Expr]) -- (ConstrainedType, Expr)
+    splitResults [] = ([], [], [])
+    splitResults ((ConstrainedType rcsr rtype, rExpr) : results) =  let (typeConstraints, types, exprs) = splitResults results
+                                                                    in (union rcsr typeConstraints, rtype : types, rExpr : exprs)
 
 representative :: Type -> M Type
 representative (TMetavar x) = do
