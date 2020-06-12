@@ -475,6 +475,16 @@ addGlobalInstance className typ constraints = do
               })
     _ -> error "(Head of instance declaration must be a type variable)"
 
+removeGlobalInstance  :: QName -> Type -> M ()
+removeGlobalInstance className typ = do
+  state <- getFS
+  case typeHead typ of
+    TVar typeConstructor ->
+      putFS (state {
+        stateGlobalInstances = M.delete (className, typeConstructor) (stateGlobalInstances state)
+      })
+    _ -> error "(Head of instance declaration must be a type variable)"
+
 lookupGlobalInstance :: QName -> QName -> M GlobalInstance
 lookupGlobalInstance className typeConstructor = do
     state <- getFS
@@ -601,21 +611,34 @@ inferTypeEquationM (Equation pos lhs rhs) = do
   let lhsFree = exprFreeVariables bound lhs 
       lfunction = fromJust $ exprHeadVariable lhs
       largs     = fromJust $ exprHeadArguments lhs in do
-    -- TODO: transform constraints
+    -----------
     enterScopeM
     mapM_ bindToFreshType lhsFree
     (TypeScheme names (ConstrainedType lfuncConstraints lfuncType)) <- lookupType lfunction
     if not(null names)
       then error "local variable must not be generalized."
       else return ()
+    mapM_ declareGlobalInstance lfuncConstraints
     (lconstraints, ltypes, largs') <- splitResults <$> mapM inferTypeExprM largs
     (ConstrainedType tcsr tr, rhs') <- inferTypeExprM rhs
     unifyTypes lfuncType (foldr tFun tr ltypes)
-    --TODO: ----solveConstraints (union tcsl tcsr)
+    mapM_ unDeclareGlobalInstance lfuncConstraints
     exitScopeM
-    return $ Equation pos (foldl (EApp pos) (EVar pos lfunction) largs') rhs'
+    -----------
+    let lfunction' = foldl (EApp pos) (EVar pos lfunction) (map constraintsParameterName lfuncConstraints)
+    return $ Equation pos (foldl (EApp pos) lfunction' largs') rhs'
   where
-    splitResults :: [InferResult] -> ([TypeConstraint], [Type], [Expr]) -- (ConstrainedType, Expr)
+    constraintsParameterName :: TypeConstraint -> Expr
+    constraintsParameterName (TypeConstraint className (TVar name)) = EVar pos $ mangleInstanceName className name
+    constraintsParameterName (TypeConstraint className _) = error "function constraints must be a variable."
+
+    declareGlobalInstance :: TypeConstraint -> M ()
+    declareGlobalInstance (TypeConstraint className typeName) = addGlobalInstance className typeName []
+
+    unDeclareGlobalInstance :: TypeConstraint -> M ()
+    unDeclareGlobalInstance (TypeConstraint className typeName) = removeGlobalInstance className typeName
+
+    splitResults :: [InferResult] -> ([TypeConstraint], [Type], [Expr])
     splitResults [] = ([], [], [])
     splitResults ((ConstrainedType rcsr rtype, rExpr) : results) =  let (typeConstraints, types, exprs) = splitResults results
                                                                     in (union rcsr typeConstraints, rtype : types, rExpr : exprs)
