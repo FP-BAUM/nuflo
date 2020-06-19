@@ -208,16 +208,18 @@ exprIsVariable (EVar _ _) = True
 exprIsVariable _          = False
 
 exprHeadVariable :: AnnExpr a -> Maybe QName
-exprHeadVariable (EVar _ q)    = return q
-exprHeadVariable (EApp _ e1 _) = exprHeadVariable e1
-exprHeadVariable _             = Nothing
+exprHeadVariable (EVar _ q)           = return q
+exprHeadVariable (EUnboundVar _ q)    = return q
+exprHeadVariable (EApp _ e1 _)        = exprHeadVariable e1
+exprHeadVariable _                    = Nothing
 
 exprHeadArguments :: AnnExpr a -> Maybe [AnnExpr a]
-exprHeadArguments (EVar _ _)    = return []
-exprHeadArguments (EApp _ e1 e2) = do
-  args <- exprHeadArguments e1
-  return (args ++ [e2])
-exprHeadArguments _             = Nothing
+exprHeadArguments (EVar _ _)          = return []
+exprHeadArguments (EUnboundVar _ _)   = return []
+exprHeadArguments (EApp _ e1 e2)      = do
+    args <- exprHeadArguments e1
+    return (args ++ [e2])
+exprHeadArguments _                   = Nothing
 
 exprFreeVariables :: S.Set QName -> AnnExpr a -> S.Set QName
 exprFreeVariables bound (EVar _ x)        = if x `S.member` bound

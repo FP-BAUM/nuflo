@@ -42,7 +42,7 @@ joinEquations eqs@((Equation pos lhs _) : _) =
             body = foldr (\ name -> ELambda pos (EUnboundVar pos name))
                          innerBody
                          paramNames 
-         in Equation pos (EVar pos functionName) body
+         in Equation pos (EUnboundVar pos functionName) body
   where
     maxArgs = maximum (map numberOfArguments eqs)
     paramNames = map mangleParameterName [1..maxArgs]

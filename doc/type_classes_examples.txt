@@ -6,7 +6,7 @@ data Bool where
   False : Bool
   
 data List a where
-  Cons : a -> List a
+  Cons : a -> List a -> List a
   Nil  : List a
   
 class EqShow a where
@@ -36,10 +36,10 @@ data List a where
 data class{EqShow} a where
   mk{EqShow} : (a -> a -> Bool) -> (a -> String) -> class{EqShow} a
 
-== :  class{EqShow} a -> a -> a -> Bool //TODO
+== :  class{EqShow} a -> a -> a -> Bool
 == (mk{EqShow} m1 m2) = m1
 
-show :  class{EqShow} a -> a -> String //TODO
+show :  class{EqShow} a -> a -> String
 show (mk{EqShow} m1 m2) = m2
 
 instance{EqShow}{Bool} : class{EqShow} Bool
