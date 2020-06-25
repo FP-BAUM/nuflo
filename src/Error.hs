@@ -53,6 +53,7 @@ data ErrorType =
   | InstanceErrorDuplicatedMethodDefinition
   | InstanceErrorMethodMismatch
   | ConstraintErrorUnresolvedPlaceholder
+  | ConstraintErrorUnresolvedConstraint
   | ConstraintErrorUndeclaredInstance
   deriving (Eq, Show)
 

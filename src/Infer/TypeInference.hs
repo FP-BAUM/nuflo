@@ -18,7 +18,7 @@ import Syntax.AST(
          AnnConstraint(..), Constraint,
          AnnCaseBranch(..), CaseBranch,
          AnnExpr(..), Expr,
-         PlaceholderId,
+         unEVar, PlaceholderId,
          exprAnnotation,
          exprHeadVariable, exprHeadArguments,
          exprFreeVariables, exprFunctionType, splitDatatypeArgsOrFail,
@@ -247,7 +247,7 @@ freshenVariables genVarNames constrainedType = do
     
     unMetaVar :: Type -> TypeMetavariable
     unMetaVar (TMetavar metavar) = metavar
-    unMetaVar _ = error "not a meta variable"
+    unMetaVar _ = error "(Not a meta variable)"
 
     -- Given a substitution mapping (some) type variables to fresh type
     -- metavariables, and given a list of type constraints,
@@ -475,15 +475,28 @@ addGlobalInstance className typ constraints = do
               })
     _ -> error "(Head of instance declaration must be a type variable)"
 
+addGlobalTypeConstraint :: TypeConstraint -> M () 
+addGlobalTypeConstraint (TypeConstraint c t) = addGlobalInstance c t []
+
+addGlobalConstraint :: Constraint -> M () 
+addGlobalConstraint (Constraint _ c t) = addGlobalInstance c (TVar t) []
+
 removeGlobalInstance  :: QName -> Type -> M ()
 removeGlobalInstance className typ = do
   state <- getFS
   case typeHead typ of
     TVar typeConstructor ->
       putFS (state {
-        stateGlobalInstances = M.delete (className, typeConstructor) (stateGlobalInstances state)
+        stateGlobalInstances =
+          M.delete (className, typeConstructor) (stateGlobalInstances state)
       })
     _ -> error "(Head of instance declaration must be a type variable)"
+
+removeGlobalTypeConstraint :: TypeConstraint -> M () 
+removeGlobalTypeConstraint (TypeConstraint c t) = removeGlobalInstance c t
+
+removeGlobalConstraint :: Constraint -> M ()
+removeGlobalConstraint (Constraint _ c t) = removeGlobalInstance c (TVar t)
 
 lookupGlobalInstance :: QName -> QName -> M GlobalInstance
 lookupGlobalInstance className typeConstructor = do
@@ -520,13 +533,13 @@ collectTypeDeclarationM :: Declaration -> M ()
 collectTypeDeclarationM (TypeDeclaration pos typ value) = do
   case exprHeadVariable typ of
     Just name -> addTypeConstant name
-    _ -> error "Type has no head variable"
+    _ -> error "(Type has no head variable)"
   let (name, args) = splitDatatypeArgsOrFail typ in
     defineTypeSynonym name args (exprToType value)
 collectTypeDeclarationM (DataDeclaration _ typ _) = do
   case exprHeadVariable typ of
     Just name -> addTypeConstant name
-    _ -> error "Type has no head variable"
+    _ -> error "(Type has no head variable)"
 collectTypeDeclarationM _ = return ()
 
 collectSignaturesM :: Declaration -> M ()
@@ -609,39 +622,44 @@ inferTypeEquationM (Equation pos lhs rhs) = do
   setPosition pos
   bound <- getAllBoundVars
   let lhsFree = exprFreeVariables bound lhs 
-      lfunction = fromJust $ exprHeadVariable lhs
-      largs     = fromJust $ exprHeadArguments lhs in do
+      lfunc   = fromJust $ exprHeadVariable lhs
+      largs   = fromJust $ exprHeadArguments lhs in do
     -----------
     enterScopeM
     mapM_ bindToFreshType lhsFree
-    (TypeScheme names (ConstrainedType lfuncConstraints lfuncType)) <- lookupType lfunction
-    if not(null names)
-      then error "local variable must not be generalized."
+    (TypeScheme names (ConstrainedType lfuncConstraints lfuncType)) <-
+      lookupType lfunc
+    if not (null names)
+      then error "(Local variable may not be generalized)"
       else return ()
-    mapM_ declareGlobalInstance lfuncConstraints
-    (lconstraints, ltypes, largs') <- splitResults <$> mapM inferTypeExprM largs
-    (ConstrainedType tcsr tr, rhs') <- inferTypeExprM rhs
-    unifyTypes lfuncType (foldr tFun tr ltypes)
-    mapM_ unDeclareGlobalInstance lfuncConstraints
+    mapM_ addGlobalTypeConstraint lfuncConstraints
+    (largsConstraints, largsTypes, largs') <-
+      splitResults <$> mapM inferTypeExprM largs
+    (ConstrainedType rConstraints rType, rhs') <- inferTypeExprM rhs
+    unifyTypes lfuncType (foldr tFun rType largsTypes)
+    mapM_ removeGlobalTypeConstraint lfuncConstraints
+    if not (null rConstraints) || not (null largsConstraints)
+     then failM ConstraintErrorUnresolvedConstraint
+                ("Unresolved constraints:\n" ++
+                 unlines (map show (rConstraints ++ largsConstraints)))
+     else return ()
     exitScopeM
     -----------
-    let lfunction' = foldl (EApp pos) (EVar pos lfunction) (map constraintsParameterName lfuncConstraints)
-    return $ Equation pos (foldl (EApp pos) lfunction' largs') rhs'
+    let lfunc' = foldl (EApp pos) (EVar pos lfunc)
+                       (map constraintsParameterName lfuncConstraints)
+    return $ Equation pos (foldl (EApp pos) lfunc' largs') rhs'
   where
     constraintsParameterName :: TypeConstraint -> Expr
-    constraintsParameterName (TypeConstraint className (TVar name)) = EVar pos $ mangleInstanceName className name
-    constraintsParameterName (TypeConstraint className _) = error "function constraints must be a variable."
-
-    declareGlobalInstance :: TypeConstraint -> M ()
-    declareGlobalInstance (TypeConstraint className typeName) = addGlobalInstance className typeName []
-
-    unDeclareGlobalInstance :: TypeConstraint -> M ()
-    unDeclareGlobalInstance (TypeConstraint className typeName) = removeGlobalInstance className typeName
+    constraintsParameterName (TypeConstraint className (TVar name)) =
+      EVar pos $ mangleInstanceName className name
+    constraintsParameterName (TypeConstraint className _) =
+      error "(Function constraint must be a variable)"
 
     splitResults :: [InferResult] -> ([TypeConstraint], [Type], [Expr])
     splitResults [] = ([], [], [])
-    splitResults ((ConstrainedType rcsr rtype, rExpr) : results) =  let (typeConstraints, types, exprs) = splitResults results
-                                                                    in (union rcsr typeConstraints, rtype : types, rExpr : exprs)
+    splitResults ((ConstrainedType cs typ, expr) : results) =
+      let (css, typs, exprs) = splitResults results
+        in (union cs css, typ : typs, expr : exprs)
 
 representative :: Type -> M Type
 representative (TMetavar x) = do
@@ -990,7 +1008,8 @@ inferTypeClassDeclarationM pos className typeName methods = do
         constructorSig   = Signature pos classConstructor
                                          constructorType
                                          constraints
-      in return (DataDeclaration pos classDatatype' [constructorSig] : methodDecls)
+      in return (DataDeclaration pos classDatatype' [constructorSig]
+                 : methodDecls)
   where
     -- Rename all the type variables in the method signature to fresh names,
     -- except for the class parameter (and constants).
@@ -1050,22 +1069,22 @@ inferTypeInstanceDeclarationM pos className typ constraints methodEqs = do
     return instanceDecl
   where
     (typeConstructor, typeParams) = splitDatatypeArgsOrFail typ
-    unEVar :: Expr -> QName
-    unEVar (EVar _ x)        = x
-    unEVar (EUnboundVar _ x) = x
-    unEVar _                 = error "(Not a variable)"
 
     buildInstanceRecordDeclaration =
-      let lhsHead                  = EUnboundVar pos $ mangleInstanceName className typeConstructor
-          instanceConstraints      = map (\(Constraint pos c t) -> EUnboundVar pos $ mangleInstanceName c t) constraints
-          lhs                      = foldl (EApp pos) lhsHead instanceConstraints
+      let lhsHead = EUnboundVar pos $
+                    mangleInstanceName className typeConstructor
+          instanceConstraints = map (\ (Constraint pos c t) ->
+                                        EUnboundVar pos $
+                                        mangleInstanceName c t)
+                                    constraints
+          lhs = foldl (EApp pos) lhsHead instanceConstraints
        in do
          enterScopeM
-         mapM_ (\(Constraint pos c t) -> addGlobalInstance c (TVar t) []) constraints
-         methodEqs' <-
-           mapM (inferTypeMethodEquationM className typ constraints)
-                methodEqs
-         mapM_ (\(Constraint pos c t) -> removeGlobalInstance c (TVar t)) constraints
+         mapM_ addGlobalConstraint constraints
+         methodEqs' <- mapM
+                         (inferTypeMethodEquationM className typ constraints)
+                         methodEqs
+         mapM_ removeGlobalConstraint constraints
          exitScopeM
          rhs <- buildRHS methodEqs'
          return $ ValueDeclaration (Equation pos lhs rhs)
@@ -1121,30 +1140,46 @@ inferTypeMethodEquationM className instantiatedType instantiatedTypeConstraints
       arguments  = fromJust $ exprHeadArguments lhs
    in do
      classParameter <- getClassParameter className
-     (ConstrainedType sigConstraints sigType) <-
+     (instantiatedConstraintMap, ConstrainedType sigConstraints sigType) <-
        classMethodFreshType className methodName
                             classParameter
                             instantiatedType instantiatedTypeConstraints
-     -- TODO: add sigConstraints
+     mapM_ addGlobalTypeConstraint sigConstraints
+     mapM_ addGlobalTypeConstraint (map snd instantiatedConstraintMap)
      enterScopeM
      mapM_ bindToFreshType lhsFree
      argResults <- mapM inferTypeExprM arguments
-     let argTypes           = map (ctType . fst) argResults
-     let argConstraints     = map (ctConstraints . fst) argResults
-     let arguments'         = map snd argResults
+     let argTypes       = map (ctType . fst) argResults
+     let argConstraints = map (ctConstraints . fst) argResults
+     let arguments'     = map snd argResults
      (ConstrainedType rhsConstraints tRHS, rhs') <- inferTypeExprM rhs
      setPosition pos
      unifyTypes sigType (foldr tFun tRHS argTypes)
-     --TODO: ----solveConstraints (union (unions argConstraints) rhsConstraints)
      exitScopeM
-     let lhs' = foldl (EApp pos) (EVar pos methodName) arguments'
-     return $ Equation pos lhs' rhs'
+     mapM_ removeGlobalTypeConstraint (map snd instantiatedConstraintMap)
+     mapM_ removeGlobalTypeConstraint sigConstraints
+     let lhs' =
+          foldl (EApp pos) (EVar pos methodName)
+                (map (\ (TypeConstraint cls typ) ->
+                        EUnboundVar pos (mangleInstanceName cls (unTVar typ)))
+                     sigConstraints
+                 ++ arguments')
+     let instantiatedConstraintDecls = 
+           [ValueDeclaration
+             (Equation pos
+               (EUnboundVar pos (mangleInstanceName cls2 (unTVar typ2)))
+               (EVar pos (mangleInstanceName cls1 typ1)))
+           | (Constraint _ cls1 typ1, TypeConstraint cls2 typ2) <-
+             instantiatedConstraintMap
+           ]
+     return $ Equation pos lhs' (ELet pos instantiatedConstraintDecls rhs')
   where
     ctType        (ConstrainedType _ t) = t
     ctConstraints (ConstrainedType c _) = c
 
 classMethodFreshType :: QName -> QName -> QName -> Expr -> [Constraint]
-                              -> M ConstrainedType
+                              -> M ([(Constraint, TypeConstraint)],
+                                    ConstrainedType)
 classMethodFreshType className methodName classParameter
                      instantiatedType instantiatedTypeConstraints = do
   methodSignature <- getClassMethodSignature className methodName
@@ -1164,8 +1199,8 @@ classMethodFreshType className methodName classParameter
   let (ConstrainedType sigConstraints' sigType') = substituteConstrainedType
                                                      substitution
                                                      sigConstrainedType
-  return $ ConstrainedType (sigConstraints' ++ instantiatedTypeConstraints')
-                           sigType'
+  return $ (zip instantiatedTypeConstraints instantiatedTypeConstraints',
+            ConstrainedType sigConstraints' sigType')
 
 refreshConstrainedType :: Expr -> [Constraint] -> M ConstrainedType
 refreshConstrainedType typ constraints = do

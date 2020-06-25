@@ -7,7 +7,7 @@ module Syntax.AST(
          AnnConstraint(..), Constraint,
          AnnCaseBranch(..), CaseBranch,
          AnnExpr(..), Expr,
-         PlaceholderId,
+         unEVar, PlaceholderId,
          eraseAnnotations, exprAnnotation,
          exprIsVariable, exprHeadVariable, exprHeadArguments,
          exprFunctionType, exprAlternative,
@@ -404,4 +404,9 @@ instance UnfoldPlaceholders AnnCaseBranch where
   unfoldPlaceholders h (CaseBranch a e1 e2) =
     CaseBranch a <$> unfoldPlaceholders h e1
                  <*> unfoldPlaceholders h e2
+
+unEVar :: Expr -> QName
+unEVar (EVar _ x)        = x
+unEVar (EUnboundVar _ x) = x
+unEVar _                 = error "(Not a variable)"
 
