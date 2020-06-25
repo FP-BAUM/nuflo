@@ -638,11 +638,6 @@ inferTypeEquationM (Equation pos lhs rhs) = do
     (ConstrainedType rConstraints rType, rhs') <- inferTypeExprM rhs
     unifyTypes lfuncType (foldr tFun rType largsTypes)
     mapM_ removeGlobalTypeConstraint lfuncConstraints
-    if not (null rConstraints) || not (null largsConstraints)
-     then failM ConstraintErrorUnresolvedConstraint
-                ("Unresolved constraints:\n" ++
-                 unlines (map show (rConstraints ++ largsConstraints)))
-     else return ()
     exitScopeM
     -----------
     let lfunc' = foldl (EApp pos) (EVar pos lfunc)
