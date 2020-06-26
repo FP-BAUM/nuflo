@@ -34,7 +34,7 @@ import Calculus.Types(
          constrainedTypeFreeVariables,
          tFun, tInt, typeHead, typeArgs, unTVar
        )
-import Infer.GroupEquations(groupEquations)
+import Syntax.GroupEquations(groupEquations)
 
 inferTypes :: Program -> Either Error Program
 inferTypes program = evalFS (inferTypeProgramM program) initialState

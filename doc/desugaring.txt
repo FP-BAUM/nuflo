@@ -24,3 +24,42 @@ f = \ x1 ... xM ->
         
 # IF M = 0:
 f = body1 (+) ... (+) bodyN
+
+
+--------------------------- Desugar mutual recursive let algorithm ---------------------------
+
+1) Let de variable no recursivo.
+
+   let x = A in B
+   ===>
+   (\x.B)A
+
+      
+2) Lambda cuyos parámetros son patrones.
+
+   \ p1 ... pn . A
+   ===>
+   \ x1 ... xn . fresh y1...ym. (x1==p1),...,(xn==pn),A
+   
+   x1,...,xn son variables frescas
+   y1,...,ym son las variables libres de p1...pn
+   
+3) Let de función no recursiva.
+
+   let f p1 ... pn = A in B
+   ===>
+   let f = (\p1...pn.A) in B   (se reduce al caso 1)
+
+ 4) Let de varias funciones mutuamente recursivas  
+
+    let f1 = A1
+        ...
+        fn = An
+    in B   
+    ===>
+    let {R} = fix(\ {R}.
+                fresh f1 ... fn.
+                  ({R} == {Tuple} f1 ... fn) , {Tuple} A1 ... An)
+      in
+        fresh f1 ... fn.
+          ({R} == ({Tuple} f1 ... fn)) , B

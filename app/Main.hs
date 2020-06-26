@@ -10,6 +10,7 @@ import Parser.Reader(readSource)
 import Parser.Parser(parse)
 import Infer.KindInference(inferKinds)
 import Infer.TypeInference(inferTypes)
+import Desugaring.Desugaring(desugarProgram)
 
 import TestMain(runAllTests)
 
@@ -25,6 +26,7 @@ run ["-r", input] = runReader input
 run ["-p", input] = runParser input
 run ["-k", input] = runKindInference input
 run ["-i", input] = runTypeInference input
+run ["-d", input] = runDesugaring input
 run _             = usage
 
 runTokenizer :: String -> IO ()
@@ -80,6 +82,25 @@ runTypeInference filename = do
                 Left e -> die e
                 Right program' -> putStrLn (show program')
 
+runDesugaring :: String -> IO ()
+runDesugaring filename = do
+  res <- readSource filename
+  case res of
+    Left  e      -> die e
+    Right tokens -> do
+      case parse tokens of
+        Left e        -> die e
+        Right program -> do
+          case inferKinds program of
+            Left e    -> die e
+            Right () -> do
+              case inferTypes program of
+                Left e -> die e
+                Right program' -> do
+                  case desugarProgram program' of
+                    Left e -> die e
+                    Right termC -> putStrLn (show termC)
+
 usage :: IO ()
 usage = do
   putStrLn "Usage:"
@@ -89,6 +110,7 @@ usage = do
   putStrLn "  la -p foo.la       Parse file."
   putStrLn "  la -k foo.la       Infer kinds."
   putStrLn "  la -i foo.la       Infer types."
+  putStrLn "  la -d foo.la       Desugar program."
 
 die :: Error -> IO ()
 die e = do

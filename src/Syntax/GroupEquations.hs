@@ -1,4 +1,4 @@
-module Infer.GroupEquations(groupEquations) where
+module Syntax.GroupEquations(groupEquations) where
 
 import Data.Maybe(fromJust)
 import qualified Data.Set as S

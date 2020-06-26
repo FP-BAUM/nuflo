@@ -55,6 +55,7 @@ data ErrorType =
   | ConstraintErrorUnresolvedPlaceholder
   | ConstraintErrorUnresolvedConstraint
   | ConstraintErrorUndeclaredInstance
+  | ValueDefinitionDuplicated
   deriving (Eq, Show)
 
 errorAtUnknown :: ErrorType -> String -> Error
