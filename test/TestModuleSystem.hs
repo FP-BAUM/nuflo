@@ -14,7 +14,9 @@ import Parser.Parser(parse)
 testExpr :: String -> String -> Either ErrorType (AnnExpr ()) -> Test
 testExpr description source expected =
   TestCase description 
-           (normalizeResult (tokenize "test" source >>= parse))
+           (normalizeResult
+             (do tokens <- tokenize "test" source
+                 parse tokens))
            expected
   where
     normalizeResult (Left  e) = Left (errorType e)

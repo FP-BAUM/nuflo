@@ -20,7 +20,17 @@ data ErrorType =
   | ReaderErrorCyclicDependencies
   | ReaderErrorModuleNameMismatch
   | ReaderErrorMissingFile
-  | ParseError
+  | ParseErrorExpectedToken
+  | ParseErrorExpectedModule
+  | ParseErrorExpectedId
+  | ParseErrorExpectedInt
+  | ParseErrorTypeHasNoHead
+  | ParseErrorDataHasNoHead
+  | ParseErrorEquationHasNoHead
+  | ParseErrorExpectedNameForSignature
+  | ParseErrorPrematureEndOfExpression
+  | ParseErrorOperatorPartUsedAsVariable
+  | ParseErrorExpectedExpression
   | ModuleSystemError
   | KindErrorMalformedDatatype
   | KindErrorTypeAlreadyDeclared
@@ -32,6 +42,20 @@ data ErrorType =
   | KindErrorUnifyOccursCheck
   | KindErrorUnifyClash
   | KindErrorInstanceMustBeDatatype
+  | TypeErrorVariableAlreadyDeclared
+  | TypeErrorUnboundVariable
+  | TypeErrorUnificationOccursCheck
+  | TypeErrorUnificationClash
+  | TypeErrorSynonymLoop
+  | TypeErrorUndefinedClassMethod
+  | ClassErrorConstrainedParameter
+  | InstanceErrorDuplicateInstance
+  | InstanceErrorDuplicatedMethodDefinition
+  | InstanceErrorMethodMismatch
+  | ConstraintErrorUnresolvedPlaceholder
+  | ConstraintErrorUnresolvedConstraint
+  | ConstraintErrorUndeclaredInstance
+  | ValueDefinitionDuplicated
   deriving (Eq, Show)
 
 errorAtUnknown :: ErrorType -> String -> Error

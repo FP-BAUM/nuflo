@@ -1,4 +1,3 @@
-{-# LANGUAGE DuplicateRecordFields #-}
 
 module Syntax.AST(
          AnnProgram(..), Program,
@@ -8,13 +7,21 @@ module Syntax.AST(
          AnnConstraint(..), Constraint,
          AnnCaseBranch(..), CaseBranch,
          AnnExpr(..), Expr,
+         unEVar, PlaceholderId,
          eraseAnnotations, exprAnnotation,
-         exprIsVariable, exprHeadVariable,
-         exprIsFunctionType, exprFunctionTypeCodomain, exprEqual
+         exprIsVariable, exprHeadVariable, exprHeadArguments,
+         exprFunctionType, exprAlternative,
+         exprIsFunctionType, exprFunctionTypeCodomain, exprEqual,
+         exprFreeVariables, splitDatatypeArgsOrFail,
+         unfoldPlaceholders
        ) where
 
+import qualified Data.Map as M
+import qualified Data.Set as S
+import Data.Maybe(fromJust)
+
 import Position(Position)
-import Syntax.Name(QName, operatorArrow)
+import Syntax.Name(QName, primitiveArrow, primitiveAlternative)
 
 data AnnProgram a = Program {
                       programDeclarations :: [AnnDeclaration a]
@@ -26,14 +33,14 @@ type Program = AnnProgram Position
 -- Annotated declaration
 data AnnDeclaration a = 
     DataDeclaration {
-      annotation       :: a,
+      dataAnnotation   :: a,
       dataType         :: AnnExpr a,
       dataConstructors :: [AnnSignature a]
     }
   | TypeDeclaration {
-      annotation :: a,
-      typeType   :: AnnExpr a,
-      typeValue  :: AnnExpr a
+      typeAnnotation :: a,
+      typeType       :: AnnExpr a,
+      typeValue      :: AnnExpr a
     }
   | TypeSignature {
       typeSignature :: AnnSignature a
@@ -42,13 +49,13 @@ data AnnDeclaration a =
       declEquation :: AnnEquation a
     }
   | ClassDeclaration {
-      annotation    :: a,
-      className     :: QName,
-      classTypeName :: QName,
-      classMethods  :: [AnnSignature a]
+      classAnnotation :: a,
+      className       :: QName,
+      classTypeName   :: QName,
+      classMethods    :: [AnnSignature a]
     }
   | InstanceDeclaration {
-      annotation          :: a,
+      instanceAnnotation  :: a,
       instanceClassName   :: QName,
       instanceType        :: AnnExpr a,
       instanceConstraints :: [AnnConstraint a],
@@ -57,52 +64,69 @@ data AnnDeclaration a =
   deriving Eq
 
 data AnnSignature a = Signature {
-                        annotation           :: a,
+                        signatureAnnotation  :: a,
                         signatureName        :: QName,
                         signatureType        :: AnnExpr a,
                         signatureConstraints :: [AnnConstraint a]
                       } deriving Eq
 
 data AnnEquation a = Equation {
-                       annotation :: a,
-                       equationLHS  :: AnnExpr a,
-                       equationRHS  :: AnnExpr a
+                       equationAnnotation :: a,
+                       equationLHS        :: AnnExpr a,
+                       equationRHS        :: AnnExpr a
                      } deriving Eq
 
 data AnnConstraint a = Constraint {
-                         annotation          :: a,
-                         constraintClassName :: QName,
-                         constraintTypeName  :: QName
+                         constraintAnnotation :: a,
+                         constraintClassName  :: QName,
+                         constraintTypeName   :: QName
                        } deriving Eq
 
 data AnnCaseBranch a = CaseBranch {
-                         annotation          :: a,
-                         caseBranchPattern   :: AnnExpr a,
-                         caseBranchResult    :: AnnExpr a
+                         caseBranchAnnotation :: a,
+                         caseBranchPattern    :: AnnExpr a,
+                         caseBranchResult     :: AnnExpr a
                        } deriving Eq
 
 -- Annotated expression
+type PlaceholderId = Integer
 data AnnExpr a =
     EVar a QName                           -- variable
+  | EUnboundVar a QName                    -- force unbound variable
   | EInt a Integer                         -- integer constant
   | EApp a (AnnExpr a) (AnnExpr a)         -- application
   | ELambda a (AnnExpr a) (AnnExpr a)      -- lambda
   | ELet a [AnnDeclaration a] (AnnExpr a)  -- let
   | ECase a (AnnExpr a) [AnnCaseBranch a]  -- case
   | EFresh a QName (AnnExpr a)             -- fresh
+  | EPlaceholder a PlaceholderId           -- placeholder for instances
   deriving Eq
 
 exprAnnotation :: AnnExpr a -> a
-exprAnnotation (EVar a _)      = a
-exprAnnotation (EInt a _)      = a
-exprAnnotation (EApp a _ _)    = a
-exprAnnotation (ELambda a _ _) = a
-exprAnnotation (ELet a _ _)    = a
-exprAnnotation (ECase a _ _)   = a
-exprAnnotation (EFresh a _ _)  = a
+exprAnnotation (EVar a _)         = a
+exprAnnotation (EUnboundVar a _)  = a
+exprAnnotation (EInt a _)         = a
+exprAnnotation (EApp a _ _)       = a
+exprAnnotation (ELambda a _ _)    = a
+exprAnnotation (ELet a _ _)       = a
+exprAnnotation (ECase a _ _)      = a
+exprAnnotation (EFresh a _ _)     = a
+exprAnnotation (EPlaceholder a _) = a
+
+exprFunctionType :: AnnExpr a -> AnnExpr a -> AnnExpr a
+exprFunctionType dom cod =
+    EApp ann (EApp ann (EVar ann primitiveArrow) dom) cod
+  where
+    ann = exprAnnotation dom
+
+exprAlternative :: AnnExpr a -> AnnExpr a -> AnnExpr a
+exprAlternative e1 e2 =
+    EApp ann (EApp ann (EVar ann primitiveAlternative) e1) e2
+  where
+    ann = exprAnnotation e1
 
 exprIsFunctionType :: AnnExpr a -> Bool
-exprIsFunctionType (EApp _ (EApp _ (EVar _ op) _) _) = op == operatorArrow
+exprIsFunctionType (EApp _ (EApp _ (EVar _ op) _) _) = op == primitiveArrow
 exprIsFunctionType _                                 = False
 
 exprFunctionTypeCodomain :: AnnExpr a -> AnnExpr a
@@ -158,10 +182,12 @@ instance EraseAnnotations AnnConstraint where
   eraseAnnotations (Constraint _ x y) = Constraint () x y
 
 instance EraseAnnotations AnnCaseBranch where
-  eraseAnnotations (CaseBranch _ p r) =  CaseBranch () (eraseAnnotations p) (eraseAnnotations r)
+  eraseAnnotations (CaseBranch _ p r) =
+    CaseBranch () (eraseAnnotations p) (eraseAnnotations r)
 
 instance EraseAnnotations AnnExpr where
   eraseAnnotations (EVar _ q)          = EVar () q
+  eraseAnnotations (EUnboundVar _ q)   = EUnboundVar () q
   eraseAnnotations (EInt _ n)          = EInt () n
   eraseAnnotations (EApp _ e1 e2)      = EApp () (eraseAnnotations e1)
                                                  (eraseAnnotations e2)
@@ -173,6 +199,7 @@ instance EraseAnnotations AnnExpr where
   eraseAnnotations (ECase _ e bs)      = ECase () (eraseAnnotations e)
                                                   (map eraseAnnotations bs)
   eraseAnnotations (EFresh _ name e)   = EFresh () name (eraseAnnotations e)
+  eraseAnnotations (EPlaceholder _ id) = EPlaceholder () id
 
 --
 
@@ -181,9 +208,58 @@ exprIsVariable (EVar _ _) = True
 exprIsVariable _          = False
 
 exprHeadVariable :: AnnExpr a -> Maybe QName
-exprHeadVariable (EVar _ q)    = return q
-exprHeadVariable (EApp _ e1 _) = exprHeadVariable e1
-exprHeadVariable _             = Nothing
+exprHeadVariable (EVar _ q)           = return q
+exprHeadVariable (EUnboundVar _ q)    = return q
+exprHeadVariable (EApp _ e1 _)        = exprHeadVariable e1
+exprHeadVariable _                    = Nothing
+
+exprHeadArguments :: AnnExpr a -> Maybe [AnnExpr a]
+exprHeadArguments (EVar _ _)          = return []
+exprHeadArguments (EUnboundVar _ _)   = return []
+exprHeadArguments (EApp _ e1 e2)      = do
+    args <- exprHeadArguments e1
+    return (args ++ [e2])
+exprHeadArguments _                   = Nothing
+
+exprFreeVariables :: S.Set QName -> AnnExpr a -> S.Set QName
+exprFreeVariables bound (EVar _ x)        = if x `S.member` bound
+                                             then S.empty
+                                             else S.fromList [x]
+exprFreeVariables bound (EUnboundVar _ x) = S.fromList [x]
+exprFreeVariables bound (EInt _ _)        = S.empty
+exprFreeVariables bound (EApp _ e1 e2)    = exprFreeVariables bound e1
+                                            `S.union`
+                                            exprFreeVariables bound e2
+exprFreeVariables bound (ELambda _ e1 e2) =
+  exprFreeVariables
+    (bound `S.union` exprFreeVariables bound e1)
+    e2
+exprFreeVariables bound (ELet _ declarations body) =
+  let functionNames = S.unions (map declBoundVariables declarations)
+   in S.unions (map (declFreeVariables bound functionNames) declarations)
+      `S.union`
+      exprFreeVariables (S.union bound functionNames) body
+  where
+    declFreeVariables :: S.Set QName -> S.Set QName -> AnnDeclaration a
+                      -> S.Set QName
+    declFreeVariables bound functionNames
+                      (ValueDeclaration (Equation _ lhs rhs)) =
+      let args       = fromJust (exprHeadArguments lhs)
+          freeInArgs = S.unions (map (exprFreeVariables bound) args)
+       in exprFreeVariables (S.unions [bound, functionNames, freeInArgs]) rhs
+    declFreeVariables _ _ _ = S.empty
+    --
+    declBoundVariables :: AnnDeclaration a -> S.Set QName
+    declBoundVariables (ValueDeclaration (Equation _ lhs _)) =
+      let f = fromJust (exprHeadVariable lhs)
+       in S.fromList [f]
+    declBoundVariables _ = S.empty
+exprFreeVariables bound (ECase _ _ _)      = error "NOT IMPLEMENTED"
+exprFreeVariables bound (EFresh _ x e)     = exprFreeVariables
+                                               (S.insert x bound)
+                                               e
+exprFreeVariables bound (EPlaceholder _ _) =
+  error "(Free variables of a placeholder should not be requested)"
 
 ---- Show
 
@@ -247,6 +323,7 @@ showOptionalConstraints cs =
 
 instance Show (AnnExpr a) where
   show (EVar _ qname)         = show qname
+  show (EUnboundVar _ qname)  = "." ++ show qname
   show (EInt _ n)             = show n
   show (EApp _ f x)           = "(" ++ show f ++ " " ++ show x ++ ")"
   show (ELambda _ param body) =
@@ -257,4 +334,79 @@ instance Show (AnnExpr a) where
     "(case " ++ show e ++ " of {" ++ (joinS "; " (map show branches)) ++ "})"
   show (EFresh _ name e)      =
     "(fresh " ++ show name ++ " in " ++ show e ++ ")"
+  show (EPlaceholder _ id)      =
+    "{PLACEHOLDER_" ++ show id ++ "}"
+
+-- Split the left-hand side in the definition of a datatype,
+-- such as "Map a b" into the head "Map" and the arguments ["a", "b"]
+-- checking that it is well-formed.
+--
+-- All the arguments should be variables.
+splitDatatypeArgsOrFail :: Expr -> (QName, [QName])
+splitDatatypeArgsOrFail (EApp _ f (EVar _ x)) =
+  let (head, args) = splitDatatypeArgsOrFail f
+   in (head, args ++ [x])
+splitDatatypeArgsOrFail (EVar _ x) = (x, [])
+splitDatatypeArgsOrFail _ = error "(Malformed datatype)"
+
+---- Unfold all placeholders inside an expression 
+
+type PlaceholderHeap a = M.Map PlaceholderId (AnnExpr a)
+
+class UnfoldPlaceholders f where
+  unfoldPlaceholders :: PlaceholderHeap a -> f a -> Either (AnnExpr a) (f a)
+
+instance UnfoldPlaceholders AnnProgram where
+  unfoldPlaceholders h (Program decls) =
+    Program <$> mapM (unfoldPlaceholders h) decls
+
+instance UnfoldPlaceholders AnnDeclaration where
+  unfoldPlaceholders h d@(DataDeclaration _ _ _)    = return d
+  unfoldPlaceholders h d@(TypeDeclaration _ _ _)    = return d
+  unfoldPlaceholders h d@(TypeSignature _)          = return d
+  unfoldPlaceholders h (ValueDeclaration equation)  =
+    ValueDeclaration <$> unfoldPlaceholders h equation
+  unfoldPlaceholders h d@(ClassDeclaration _ _ _ _) = return d
+  unfoldPlaceholders h d@(InstanceDeclaration a name typ cs eqs) = do
+    InstanceDeclaration a name typ cs <$>
+      mapM (unfoldPlaceholders h) eqs
+
+instance UnfoldPlaceholders AnnEquation where
+  unfoldPlaceholders h (Equation a lhs rhs) =
+    Equation a <$> unfoldPlaceholders h lhs
+               <*> unfoldPlaceholders h rhs
+
+instance UnfoldPlaceholders AnnExpr where
+  unfoldPlaceholders h e@(EVar _ _)        = return e
+  unfoldPlaceholders h e@(EUnboundVar _ _) = return e
+  unfoldPlaceholders h e@(EInt _ _)        = return e
+  unfoldPlaceholders h (EApp a e1 e2)      =
+    EApp a <$> unfoldPlaceholders h e1
+           <*> unfoldPlaceholders h e2
+  unfoldPlaceholders h (ELambda a e1 e2)   =
+    ELambda a <$> unfoldPlaceholders h e1
+              <*> unfoldPlaceholders h e2
+  unfoldPlaceholders h (ELet a decls e)    =
+    ELet a <$> mapM (unfoldPlaceholders h) decls
+           <*> unfoldPlaceholders h e
+  unfoldPlaceholders h (ECase a e bs)      =
+    ECase a <$> unfoldPlaceholders h e
+            <*> mapM (unfoldPlaceholders h) bs
+  unfoldPlaceholders h (EFresh a x e)      =
+    EFresh a x <$> unfoldPlaceholders h e
+  unfoldPlaceholders h (EPlaceholder a p)  =
+    if M.member p h
+     then unfoldPlaceholders h (M.findWithDefault undefined p h)
+     else Left (EPlaceholder a p)
+          --return $ EPlaceholder a p {-- For DEBUGGING --}
+
+instance UnfoldPlaceholders AnnCaseBranch where
+  unfoldPlaceholders h (CaseBranch a e1 e2) =
+    CaseBranch a <$> unfoldPlaceholders h e1
+                 <*> unfoldPlaceholders h e2
+
+unEVar :: Expr -> QName
+unEVar (EVar _ x)        = x
+unEVar (EUnboundVar _ x) = x
+unEVar _                 = error "(Not a variable)"
 

@@ -19,8 +19,8 @@ testProgram :: String -> String -> Either ErrorType (AnnProgram ()) -> Test
 testProgram description source expected =
   TestCase description 
            (normalizeResult
-             (return source >>= tokenize "test"
-                            >>= parse))
+             (do tokens <- tokenize "test" source
+                 parse tokens))
            expected
   where
     normalizeResult (Left  e) = Left (errorType e)
@@ -86,7 +86,7 @@ tests = TestSuite "PARSER" [
 
       testProgramError "Expect module name after module keyword"
          "module module" 
-         ParseError
+         ParseErrorExpectedId
 
     ],
 
@@ -116,7 +116,7 @@ tests = TestSuite "PARSER" [
          (unlines [
            "type 10 = 10"
          ])
-         ParseError
+         ParseErrorTypeHasNoHead
 
     ],
 
@@ -164,7 +164,7 @@ tests = TestSuite "PARSER" [
          (unlines [
            "data 10 where"
          ])
-         ParseError
+         ParseErrorDataHasNoHead
 
     ],
 
@@ -222,7 +222,7 @@ tests = TestSuite "PARSER" [
          (unlines [
            "class Eq where"
          ])
-         ParseError
+         ParseErrorExpectedId
 
     ],
 
@@ -293,7 +293,7 @@ tests = TestSuite "PARSER" [
            "data Bool where",
            "10 : Bool"
          ])
-         ParseError
+         ParseErrorEquationHasNoHead
 
     ],
 
@@ -303,7 +303,7 @@ tests = TestSuite "PARSER" [
          (unlines [
            "10 = 10"
          ])
-         ParseError
+         ParseErrorEquationHasNoHead
 
     ]
 
@@ -333,12 +333,19 @@ tests = TestSuite "PARSER" [
 
     TestSuite "Mixfix operators" [
 
+      testExprError "Reject infix declaration without precedence"
+         (unlines [
+           "infix foo_",
+           "x = foo_"
+         ])
+         ParseErrorExpectedInt,
+
       testExprError "Reject using operator part as variable"
          (unlines [
            "infix 20 foo_",
            "x = foo"
          ])
-         ParseError,
+         ParseErrorPrematureEndOfExpression,
 
       testExprOK "Basic prefix operator"
          (unlines [
@@ -424,7 +431,7 @@ tests = TestSuite "PARSER" [
            "infix 20 _+_",
            "x = 1 + 2 + 3"
          ])
-         ParseError,
+         ParseErrorExpectedToken,
 
       testExprOK "Basic left-associative operator"
          (unlines [
@@ -584,7 +591,7 @@ tests = TestSuite "PARSER" [
            "x = let { type B = Bool }",
            "     in t"
          ])
-         ParseError
+         ParseErrorExpectedExpression
 
     ],
 

@@ -1,0 +1,63 @@
+//  TYPE CLASSES EXAMPLE:
+//  TRANSFORMATION OF CLASSES AND INSTANCES
+
+data Bool where
+  True : Bool
+  False : Bool
+  
+data List a where
+  Cons : a -> List a -> List a
+  Nil  : List a
+  
+class EqShow a where
+  ==   : a -> a -> Bool
+  show : a -> String
+
+instance EqShow Bool where
+  == True True = True
+  show True = "True"
+  
+instance EqShow (List a) {EqShow a} where
+  == (Cons x xs) (Cons y ys) = (== x y) && == xs ys
+  show (Cons x xs) = show x ++ show xs
+  
+main = show (== [True] [False])
+
+------------------------------
+
+data Bool where
+  True : Bool
+  False : Bool
+
+data List a where
+  Cons : a -> List a
+  Nil  : List a
+
+data class{EqShow} a where
+  mk{EqShow} : (a -> a -> Bool) -> (a -> String) -> class{EqShow} a
+
+== :  class{EqShow} a -> a -> a -> Bool
+== (mk{EqShow} m1 m2) = m1
+
+show :  class{EqShow} a -> a -> String
+show (mk{EqShow} m1 m2) = m2
+
+instance{EqShow}{Bool} : class{EqShow} Bool
+instance{EqShow}{Bool} = let m1 True True = True
+                         let m2 True = "True"
+                         in mk{EqShow} m1 m2
+
+instance{EqShow}{List} : class{EqShow} a -> class{EqShow} (List a) 
+instance{EqShow}{List} .instance{EqShow}{a} =
+  let m1 (Cons x xs) (Cons y ys) =
+                        (== .instance{EqShow}{a}) x y &&
+                        (== (instance{EqShow}{List} .instance{EqShow}{a})) xs ys
+  let m2 (Cons x xs) =
+                        (show .instance{EqShow}{a}) x ++
+                        (show (instance{EqShow}{List} .instance{EqShow}{a})) xs
+  in mk{EqShow} m1 m2
+
+main : String
+main = let b = instance{EqShow}{Bool}
+       let l = instance{EqShow}{List} instance{EqShow}{Bool}
+       in show b ((== l) [True] [False])

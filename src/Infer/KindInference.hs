@@ -7,7 +7,7 @@ import qualified Data.Map as M
 import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Error(Error(..), ErrorType(..))
 import Position(Position(..), unknownPosition)
-import Syntax.Name(QName, operatorArrow)
+import Syntax.Name(QName, primitiveArrow, primitiveInt)
 import Syntax.AST(
          AnnProgram(..), Program,
          AnnDeclaration(..), Declaration,
@@ -38,7 +38,7 @@ data KindInferState =
        statePosition       :: Position
      , stateNextFresh      :: KindVariable
      , stateDataTypeNames  :: S.Set QName
-     , stateEnvironment    :: [M.Map QName Kind] -- Stack of ribs
+     , stateEnvironment    :: [M.Map QName Kind] -- Non-empty stack of ribs
      , stateSubstitution   :: M.Map KindVariable Kind
      , stateClassTypeKinds :: M.Map QName Kind
      }
@@ -87,7 +87,7 @@ bindKind typeName kind = do
 bindToFreshKind :: QName -> M ()
 bindToFreshKind x = do
   k <- freshKind
-  bindKind x k 
+  bindKind x k
 
 lookupKind :: QName -> M Kind
 lookupKind typeName = do
@@ -142,16 +142,14 @@ getClassTypeKindM className = do
 inferKindProgramM :: Program -> M ()
 inferKindProgramM (Program decls) = do
   -- Initialize primitive types
-  bindKind operatorArrow (KFun KType (KFun KType KType))
+  bindKind primitiveArrow (KFun KType (KFun KType KType))
+  addDataTypeM primitiveArrow
+  bindKind primitiveInt KType
+  addDataTypeM primitiveInt
   -- Infer kinds of all declarations
   mapM_ declareTypeM decls
   mapM_ inferKindDeclarationM decls
 
--- Split the left-hand side in the definition of a datatype,
--- such as "Map a b" into the head "Map" and the arguments ["a", "b"]
--- checking that it is well-formed.
---
--- All the arguments should be variables.
 splitDatatypeArgs :: Expr -> M (QName, [QName])
 splitDatatypeArgs (EApp _ f (EVar _ x)) = do
   (head, args) <- splitDatatypeArgs f
@@ -290,6 +288,7 @@ inferKindEquationM (Equation pos lhs rhs) = do
 
 inferKindExpressionM :: Expr -> M ()
 inferKindExpressionM (EVar _ _)           = return ()
+inferKindExpressionM (EUnboundVar _ _)    = return ()
 inferKindExpressionM (EInt _ _)           = return ()
 inferKindExpressionM (EApp _ f x)         = do inferKindExpressionM f
                                                inferKindExpressionM x
@@ -301,6 +300,8 @@ inferKindExpressionM (ECase _ e branches) = do
   inferKindExpressionM e
   mapM_ inferKindBranchM branches
 inferKindExpressionM (EFresh _ _ e)       = inferKindExpressionM e
+inferKindExpressionM (EPlaceholder _ _)   =
+  error "(Impossible: kind inference of instance PlaceHolder)"
 
 inferKindBranchM :: CaseBranch -> M ()
 inferKindBranchM (CaseBranch _ p e) = do
