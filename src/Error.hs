@@ -42,6 +42,7 @@ data ErrorType =
   | KindErrorUnifyOccursCheck
   | KindErrorUnifyClash
   | KindErrorInstanceMustBeDatatype
+  | KindErrorInstanceArgCannotBeDatatype
   | TypeErrorVariableAlreadyDeclared
   | TypeErrorUnboundVariable
   | TypeErrorUnificationOccursCheck
@@ -55,7 +56,7 @@ data ErrorType =
   | ConstraintErrorUnresolvedPlaceholder
   | ConstraintErrorUnresolvedConstraint
   | ConstraintErrorUndeclaredInstance
-  | ValueDefinitionDuplicated
+  | DesugaringErrorDuplicatedValueDefinition
   deriving (Eq, Show)
 
 errorAtUnknown :: ErrorType -> String -> Error

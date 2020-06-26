@@ -1,8 +1,8 @@
 module Desugaring.Desugaring(desugarProgram) where
 
 import qualified Data.Set as S
-import qualified Calculus.Terms as C
 
+import qualified Calculus.Terms as C
 import Error(Error(..), ErrorType(..))
 import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Position(Position(..), unknownPosition)
@@ -42,6 +42,11 @@ currentPosition = do
   state <- getFS
   return $ statePosition state
 
+setPosition :: Position -> M ()
+setPosition pos = do
+  state <- getFS
+  putFS (state { statePosition = pos })
+
 failM :: ErrorType -> String -> M a
 failM errorType msg = do
   pos <- currentPosition
@@ -52,10 +57,10 @@ failM errorType msg = do
 desugarProgramM :: Program -> M C.Term
 desugarProgramM (Program decls) = do
   mapM_ collectConstructors decls
-  equations <- case groupEquations $ concatMap valueDeclaration decls
-                of Left message -> failM ValueDefinitionDuplicated message
-                   Right equations -> return equations
-
+  equations <- case groupEquations (concatMap valueDeclaration decls) of
+                 Left msg ->
+                   failM DesugaringErrorDuplicatedValueDefinition msg
+                 Right equations -> return equations
   terms <- mapM desugarDeclaration decls
   return $ C.Num 0
   where
