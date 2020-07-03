@@ -8,7 +8,7 @@ data Term = Var QName                   |
             Fresh QName Term            |
             Lam QName Program           |
             LamL Location QName Program |
-            Fix Term                    |
+            Fix QName Term              |
             App Term Term               |
             Seq Term Term               |
             Unif Term Term deriving Show
