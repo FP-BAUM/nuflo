@@ -107,10 +107,10 @@ desugarProgramM (Program decls) = do
                      failM DesugaringErrorDuplicatedValueDefinition msg
                    Right equations -> return equations
     desugarLetrec equations (EInt unknownPosition 0)
-  where
-    valueDeclaration :: Declaration -> [Equation]
-    valueDeclaration (ValueDeclaration eq)  = [eq]
-    valueDeclaration _                      = []
+
+valueDeclaration :: Declaration -> [Equation]
+valueDeclaration (ValueDeclaration eq)  = [eq]
+valueDeclaration _                      = []
 
 collectConstructors :: Declaration -> M ()
 collectConstructors (DataDeclaration _ _ constructors) = do
@@ -168,5 +168,14 @@ desugarExpr (ELambda _ e1 e2) = do
     return $ C.Lam x (progSingleton
                        (termFresh (S.toList freeVars)
                                   (C.Seq (C.Unif (C.Var x) t1) t2)))
-desugarExpr e                 = return $ C.Num 7 --TODO
+desugarExpr (ELet _ decls e2) = do
+  enterScope
+  equations <- case groupEquations (concatMap valueDeclaration decls) of
+                Left msg -> failM DesugaringErrorDuplicatedValueDefinition msg
+                Right equations -> return equations
+  exitScope
+  desugarLetrec equations e2
+desugarExpr (ECase _ pattern branches) = return $ C.Num 7 --TODO
+  -- TODO: we should make an alternative <+> for each branch and compose them? like (pattern <+> pattern_i ; body_i)
 
+desugarExpr e                 = return $ C.Num 7 --TODO
