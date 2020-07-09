@@ -168,14 +168,35 @@ desugarExpr (ELambda _ e1 e2) = do
     return $ C.Lam x (progSingleton
                        (termFresh (S.toList freeVars)
                                   (C.Seq (C.Unif (C.Var x) t1) t2)))
-desugarExpr (ELet _ decls e2) = do
-  enterScope
+desugarExpr (ELet pos decls body) = do
+  setPosition pos
   equations <- case groupEquations (concatMap valueDeclaration decls) of
                 Left msg -> failM DesugaringErrorDuplicatedValueDefinition msg
                 Right equations -> return equations
+  desugarLetrec equations body
+desugarExpr (ECase pos guard branches) = do
+  setPosition pos
+  x  <- freshVariable
+  guard' <- desugarExpr guard
+  branches' <- mapM (desugarBranch x) branches
+  let program = foldr C.Alt C.Fail branches'
+  return $ C.App (C.Lam x program) guard'
+  where
+    desugarBranch :: QName -> CaseBranch -> M C.Term
+    desugarBranch x (CaseBranch _ pattern result) = do
+      boundVars <- getAllBoundVarsAndConstructors
+      let freeVars = exprFreeVariables boundVars pattern
+      enterScope
+      mapM_ bindVariable freeVars
+      pattern' <- desugarExpr pattern
+      result' <- desugarExpr result
+      let sequence = C.Seq (C.Unif (C.Var x) pattern') result'
+      exitScope
+      return $ termFresh (S.toList freeVars) sequence
+desugarExpr (EFresh pos name exp) = do
+  enterScope
+  bindVariable name
+  exp' <- desugarExpr exp
   exitScope
-  desugarLetrec equations e2
-desugarExpr (ECase _ pattern branches) = return $ C.Num 7 --TODO
-  -- TODO: we should make an alternative <+> for each branch and compose them? like (pattern <+> pattern_i ; body_i)
-
-desugarExpr e                 = return $ C.Num 7 --TODO
+  return $ C.Fresh name exp'
+desugarExpr (EPlaceholder _ _) = error "(Impossible: desugaring placeholder of an instance placeholder)"

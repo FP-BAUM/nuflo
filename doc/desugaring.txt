@@ -71,3 +71,18 @@ f = body1 (+) ... (+) bodyN
         fresh f1 ... fn.
           ({R} == ({Tuple} f1 ... fn)) , B
 
+--------------------------- Desugar Case of ---------------------------
+
+case e of
+  p1 -> b1
+  ...
+  pN -> bN
+
+Should be transformed to:
+
+(\ x ->   fresh Y1 in ((x == p1); b1)
+        + ...
+        + fresh Yn in ((x == pN); bN))
+    e
+
+Where Y_i are the free variables of p_i

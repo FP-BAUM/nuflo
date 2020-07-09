@@ -254,12 +254,20 @@ exprFreeVariables bound (ELet _ declarations body) =
       let f = fromJust (exprHeadVariable lhs)
        in S.fromList [f]
     declBoundVariables _ = S.empty
-exprFreeVariables bound (ECase _ _ _)      = error "NOT IMPLEMENTED"
+exprFreeVariables bound (ECase _ guard branches) =
+  let guardFV  = exprFreeVariables bound guard
+      branchFV = S.unions $ map (branchFreeVariables bound) branches
+  in S.union guardFV branchFV
 exprFreeVariables bound (EFresh _ x e)     = exprFreeVariables
                                                (S.insert x bound)
                                                e
 exprFreeVariables bound (EPlaceholder _ _) =
   error "(Free variables of a placeholder should not be requested)"
+
+branchFreeVariables :: S.Set QName -> AnnCaseBranch a -> S.Set QName
+branchFreeVariables bound (CaseBranch _ pattern body) =
+  let patternFV = exprFreeVariables bound pattern
+  in exprFreeVariables (S.union bound patternFV) body
 
 ---- Show
 
