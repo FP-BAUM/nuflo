@@ -221,23 +221,32 @@ inferKindDeclarationM (ClassDeclaration pos className typeName methods) = do
   exitScopeM
 inferKindDeclarationM (InstanceDeclaration pos className typ
                                            constraints methods) = do
-  setPosition pos
-  classTypeKind <- getClassTypeKindM className
-  (name, args) <- splitDatatypeArgs typ
-  b <- isDataTypeM name
-  enterScopeM
-  typeKind <- lookupKind name
-  if b
-   then return ()
-   else failM KindErrorInstanceMustBeDatatype
-              "Type on instance declaration must be a datatype."
-  let argsAndKinds = zipKinds args typeKind
-  let argKinds = map snd argsAndKinds
-  mapM_ (uncurry bindKind) argsAndKinds
-  unifyKindsM (foldr KFun classTypeKind argKinds) typeKind
-  mapM_ inferKindConstraintM constraints
-  exitScopeM
-  mapM_ inferKindEquationM methods
+    setPosition pos
+    classTypeKind <- getClassTypeKindM className
+    (name, args) <- splitDatatypeArgs typ
+    b <- isDataTypeM name
+    enterScopeM
+    typeKind <- lookupKind name
+    if b
+     then return ()
+     else failM KindErrorInstanceMustBeDatatype
+                "Type on instance declaration must be a datatype."
+    mapM_ checkArgNotDatatype args
+    let argsAndKinds = zipKinds args typeKind
+    let argKinds = map snd argsAndKinds
+    mapM_ (uncurry bindKind) argsAndKinds
+    unifyKindsM (foldr KFun classTypeKind argKinds) typeKind
+    mapM_ inferKindConstraintM constraints
+    exitScopeM
+    mapM_ inferKindEquationM methods
+  where
+    checkArgNotDatatype arg = do
+      b <- isDataTypeM arg
+      if b
+       then failM KindErrorInstanceArgCannotBeDatatype
+               ("Argument \"" ++ show arg ++ "\" of type constructor " ++
+                "cannot be a datatype.")
+       else return ()
 
 inferKindConstructorM :: Expr -> Signature -> M ()
 inferKindConstructorM dataType

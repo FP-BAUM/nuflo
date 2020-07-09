@@ -1064,7 +1064,6 @@ inferTypeInstanceDeclarationM pos className typ constraints methodEqs = do
     return instanceDecl
   where
     (typeConstructor, typeParams) = splitDatatypeArgsOrFail typ
-
     buildInstanceRecordDeclaration =
       let lhsHead = EUnboundVar pos $
                     mangleInstanceName className typeConstructor
@@ -1110,7 +1109,7 @@ inferTypeInstanceDeclarationM pos className typ constraints methodEqs = do
                                localMethodNames)
     varToUnboundVar :: Expr -> Expr
     varToUnboundVar (EVar pos var) = EUnboundVar pos var
-    varToUnboundVar a              = error ("can not be " ++ show a)
+    varToUnboundVar _              = error "(Must be a variable)"
     methodMismatchMessage cs is =
       "Instance methods do not match class methods."
        ++ (if cs `S.isSubsetOf` is

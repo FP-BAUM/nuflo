@@ -5,7 +5,7 @@ import qualified Data.Set as S
 
 import Error(Error(..), ErrorType(..))
 import Position(Position)
-import Syntax.Name(QName(..), primitiveAlternative)
+import Syntax.Name(QName(..), primitiveAlternative, primitiveTuple)
 import Syntax.AST(AnnEquation(..), Equation,
                   AnnCaseBranch(..), CaseBranch,
                   AnnExpr(..), Expr, exprHeadVariable, exprHeadArguments,
@@ -59,14 +59,11 @@ joinEquations eqs@((Equation pos lhs _) : _) =
               pattern  = makeTuple pos (pad patterns)
            in CaseBranch pos pattern rhs
 
-mangleTupleConstructor :: QName
-mangleTupleConstructor = Name "{Tuple}"
-
 mangleParameterName :: Int -> QName
 mangleParameterName i = Name ("param{" ++ show i ++ "}")
 
 makeTuple :: Position -> [Expr] -> Expr
-makeTuple pos exprs = foldl (EApp pos) (EVar pos mangleTupleConstructor) exprs
+makeTuple pos exprs = foldl (EApp pos) (EVar pos primitiveTuple) exprs
 
 numberOfArguments :: Equation -> Int
 numberOfArguments (Equation _ lhs _) =

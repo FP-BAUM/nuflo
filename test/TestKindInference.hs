@@ -253,6 +253,13 @@ tests = TestSuite "KIND INFERENCE" [
     "instance Eq BB where"
   ]) KindErrorInstanceMustBeDatatype,
 
+  testProgramError "Reject argument in instance declaration" (unlines [
+    "data Bool where",
+    "data List a where",
+    "class Eq a where",
+    "instance Eq (List Bool) where"
+  ]) KindErrorInstanceArgCannotBeDatatype,
+
   testProgramError "Check kinds inside let/where" (unlines [
     "data List a where",
     "main = x where x : List"
