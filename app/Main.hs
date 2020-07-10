@@ -11,6 +11,7 @@ import Parser.Parser(parse)
 import Infer.KindInference(inferKinds)
 import Infer.TypeInference(inferTypes)
 import Desugaring.Desugaring(desugarProgram)
+import Eval.Eval(evalProgram)
 
 import TestMain(runAllTests)
 
@@ -27,6 +28,7 @@ run ["-p", input] = runParser input
 run ["-k", input] = runKindInference input
 run ["-i", input] = runTypeInference input
 run ["-d", input] = runDesugaring input
+run [input]       = runEvaluator input
 run _             = usage
 
 runTokenizer :: String -> IO ()
@@ -100,6 +102,28 @@ runDesugaring filename = do
                   case desugarProgram program' of
                     Left e -> die e
                     Right termC -> putStrLn (show termC)
+runEvaluator :: String -> IO ()
+runEvaluator filename = do
+  res <- readSource filename
+  case res of
+    Left  e      -> die e
+    Right tokens -> do
+      case parse tokens of
+        Left e        -> die e
+        Right program -> do
+          case inferKinds program of
+            Left e    -> die e
+            Right () -> do
+              case inferTypes program of
+                Left e -> die e
+                Right program' -> do
+                  case desugarProgram program' of
+                    Left e -> die e
+                    Right termC -> do
+                      case evalProgram termC of
+                        Left e -> die e
+                        Right _ -> putStrLn (show "")
+                    
 
 usage :: IO ()
 usage = do
@@ -111,6 +135,7 @@ usage = do
   putStrLn "  la -k foo.la       Infer kinds."
   putStrLn "  la -i foo.la       Infer types."
   putStrLn "  la -d foo.la       Desugar program."
+  putStrLn "  la foo.la          Eval program."
 
 die :: Error -> IO ()
 die e = do
