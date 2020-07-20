@@ -604,12 +604,11 @@ inferTypeDeclarationsM decls =
     rec defined (decl@(ValueDeclaration equation) : decls) =
       let name = fromJust . exprHeadVariable . equationLHS $ equation in do
         continue (S.insert name defined) decl decls
-    rec defined (decl@(TypeSignature sig) : decls) = do
+    rec defined (decl : decls) = do
       if not (S.null defined)
        then generalizeLocalBindings defined
        else return ()
       continue S.empty decl decls
-    rec defined (decl : decls) = continue defined decl decls
 
     continue :: S.Set QName -> Declaration -> [Declaration] -> M [Declaration]
     continue defined decl decls = do
