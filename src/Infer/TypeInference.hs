@@ -589,12 +589,33 @@ inferTypeDeclarationsM :: [Declaration] -> M [Declaration]
 inferTypeDeclarationsM decls =
     let definedVars = S.unions (map declarationHeadVar decls)
      in do mapM_ bindToFreshTypeIfNotLocallyBound (S.toList definedVars)
-           decls' <- mapM inferTypeDeclarationM decls
-           return $ concat decls'
+           rec S.empty decls
   where
     declarationHeadVar (ValueDeclaration (Equation _ lhs _)) =
       S.fromList [fromJust (exprHeadVariable lhs)]
     declarationHeadVar _ = S.empty
+
+    rec :: S.Set QName -> [Declaration] -> M [Declaration]
+    rec defined [] = do
+      if not (S.null defined)
+       then do generalizeLocalBindings defined
+               return []
+       else return []
+    rec defined (decl@(ValueDeclaration equation) : decls) =
+      let name = fromJust . exprHeadVariable . equationLHS $ equation in do
+        continue (S.insert name defined) decl decls
+    rec defined (decl@(TypeSignature sig) : decls) = do
+      if not (S.null defined)
+       then generalizeLocalBindings defined
+       else return ()
+      continue S.empty decl decls
+    rec defined (decl : decls) = continue defined decl decls
+
+    continue :: S.Set QName -> Declaration -> [Declaration] -> M [Declaration]
+    continue defined decl decls = do
+      decl'  <- inferTypeDeclarationM decl
+      decls' <- rec defined decls
+      return (decl' ++ decls')
 
 inferTypeDeclarationM :: Declaration -> M [Declaration]
 inferTypeDeclarationM decl@(DataDeclaration _ _ _) = return [decl]
@@ -602,7 +623,8 @@ inferTypeDeclarationM decl@(TypeDeclaration _ _ _) = return [decl]
 inferTypeDeclarationM (ValueDeclaration equation) = do
   equation' <- inferTypeEquationM equation
   return [ValueDeclaration equation']
-inferTypeDeclarationM decl@(TypeSignature _) = return [decl]
+inferTypeDeclarationM decl@(TypeSignature _) = do
+  return [decl]
 inferTypeDeclarationM (ClassDeclaration pos className typeName methods) = do
   inferTypeClassDeclarationM pos className typeName methods
 inferTypeDeclarationM (InstanceDeclaration pos className typ
@@ -730,8 +752,8 @@ unfoldTypeConstraint (TypeConstraint name typ) = do
 -- environment that can be generalized with a forall. Update all the
 -- bindings in the local environment so that all these type variables
 -- become generalized.
-generalizeLocalBindings :: M ()
-generalizeLocalBindings = do
+generalizeLocalBindings :: S.Set QName -> M ()
+generalizeLocalBindings affectedNames = do
     (genMetavars, genVars) <- generalizableVariables
     rib <- head <$> getEnvironment
     mapM_ (uncurry $ generalizeLocalBinding genMetavars genVars) (M.toList rib)
@@ -756,12 +778,18 @@ generalizeLocalBindings = do
       return (genMetavars, genVars `S.union` S.fromList (map unTVar genVars'))
     getVars :: M.Map QName TypeScheme -> M (S.Set QName)
     getVars rib = do
-      schemes <- mapM unfoldTypeScheme (M.elems rib)
+      schemes <- concat <$> mapM (lookupInRib rib) (S.toList affectedNames)
       return $ S.unions (map typeSchemeFreeVariables schemes)
     getMetavars :: M.Map QName TypeScheme -> M (S.Set TypeMetavariable)
     getMetavars rib = do
-      schemes <- mapM unfoldTypeScheme (M.elems rib)
+      schemes <- concat <$> mapM (lookupInRib rib) (S.toList affectedNames)
       return $ S.unions (map typeSchemeMetavariables schemes)
+    lookupInRib :: M.Map QName TypeScheme -> QName -> M [TypeScheme]
+    lookupInRib rib name = do
+      case M.lookup name rib of
+        Nothing -> return []
+        Just ts -> do ts' <- unfoldTypeScheme ts
+                      return [ts']
     generalizeLocalBinding :: S.Set TypeMetavariable -> S.Set QName
                            -> QName -> TypeScheme -> M ()
     generalizeLocalBinding genMetavars genVars x scheme = do
@@ -937,7 +965,6 @@ inferTypeELetM pos decls body = do
   enterScopeM
   mapM_ collectSignaturesM decls
   decls' <- inferTypeDeclarationsM decls
-  generalizeLocalBindings
   (typeScheme, body') <- inferTypeExprM body
   exitScopeM
   return (typeScheme, ELet pos decls' body')
