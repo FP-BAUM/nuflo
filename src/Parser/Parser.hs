@@ -10,7 +10,7 @@ import Syntax.Name(
          QName(..), readName, qualify, moduleNameFromQName,
          isWellFormedOperatorName, unqualifiedName, splitParts,
          allNameParts,
-         modulePRIM, moduleMain, arrowSymbol, primitiveArrow, primitiveInt
+         modulePRIM, moduleMain, arrowSymbol, primitiveArrow, primitiveInt, primitiveUnderscore
        )
 import Syntax.AST(
          AnnProgram(..), Program,
@@ -296,6 +296,7 @@ parseM = do
   enterModule modulePRIM
   exportAllNamesFromModuleM modulePRIM
   declareQNameM primitiveInt
+  declareQNameM primitiveUnderscore
   declareOperatorM RightAssoc 50 primitiveArrow
 
   -- Parse

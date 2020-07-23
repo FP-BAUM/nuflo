@@ -7,7 +7,7 @@ import qualified Calculus.Terms as C
 import Error(Error(..), ErrorType(..))
 import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Position(Position(..), unknownPosition)
-import Syntax.Name(QName(..), primitiveTuple)
+import Syntax.Name(QName(..), primitiveTuple, primitiveUnderscore)
 import Syntax.GroupEquations(groupEquations)
 import Syntax.AST(
          AnnProgram(..), Program,
@@ -150,7 +150,10 @@ progSingleton t = C.Alt t C.Fail
 
 desugarExpr :: Expr ->  M C.Term
 -- TODO: primitivas
-desugarExpr (EVar _ x)        = return $ C.Var x
+desugarExpr (EVar _ x)       | x == primitiveUnderscore = do
+                                  x' <- freshVariable
+                                  return $ C.Fresh x' (C.Var x')
+                             | otherwise                = return $ C.Var x
 desugarExpr (EUnboundVar _ x) = return $ C.Var x
 desugarExpr (EInt _ x)        = return $ C.Num x
 desugarExpr (EApp _ e1 e2)    = do t1 <- desugarExpr e1

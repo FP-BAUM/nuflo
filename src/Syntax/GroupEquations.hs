@@ -5,7 +5,7 @@ import qualified Data.Set as S
 
 import Error(Error(..), ErrorType(..))
 import Position(Position)
-import Syntax.Name(QName(..), primitiveAlternative, primitiveTuple)
+import Syntax.Name(QName(..), primitiveAlternative, primitiveTuple, primitiveUnderscore)
 import Syntax.AST(AnnEquation(..), Equation,
                   AnnCaseBranch(..), CaseBranch,
                   AnnExpr(..), Expr, exprHeadVariable, exprHeadArguments,
@@ -48,7 +48,7 @@ joinEquations eqs@((Equation pos lhs _) : _) =
     paramNames = map mangleParameterName [1..maxArgs]
     pad :: [Expr] -> [Expr]
     pad exprs =
-      exprs ++ replicate (maxArgs - length exprs) (EVar pos (Name "_"))
+      exprs ++ replicate (maxArgs - length exprs) (EVar pos primitiveUnderscore)
     innerBody = ECase pos guard (map branch eqs)
       where
         guard :: Expr

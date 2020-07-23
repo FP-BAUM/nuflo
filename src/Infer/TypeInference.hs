@@ -9,7 +9,8 @@ import Error(Error(..), ErrorType(..))
 import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Position(Position(..), unknownPosition)
 import Syntax.Name(QName(..), primitiveArrow, primitiveInt,
-                   primitiveAlternative, unqualifiedName)
+                   primitiveAlternative, unqualifiedName,
+                   primitiveUnderscore)
 import Syntax.AST(
          AnnProgram(..), Program,
          AnnDeclaration(..), Declaration,
@@ -522,7 +523,9 @@ inferTypeProgramM (Program decls) = do
   let tA = Name "{a}"
   bindType primitiveAlternative
            (TypeScheme [tA] (ConstrainedType []
-             (tFun (TVar tA) (tFun (TVar tA) (TVar tA)))))
+              (tFun (TVar tA) (tFun (TVar tA) (TVar tA)))))
+  bindType primitiveUnderscore
+           (TypeScheme [tA] (ConstrainedType [] (TVar tA)))
   -- Infer
   mapM_ collectTypeDeclarationM decls
   mapM_ collectSignaturesM decls
