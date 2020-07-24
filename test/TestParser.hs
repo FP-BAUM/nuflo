@@ -4,7 +4,7 @@ module TestParser(tests) where
 import Test(Test(..))
 
 import Error(Error(..), ErrorType(..))
-import Syntax.Name(QName(..))
+import Syntax.Name(QName(..), primitiveUnderscore)
 import Syntax.AST(AnnProgram(..), AnnDeclaration(..),
                   AnnSignature(..), Signature,
                   AnnEquation(..), Equation,
@@ -319,7 +319,7 @@ tests = TestSuite "PARSER" [
 
       testExprOK "Variable (underscore)"
          "x = _" 
-         (evar "_")
+         (EVar () primitiveUnderscore)
 
     ],
 
