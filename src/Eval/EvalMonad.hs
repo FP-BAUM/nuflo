@@ -53,6 +53,17 @@ modifyEM f = EM $ \ s0 -> return (Right ((), f s0))
 logEM :: String -> EvalMonad state ()
 logEM msg = trace msg (return ())
 
+liftIO_EM :: IO a -> EvalMonad state a
+liftIO_EM cmd = EM $ \ s -> do
+                  a <- cmd
+                  return (Right (a, s))
+
+putStrEM :: String -> EvalMonad state ()
+putStrEM str = liftIO_EM (putStr str)
+
+putStrLnEM :: String -> EvalMonad state ()
+putStrLnEM str = liftIO_EM (putStrLn str)
+
 runEM :: EvalMonad state a -> state -> IO (Either Error (a, state))
 runEM (EM a) s0 = a s0
 
