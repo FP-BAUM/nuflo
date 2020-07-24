@@ -1,22 +1,72 @@
-module Eval.EvalMonad(EvalMonad(..)) where
+module Eval.EvalMonad(
+         EvalMonad, failEM, getEM, putEM, modifyEM, logEM,
+         runEM, execEM, evalEM
+       ) where
 
-  import System.IO(IO)
-  import Error(Error(..), ErrorType(..))
-  import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
+import Debug.Trace(trace)
 
-  data EvalMonad a = EM (IO (FailState Error a))
+import System.IO(IO)
+import Error(Error(..), ErrorType(..))
+import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 
-  instance Functor EvalMonad where
-    -- fmap :: (a -> b) -> EvalMonad a -> EvalMonad b
-    fmap f (EM xio) = EM $ (fmap . fmap $ f) xio
+data EvalMonad state a = EM (state -> IO (Either Error (a, state)))
 
-  instance Applicative EvalMonad where
-    pure a = EM (pure . pure $ a)
-    EM mf <*> EM ma = EM ((<*>) <$> mf <*> ma)
+instance Functor (EvalMonad state) where
+  fmap f (EM a) = EM $ \ s0 -> do
+    a' <- a s0
+    return $ case a' of
+      Left err        -> Left err
+      Right (a'', s1) -> Right (f a'', s1)
 
-  instance Monad EvalMonad where
-    -- return = pure
-    -- EM ma >>= f = do
-    --   fs <- ma
-    --   a <- fs
-    --   return a
+instance Applicative (EvalMonad state) where
+  pure a        = EM $ \ s0 -> return $ Right (a, s0)
+  EM f <*> EM a = EM $ \ s0 -> do
+    f' <- f s0
+    case f' of
+      Left err        -> return $ Left err
+      Right (f'', s1) -> do
+        a' <- a s1
+        return $ case a' of
+          Left err        -> Left err
+          Right (a'', s2) -> Right (f'' a'', s2)
+
+instance Monad (EvalMonad state) where
+  return = pure
+  EM a >>= f = EM $ \ s0 -> do
+    a' <- a s0
+    case a' of
+      Left  err       -> return $ Left err
+      Right (a'', s1) -> let EM b = f a'' in b s1
+
+failEM :: Error -> EvalMonad state a
+failEM e = EM $ \ s0 -> return (Left e)
+
+getEM :: EvalMonad state state
+getEM = EM $ \ s0 -> return (Right (s0, s0))
+
+putEM :: state -> EvalMonad state ()
+putEM s = EM $ \ _ -> return (Right ((), s))
+
+modifyEM :: (state -> state) -> EvalMonad state ()
+modifyEM f = EM $ \ s0 -> return (Right ((), f s0))
+
+logEM :: String -> EvalMonad state ()
+logEM msg = trace msg (return ())
+
+runEM :: EvalMonad state a -> state -> IO (Either Error (a, state))
+runEM (EM a) s0 = a s0
+
+evalEM :: EvalMonad state a -> state -> IO (Either Error a)
+evalEM a s0 = do
+  a' <- runEM a s0
+  case a' of
+    Left err       -> return $ Left err
+    Right (a'', _) -> return $ Right a''
+
+execEM :: EvalMonad state a -> state -> IO (Either Error state)
+execEM a s0 = do
+  a' <- runEM a s0
+  case a' of
+    Left err      -> return $ Left err
+    Right (_, s1) -> return $ Right s1
+
