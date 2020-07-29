@@ -406,7 +406,6 @@ instance UnfoldPlaceholders AnnExpr where
     if M.member p h
      then unfoldPlaceholders h (M.findWithDefault undefined p h)
      else Left (EPlaceholder a p)
-          --return $ EPlaceholder a p {-- For DEBUGGING --}
 
 instance UnfoldPlaceholders AnnCaseBranch where
   unfoldPlaceholders h (CaseBranch a e1 e2) =

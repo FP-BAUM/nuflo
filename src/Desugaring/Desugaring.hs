@@ -150,10 +150,10 @@ progSingleton t = C.Alt t C.Fail
 
 desugarExpr :: Expr ->  M C.Term
 -- TODO: primitivas
-desugarExpr (EVar _ x)       | x == primitiveUnderscore = do
-                                  x' <- freshVariable
-                                  return $ C.Fresh x' (C.Var x')
-                             | otherwise                = return $ C.Var x
+desugarExpr (EVar _ x)
+  | x == primitiveUnderscore  = do x' <- freshVariable
+                                   return $ C.Fresh x' (C.Var x')
+  | otherwise                 = return $ C.Var x
 desugarExpr (EUnboundVar _ x) = return $ C.Var x
 desugarExpr (EInt _ x)        = return $ C.Num x
 desugarExpr (EApp _ e1 e2)    = do t1 <- desugarExpr e1
@@ -179,7 +179,7 @@ desugarExpr (ELet pos decls body) = do
   desugarLetrec equations body
 desugarExpr (ECase pos guard branches) = do
   setPosition pos
-  x  <- freshVariable
+  x <- freshVariable
   guard' <- desugarExpr guard
   branches' <- mapM (desugarBranch x) branches
   let program = foldr C.Alt C.Fail branches'
@@ -202,4 +202,6 @@ desugarExpr (EFresh pos name exp) = do
   exp' <- desugarExpr exp
   exitScope
   return $ C.Fresh name exp'
-desugarExpr (EPlaceholder _ _) = error "(Impossible: desugaring placeholder of an instance placeholder)"
+desugarExpr (EPlaceholder _ _) =
+  error "(Impossible: desugaring placeholder of an instance placeholder)"
+
