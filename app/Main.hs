@@ -11,7 +11,7 @@ import Parser.Parser(parse)
 import Infer.KindInference(inferKinds)
 import Infer.TypeInference(inferTypes)
 import Desugaring.Desugaring(desugarProgram)
-import Eval.Eval(evalProgram)
+import Eval.Eval(eval)
 
 import TestMain(runAllTests)
 
@@ -102,6 +102,7 @@ runDesugaring filename = do
                   case desugarProgram program' of
                     Left e -> die e
                     Right termC -> putStrLn (show termC)
+
 runEvaluator :: String -> IO ()
 runEvaluator filename = do
   res <- readSource filename
@@ -119,11 +120,7 @@ runEvaluator filename = do
                 Right program' -> do
                   case desugarProgram program' of
                     Left e -> die e
-                    Right termC -> do
-                      case evalProgram termC of
-                        Left e -> die e
-                        Right _ -> putStrLn (show "")
-                    
+                    Right termC -> eval termC
 
 usage :: IO ()
 usage = do
