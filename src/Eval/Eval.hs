@@ -11,10 +11,9 @@ data Result = End (IO ())
             | Next (IO (C.Term, Result))
 
 data EvalState = EvalState {
-    stateNextFresh :: Integer,
-    stateThreads   :: [C.Term]
-  }
-
+                   stateNextFresh :: Integer
+                 , stateThreads   :: [C.Term]
+                 }
 
 getThreads :: M [C.Term]
 getThreads = do
