@@ -1,6 +1,6 @@
-module Calculus.Terms(Term(..), Program(..), Location) where
+module Calculus.Terms(Term(..), Program(..), Location, consOk) where
 
-import Syntax.Name(QName(..))
+import Syntax.Name(QName(..), primitiveOk)
 
 data Term = Var QName
           | Cons QName
@@ -19,4 +19,7 @@ data Program = Fail
   deriving Show
 
 type Location = Integer
+
+consOk :: Term
+consOk = Cons primitiveOk
 

@@ -2,9 +2,9 @@
 module Eval.Eval(eval) where
 
 import System.Exit(die)
+import qualified Data.Map as M
 
 import qualified Calculus.Terms as C
-import qualified Data.Map as M
 import Syntax.Name(QName(..))
 import Eval.EvalMonad(EvalMonad, failEM, getEM, putEM, modifyEM, logEM,
                       runEM, execEM, evalEM)
@@ -13,8 +13,9 @@ data Result = End (IO ())
             | Next (IO (C.Term, Result))
 
 data EvalState = EvalState {
-                   stateNextFresh :: Integer
-                 , stateThreads   :: [C.Term]
+                   stateNextFresh    :: Integer
+                 , stateNextLocation :: Integer
+                 , stateThreads      :: [C.Term]
                  }
 
 data Goal = Goal C.Term C.Term
@@ -24,9 +25,14 @@ type Subst = M.Map QName C.Term
 freshVar :: M QName
 freshVar = do
   state <- getEM
-  let var = stateNextFresh state
-  putEM (state { stateNextFresh = (stateNextFresh state) + 1 })
-  return $ Name ("?{" ++ show var ++ "}")
+  putEM (state { stateNextFresh = stateNextFresh state + 1 })
+  return $ Name ("?{" ++ show (stateNextFresh state) ++ "}")
+
+freshLocation :: M Integer
+freshLocation = do
+  state <- getEM
+  putEM (state { stateNextLocation = stateNextLocation state + 1 })
+  return $ stateNextLocation state
 
 getThreads :: M [C.Term]
 getThreads = do
@@ -44,7 +50,11 @@ eval :: C.Term -> IO ()
 eval term = rec initialState
   where
     initialState :: EvalState
-    initialState = EvalState { stateNextFresh = 0, stateThreads = [term] }
+    initialState = EvalState {
+                     stateNextFresh    = 0
+                   , stateNextLocation = 0
+                   , stateThreads      = [term]
+                   }
     rec :: EvalState -> IO ()
     rec state = do
       result <- runEM step state
@@ -69,7 +79,7 @@ splitNormalForms :: [C.Term] -> ([C.Term], [C.Term])
 splitNormalForms []          = ([], [])
 splitNormalForms (t : terms) =
   let (normalForms, pending) = splitNormalForms terms
-   in if (isNormalForm t)
+   in if isNormalForm t
        then (t : normalForms, pending)
        else (normalForms, t : pending)
 
@@ -92,22 +102,30 @@ isVar :: C.Term -> Bool
 isVar (C.Var _)      = True
 isVar _              = False
 
+programToList :: C.Program -> [C.Term]
+programToList C.Fail      = []
+programToList (C.Alt t p) = t : programToList p
+
+splitArgs :: C.Term -> (C.Term, [C.Term])
+splitArgs (C.App t s) = let (head, args) = splitArgs t
+                         in (head, args ++ [s])
+splitArgs t           = (t, [])
+
 isFree :: QName -> C.Term -> Bool
-isFree = error "not implemented"
--- isFree
+isFree x (C.Var y)      = x == y
+isFree x (C.Cons _)     = False
+isFree x (C.Num _)      = False
+isFree x (C.Fresh y t)  = x /= y && isFree x t
+isFree x (C.Lam y p)    = x /= y && isFreeP x p
+isFree x (C.LamL _ y p) = x /= y && isFreeP x p
+isFree x (C.Fix y t)    = x /= y && isFree x t
+isFree x (C.App t1 t2)  = isFree x t1 || isFree x t2
+isFree x (C.Seq t1 t2)  = isFree x t1 || isFree x t2
+isFree x (C.Unif t1 t2) = isFree x t1 || isFree x t2
 
-
-
--- data Term = Var QName
---           | Cons QName
---           | Num Integer
---           | Fresh QName Term
---           | Lam QName Program
---           | LamL Location QName Program
---           | Fix QName Term
---           | App Term Term
---           | C.Seq Term Term
---           | C.Unif Term Term
+isFreeP :: QName -> C.Program -> Bool
+isFreeP x C.Fail      = False
+isFreeP x (C.Alt t p) = isFree x t || isFreeP x p
 
 isValue :: C.Term -> Bool
 isValue (C.Var _)      = True
@@ -128,43 +146,74 @@ isStuck t = isNormalForm t && not (isValue t)
 stepThread :: C.Term -> M [C.Term]
 stepThread term = do
   (goals, terms) <- stepThread' term
-  subst <- mgu goals
-  case subst of
-    Nothing     -> return []
-    Just subst' -> mapM (applySubst subst') terms
+  mSubst <- mgu goals
+  case mSubst of
+    Nothing    -> return []
+    Just subst -> mapM (applySubst subst) terms
 
 stepThread' :: C.Term -> M ([Goal], [C.Term])
-stepThread' var@(C.Var _)                = return ([], [var])
-stepThread' const@(C.Cons _)             = return ([], [const])
-stepThread' num@(C.Num _)                = return ([], [num])
-stepThread' fresh@(C.Fresh x term)       = do
-                                          x' <- freshVar
-                                          term' <- renameVar term x x'
-                                          stepThread' term'
-stepThread' _ = error "bla"
--- stepThread' lambda@(Lam name programm) = ]
+stepThread' e@(C.Var _)           = return ([], [e])
+stepThread' e@(C.Cons _)          = return ([], [e])
+stepThread' e@(C.Num _)           = return ([], [e])
+stepThread' (C.Fresh x t)         = do x' <- freshVar
+                                       t' <- renameVar t x x'
+                                       stepThread' t'
+stepThread' (C.Lam x p)           = do l <- freshLocation
+                                       return ([], [C.LamL l x p])
+stepThread' e@(C.LamL _ _ _)      = do l <- freshLocation
+                                       return ([], [e])
+stepThread' (C.App (C.LamL _ x p) v)
+  | isValue v                     = do
+    p' <- applySubstP (singletonSubst x v) p
+    return ([], programToList p')
+stepThread' e@(C.Fix x t)           = do
+  t' <- applySubst (singletonSubst x e) t
+  return ([], [t'])
+stepThread' (C.App t1 t2)         = do (g1, p1) <- stepThread' t1
+                                       (g2, p2) <- stepThread' t2
+                                       return (g1 ++ g2, C.App <$> p1 <*> p2)
+stepThread' (C.Seq v t)
+  | isValue v                     = stepThread' t
+stepThread' (C.Seq t1 t2)         = do (g1, p1) <- stepThread' t1
+                                       (g2, p2) <- stepThread' t2
+                                       return (g1 ++ g2, C.Seq <$> p1 <*> p2)
+stepThread' (C.Unif v w)
+  | isValue v && isValue w        = return ([Goal v w], [C.consOk])
+stepThread' (C.Unif t1 t2)        = do (g1, p1) <- stepThread' t1
+                                       (g2, p2) <- stepThread' t2
+                                       return (g1 ++ g2, C.Unif <$> p1 <*> p2)
+
+singletonSubst :: QName -> C.Term -> Subst
+singletonSubst x v = M.insert x v M.empty
 
 mgu :: [Goal] -> M (Maybe Subst)
-mgu []                                                    = return (Just M.empty)
-mgu (Goal (C.Var x) (C.Var y) :xs)        | x == y        = mgu xs
-mgu (Goal (C.Var x) v :xs)                | isFree x v    = return Nothing
-mgu (Goal (C.Var x) v :xs)                                = do
-  xs' <- mapM (applySubstG (M.insert x v M.empty)) xs
+mgu []         = return (Just M.empty)
+mgu (Goal (C.Var x) (C.Var y) : xs)
+  | x == y     = mgu xs
+mgu (Goal (C.Var x) v : xs)
+  | isFree x v = return Nothing
+mgu (Goal (C.Var x) v : xs) = do
+  xs' <- mapM (applySubstG (singletonSubst x v)) xs
   mSubst <- mgu xs'
   case mSubst of
     Nothing -> return Nothing
     Just subst -> do
       v' <- applySubst subst v
       return $ Just (M.insert x v' subst)
-mgu (Goal v (C.Var x) :xs)                | not $ isVar v    = mgu (Goal (C.Var x) v : xs)
-mgu (Goal (C.LamL l _ _) (C.LamL l' _ _) :xs) | l == l'       = mgu xs
-mgu (Goal (C.LamL l _ _) (C.LamL l' _ _) :xs)                 = return Nothing
-mgu (Goal v w : xs)                                           =
+mgu (Goal v (C.Var x) : xs)
+  | not $ isVar v   = mgu (Goal (C.Var x) v : xs)
+mgu (Goal (C.LamL l _ _) (C.LamL l' _ _) : xs)
+  | l == l'         = mgu xs
+mgu (Goal (C.LamL l _ _) (C.LamL l' _ _) : xs)
+                    = return Nothing
+mgu (Goal v w : xs) =
   let (v', v_args) = splitArgs v
       (w', w_args) = splitArgs w
-  in case (v', w') of
-    (C.Cons c, C.Cons d) | c == d && length v_args == length w_args -> mgu (zipWith Goal v_args w_args ++ xs)
-    _                                                               -> return Nothing
+   in case (v', w') of
+     (C.Cons c, C.Cons d)
+       | c == d && length v_args == length w_args
+       -> mgu (zipWith Goal v_args w_args ++ xs)
+     _ -> return Nothing
 
 applySubst :: Subst -> C.Term -> M C.Term
 applySubst subst var@(C.Var name) = do
@@ -207,5 +256,12 @@ applySubstP subst (C.Alt t p) = do
   p' <- applySubstP subst p
   return $ C.Alt t' p'
 
+applySubstG :: Subst -> Goal -> M Goal
+applySubstG subst (Goal t1 t2) = do
+  t1' <- applySubst subst t1
+  t2' <- applySubst subst t2
+  return $ Goal t1' t2'
+
 renameVar :: C.Term -> QName -> QName -> M C.Term
-renameVar t x y = applySubst (M.insert x (C.Var y) M.empty) t
+renameVar t x y = applySubst (singletonSubst x (C.Var y)) t
+
