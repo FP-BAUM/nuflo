@@ -62,6 +62,9 @@ eval term = rec initialState
         Left err -> do
           die ("Runtime error:\n" ++ show err)
         Right (normalForms, state') -> do
+          {- Show final result -}
+          putStrLn (show (stateThreads state'))
+          {----}
           mapM_ (putStrLn . show) normalForms
           if null $ stateThreads state'
            then return ()

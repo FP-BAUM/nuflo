@@ -7,7 +7,11 @@ import qualified Calculus.Terms as C
 import Error(Error(..), ErrorType(..))
 import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Position(Position(..), unknownPosition)
-import Syntax.Name(QName(..), primitiveTuple, primitiveUnderscore)
+import Syntax.Name(
+         QName(..),
+         primitiveAlternative, primitiveTuple,
+         primitiveUnderscore
+       )
 import Syntax.GroupEquations(groupEquations)
 import Syntax.AST(
          AnnProgram(..), Program,
@@ -25,10 +29,13 @@ desugarProgram :: Program -> Either Error C.Term
 desugarProgram program = evalFS (desugarProgramM program) initialState
   where initialState = DesugarState {
     statePosition     = unknownPosition,
-    stateConstructors = S.empty,
+    stateConstructors = S.fromList builtinConstructors,
     stateNextFresh    = 0,
     stateEnvironment  = [S.empty]
   }
+
+builtinConstructors :: [QName]
+builtinConstructors = [primitiveAlternative, primitiveTuple]
 
 data DesugarState = DesugarState {
     statePosition     :: Position,
@@ -97,6 +104,12 @@ getAllBoundVarsAndConstructors = do
   bs <- getAllBoundVars
   return (cs `S.union` bs)
 
+isBoundToConstructor :: QName -> M Bool
+isBoundToConstructor x = do
+  cs <- getConstructors
+  bs <- getAllBoundVars
+  return (S.member x cs && not (S.member x bs))
+
 ---------------------------------
 
 desugarProgramM :: Program -> M C.Term
@@ -128,6 +141,17 @@ desugarLetrec equations body =
      rhss' <- mapM desugarExpr rhss
      body' <- desugarExpr body
      exitScope
+
+     {- DEBUG del evaluador sin letrec -}
+     return $
+       foldr
+          (\ (x, e) b -> termLet x e b)
+          body'
+          (zip vars rhss')
+
+     {- Traducción original del letrec problemática porque
+        no anda en call-by-value -}
+     {-
      return $
        termLet rec (C.Fix rec
                      (termFresh vars
@@ -135,12 +159,13 @@ desugarLetrec equations body =
                                       (termTuple (map C.Var vars)))
                               (termTuple rhss'))))
                    body'
+     -}
 
 termLet :: QName -> C.Term -> C.Term -> C.Term
 termLet var value body = C.App (C.Lam var (progSingleton body)) value
 
 termTuple :: [C.Term] -> C.Term
-termTuple terms = foldl C.App (C.Var primitiveTuple) terms
+termTuple terms = foldl C.App (C.Cons primitiveTuple) terms
 
 termFresh :: [QName] -> C.Term -> C.Term
 termFresh vars body = foldr C.Fresh body vars
@@ -153,7 +178,11 @@ desugarExpr :: Expr ->  M C.Term
 desugarExpr (EVar _ x)
   | x == primitiveUnderscore  = do x' <- freshVariable
                                    return $ C.Fresh x' (C.Var x')
-  | otherwise                 = return $ C.Var x
+  | otherwise                 = do
+      b <- isBoundToConstructor x
+      return $ if b
+                then C.Cons x
+                else C.Var x
 desugarExpr (EUnboundVar _ x) = return $ C.Var x
 desugarExpr (EInt _ x)        = return $ C.Num x
 desugarExpr (EApp _ e1 e2)    = do t1 <- desugarExpr e1
