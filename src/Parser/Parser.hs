@@ -10,7 +10,9 @@ import Syntax.Name(
          QName(..), readName, qualify, moduleNameFromQName,
          isWellFormedOperatorName, unqualifiedName, splitParts,
          allNameParts,
-         modulePRIM, moduleMain, arrowSymbol, primitiveArrow, primitiveInt, primitiveUnderscore
+         modulePRIM, moduleMain, arrowSymbol,
+         primitiveArrow, primitiveUnit, primitiveInt,
+         primitivePrint, primitiveUnderscore
        )
 import Syntax.AST(
          AnnProgram(..), Program,
@@ -297,6 +299,7 @@ parseM = do
   exportAllNamesFromModuleM modulePRIM
   declareQNameM primitiveInt
   declareQNameM primitiveUnderscore
+  declareQNameM primitivePrint
   declareOperatorM RightAssoc 50 primitiveArrow
 
   -- Parse
@@ -981,10 +984,15 @@ parseAtom = do
     T_Int n  -> do pos <- currentPosition
                    getToken
                    return $ EInt pos n
-    T_LParen -> do match T_LParen
-                   expr <- parseExpr
-                   match T_RParen
-                   return expr
+    T_LParen -> do pos <- currentPosition
+                   match T_LParen
+                   t <- peekType
+                   case t of
+                     T_RParen -> do match T_RParen
+                                    return $ EVar pos primitiveUnit
+                     _        -> do expr <- parseExpr
+                                    match T_RParen
+                                    return expr
     _      -> failM ParseErrorExpectedExpression
                      ("Expected an expression.\n" ++
                       "Got: " ++ show t ++ ".")

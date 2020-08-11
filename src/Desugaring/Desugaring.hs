@@ -9,8 +9,8 @@ import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Position(Position(..), unknownPosition)
 import Syntax.Name(
          QName(..),
-         primitiveAlternative, primitiveTuple,
-         primitiveUnderscore
+         primitiveAlternative, primitiveUnit, primitiveTuple,
+         primitivePrint, primitiveUnderscore
        )
 import Syntax.GroupEquations(groupEquations)
 import Syntax.AST(
@@ -174,7 +174,13 @@ progSingleton :: C.Term -> C.Program
 progSingleton t = C.Alt t C.Fail
 
 desugarExpr :: Expr ->  M C.Term
--- TODO: primitivas
+-- Begin: primitives
+desugarExpr (EVar _ x)
+  | x == primitiveUnit        = return C.consOk
+desugarExpr (EApp _ (EVar _ x) e)
+  | x == primitivePrint       = do t <- desugarExpr e
+                                   return $ C.Primitive C.Print [t]
+-- End: primitives
 desugarExpr (EVar _ x)
   | x == primitiveUnderscore  = do x' <- freshVariable
                                    return $ C.Fresh x' (C.Var x')

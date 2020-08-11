@@ -7,6 +7,7 @@ import qualified Data.Map as M
 import qualified Calculus.Terms as C
 import Syntax.Name(QName(..))
 import Eval.EvalMonad(EvalMonad, failEM, getEM, putEM, modifyEM, logEM,
+                      putStrLnEM,
                       runEM, execEM, evalEM)
 
 data Result = End (IO ())
@@ -63,9 +64,9 @@ eval term = rec initialState
           die ("Runtime error:\n" ++ show err)
         Right (normalForms, state') -> do
           {- Show final result -}
-          putStrLn (show (stateThreads state'))
+          --putStrLn (show (stateThreads state'))
           {----}
-          mapM_ (putStrLn . show) normalForms
+          --mapM_ (putStrLn . show) normalForms
           if null $ stateThreads state'
            then return ()
            else rec state'
@@ -87,19 +88,20 @@ splitNormalForms (t : terms) =
        else (normalForms, t : pending)
 
 isNormalForm :: C.Term -> Bool
-isNormalForm (C.Var _)      = True
-isNormalForm (C.Num _)      = True
-isNormalForm (C.Cons _)     = True
-isNormalForm (C.Lam _ _)    = False
-isNormalForm (C.LamL _ _ _) = True
-isNormalForm (C.Fix _ _)    = False
-isNormalForm (C.Fresh _ _)  = False
-isNormalForm (C.Seq t1 t2)  = isStuck t1 && isNormalForm t2
-isNormalForm (C.Unif t1 t2) = isNormalForm t1 && isNormalForm t2 &&
-                              (notIsValue t1 || notIsValue t2)
+isNormalForm (C.Var _)          = True
+isNormalForm (C.Num _)          = True
+isNormalForm (C.Cons _)         = True
+isNormalForm (C.Lam _ _)        = False
+isNormalForm (C.LamL _ _ _)     = True
+isNormalForm (C.Fix _ _)        = False
+isNormalForm (C.Fresh _ _)      = False
+isNormalForm (C.Seq t1 t2)      = isStuck t1 && isNormalForm t2
+isNormalForm (C.Unif t1 t2)     = isNormalForm t1 && isNormalForm t2 &&
+                                  (notIsValue t1 || notIsValue t2)
+isNormalForm (C.Primitive _ ts) = all isNormalForm ts && any isStuck ts
 isNormalForm
-  (C.App (C.LamL _ _ _) t2) = isStuck t2
-isNormalForm (C.App t1 t2)  = isNormalForm t1 && isNormalForm t2
+  (C.App (C.LamL _ _ _) t2)     = isStuck t2
+isNormalForm (C.App t1 t2)      = isNormalForm t1 && isNormalForm t2
 
 isVar :: C.Term -> Bool
 isVar (C.Var _)      = True
@@ -115,22 +117,24 @@ splitArgs (C.App t s) = let (head, args) = splitArgs t
 splitArgs t           = (t, [])
 
 isFree :: QName -> C.Term -> Bool
-isFree x (C.Var y)      = x == y
-isFree x (C.Cons _)     = False
-isFree x (C.Num _)      = False
-isFree x (C.Fresh y t)  = x /= y && isFree x t
-isFree x (C.Lam y p)    = x /= y && isFreeP x p
-isFree x (C.LamL _ y p) = x /= y && isFreeP x p
-isFree x (C.Fix y t)    = x /= y && isFree x t
-isFree x (C.App t1 t2)  = isFree x t1 || isFree x t2
-isFree x (C.Seq t1 t2)  = isFree x t1 || isFree x t2
-isFree x (C.Unif t1 t2) = isFree x t1 || isFree x t2
+isFree x (C.Var y)          = x == y
+isFree x (C.Cons _)         = False
+isFree x (C.Num _)          = False
+isFree x (C.Fresh y t)      = x /= y && isFree x t
+isFree x (C.Lam y p)        = x /= y && isFreeP x p
+isFree x (C.LamL _ y p)     = x /= y && isFreeP x p
+isFree x (C.Fix y t)        = x /= y && isFree x t
+isFree x (C.App t1 t2)      = isFree x t1 || isFree x t2
+isFree x (C.Seq t1 t2)      = isFree x t1 || isFree x t2
+isFree x (C.Unif t1 t2)     = isFree x t1 || isFree x t2
+isFree x (C.Primitive b ts) = any (isFree x) ts
 
 isFreeP :: QName -> C.Program -> Bool
 isFreeP x C.Fail      = False
 isFreeP x (C.Alt t p) = isFree x t || isFreeP x p
 
 isValue :: C.Term -> Bool
+isValue (C.Num _)      = True
 isValue (C.Var _)      = True
 isValue (C.LamL _ _ _) = True
 isValue t              = isStructure t
@@ -155,42 +159,59 @@ stepThread term = do
     Just subst -> mapM (applySubst subst) terms
 
 stepThread' :: C.Term -> M ([Goal], [C.Term])
-stepThread' e@(C.Var _)           = return ([], [e])
-stepThread' e@(C.Cons _)          = return ([], [e])
-stepThread' e@(C.Num _)           = return ([], [e])
-stepThread' (C.Fresh x t)         = do x' <- freshVar
-                                       t' <- renameVar t x x'
-                                       stepThread' t'
-stepThread' (C.Lam x p)           = do l <- freshLocation
-                                       return ([], [C.LamL l x p])
-stepThread' e@(C.LamL _ _ _)      = do l <- freshLocation
-                                       return ([], [e])
+stepThread' e@(C.Var _)      = return ([], [e])
+stepThread' e@(C.Cons _)     = return ([], [e])
+stepThread' e@(C.Num _)      = return ([], [e])
+stepThread' (C.Fresh x t)    = do x' <- freshVar
+                                  t' <- renameVar t x x'
+                                  stepThread' t'
+stepThread' (C.Lam x p)      = do l <- freshLocation
+                                  return ([], [C.LamL l x p])
+stepThread' e@(C.LamL _ _ _) = do l <- freshLocation
+                                  return ([], [e])
 stepThread' (C.App (C.LamL _ x p) v)
-  | isValue v                     = do
+  | isValue v                = do
     p' <- applySubstP (singletonSubst x v) p
     return ([], programToList p')
-stepThread' e@(C.Fix x t)           = do
+stepThread' e@(C.Fix x t)    = do
   t' <- applySubst (singletonSubst x e) t
   return ([], [t'])
-stepThread' (C.App t1 t2)         = do (g1, p1) <- stepThread' t1
-                                       (g2, p2) <- stepThread' t2
-                                       return (g1 ++ g2, C.App <$> p1 <*> p2)
+stepThread' (C.App t1 t2)    = do (g1, p1) <- stepThread' t1
+                                  (g2, p2) <- stepThread' t2
+                                  return (g1 ++ g2, C.App <$> p1 <*> p2)
 stepThread' (C.Seq v t)
-  | isValue v                     = stepThread' t
-stepThread' (C.Seq t1 t2)         = do (g1, p1) <- stepThread' t1
-                                       (g2, p2) <- stepThread' t2
-                                       return (g1 ++ g2, C.Seq <$> p1 <*> p2)
+  | isValue v                = stepThread' t
+stepThread' (C.Seq t1 t2)    = do (g1, p1) <- stepThread' t1
+                                  (g2, p2) <- stepThread' t2
+                                  return (g1 ++ g2, C.Seq <$> p1 <*> p2)
 stepThread' (C.Unif v w)
-  | isValue v && isValue w        = return ([Goal v w], [C.consOk])
-stepThread' (C.Unif t1 t2)        = do (g1, p1) <- stepThread' t1
-                                       (g2, p2) <- stepThread' t2
-                                       return (g1 ++ g2, C.Unif <$> p1 <*> p2)
+  | isValue v && isValue w   = return ([Goal v w], [C.consOk])
+stepThread' (C.Unif t1 t2)   = do (g1, p1) <- stepThread' t1
+                                  (g2, p2) <- stepThread' t2
+                                  return (g1 ++ g2, C.Unif <$> p1 <*> p2)
+stepThread' (C.Primitive b ts)
+  | all isValue ts           = do p <- applyBuiltin b ts
+                                  return ([], p)
+stepThread' (C.Primitive b ts) = do
+  (gs, ps) <- unzip <$> mapM stepThread' ts
+  return (concat gs, [C.Primitive b ts' | ts' <- sequence ps])
+
+-- Note: all the arguments are already values
+applyBuiltin :: C.Builtin -> [C.Term] -> M [C.Term]
+applyBuiltin C.Print [value] = do
+  putStrLnEM (show value)
+  return [C.consOk]
+applyBuiltin b args =
+  error ("Unimplemented builtin " ++ show b
+         ++ " with arity " ++ show (length args))
 
 singletonSubst :: QName -> C.Term -> Subst
 singletonSubst x v = M.insert x v M.empty
 
 mgu :: [Goal] -> M (Maybe Subst)
 mgu []         = return (Just M.empty)
+mgu (Goal (C.Num n) (C.Num m) : xs)
+  | n == m     = mgu xs
 mgu (Goal (C.Var x) (C.Var y) : xs)
   | x == y     = mgu xs
 mgu (Goal (C.Var x) v : xs)
@@ -251,6 +272,9 @@ applySubst subst (C.Unif t1 t2) = do
   t1' <- applySubst subst t1
   t2' <- applySubst subst t2
   return $ C.Unif t1' t2'
+applySubst subst (C.Primitive b ts) = do
+  ts' <- mapM (applySubst subst) ts
+  return $ C.Primitive b ts'
 
 applySubstP :: Subst -> C.Program -> M C.Program
 applySubstP subst C.Fail      = return C.Fail

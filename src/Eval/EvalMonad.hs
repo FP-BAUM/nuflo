@@ -1,5 +1,6 @@
 module Eval.EvalMonad(
          EvalMonad, failEM, getEM, putEM, modifyEM, logEM,
+         putStrLnEM,
          runEM, execEM, evalEM
        ) where
 

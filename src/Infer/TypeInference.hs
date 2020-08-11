@@ -10,7 +10,7 @@ import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Position(Position(..), unknownPosition)
 import Syntax.Name(QName(..), primitiveArrow, primitiveInt,
                    primitiveAlternative, unqualifiedName,
-                   primitiveUnderscore)
+                   primitiveUnit, primitivePrint, primitiveUnderscore)
 import Syntax.AST(
          AnnProgram(..), Program,
          AnnDeclaration(..), Declaration,
@@ -518,12 +518,18 @@ inferTypeProgramM :: Program -> M Program
 inferTypeProgramM (Program decls) = do
   -- Declare built-in type constructors
   addTypeConstant primitiveArrow
+  addTypeConstant primitiveUnit
   addTypeConstant primitiveInt
   -- Declare types of built-in functions
   let tA = Name "{a}"
   bindType primitiveAlternative
            (TypeScheme [tA] (ConstrainedType []
               (tFun (TVar tA) (tFun (TVar tA) (TVar tA)))))
+  bindType primitiveUnit
+           (TypeScheme [] (ConstrainedType [] (TVar primitiveUnit)))
+  bindType primitivePrint
+           (TypeScheme [tA] (ConstrainedType []
+              (tFun (TVar tA) (TVar primitiveUnit))))
   bindType primitiveUnderscore
            (TypeScheme [tA] (ConstrainedType [] (TVar tA)))
   -- Infer

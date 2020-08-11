@@ -3,9 +3,10 @@ module Syntax.Name(
          splitParts, allNameParts,
          isWellFormedName, isWellFormedOperatorName,
          QName(..), readName, qualify, moduleNameFromQName, unqualifiedName,
-         modulePRIM, moduleMain, arrowSymbol, primitiveArrow, primitiveInt,
+         modulePRIM, moduleMain, arrowSymbol,
+         primitiveArrow, primitiveUnit, primitiveInt,
          primitiveAlternative, primitiveTuple, primitiveUnderscore,
-         primitiveOk
+         primitivePrint, primitiveOk
        ) where
 
 import Lexer.Categories(isKeyword, isInteger)
@@ -90,33 +91,27 @@ moduleMain = Name "Main"
 arrowSymbol :: String
 arrowSymbol = "→"
 
-intSymbol :: String
-intSymbol = "Int"
-
-alternativeSymbol :: String
-alternativeSymbol  = "<>"
-
-underscoreSymbol :: String
-underscoreSymbol = "_"
-
-okSymbol :: String
-okSymbol = "ok"
-
 primitiveArrow :: QName
 primitiveArrow = qualify modulePRIM ("_" ++ arrowSymbol ++ "_")
 
+primitiveUnit :: QName
+primitiveUnit = qualify modulePRIM "()"
+
 primitiveInt :: QName
-primitiveInt = qualify modulePRIM intSymbol
+primitiveInt = qualify modulePRIM "Int"
 
 primitiveAlternative :: QName
-primitiveAlternative = qualify modulePRIM ("_" ++ alternativeSymbol ++ "_")
+primitiveAlternative = qualify modulePRIM ("_<>_")
 
 primitiveTuple :: QName
 primitiveTuple = qualify modulePRIM "{Tuple}"
 
 primitiveUnderscore :: QName
-primitiveUnderscore = qualify modulePRIM underscoreSymbol
+primitiveUnderscore = qualify modulePRIM "_"
+
+primitivePrint :: QName
+primitivePrint = qualify modulePRIM "print"
 
 primitiveOk :: QName
-primitiveOk = qualify modulePRIM okSymbol
+primitiveOk = qualify modulePRIM "ok"
 

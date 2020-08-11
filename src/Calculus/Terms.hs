@@ -1,6 +1,14 @@
-module Calculus.Terms(Term(..), Program(..), Location, consOk) where
+module Calculus.Terms(
+         Builtin(..), Term(..), Program(..), Location, consOk
+       ) where
 
 import Syntax.Name(QName(..), primitiveOk)
+
+data Builtin = Print
+  deriving Show
+
+builtinArity :: Builtin -> Integer
+builtinArity Print = 1
 
 data Term = Var QName
           | Cons QName
@@ -12,6 +20,7 @@ data Term = Var QName
           | App Term Term
           | Seq Term Term
           | Unif Term Term
+          | Primitive Builtin [Term]
           deriving Show
 
 data Program = Fail
