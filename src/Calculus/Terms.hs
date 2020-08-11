@@ -1,14 +1,16 @@
 module Calculus.Terms(
-         Builtin(..), Term(..), Program(..), Location, consOk, lam
+         PrimitiveFunction(..),
+         PrimitiveCommand(..),
+         Term(..), Program(..), Location, consOk, lam
        ) where
 
 import Syntax.Name(QName(..), primitiveOk)
 
-data Builtin = Print
+data PrimitiveFunction = IntAdd
   deriving Show
 
-builtinArity :: Builtin -> Integer
-builtinArity Print = 1
+data PrimitiveCommand = Print
+  deriving Show
 
 data Term = Var QName
           | Cons QName
@@ -20,7 +22,8 @@ data Term = Var QName
           | App Term Term
           | Seq Term Term
           | Unif Term Term
-          | Primitive Builtin [Term]
+          | Function PrimitiveFunction [Term]
+          | Command PrimitiveCommand [Term]
           deriving Show
 
 data Program = Fail

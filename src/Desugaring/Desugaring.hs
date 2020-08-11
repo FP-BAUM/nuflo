@@ -10,7 +10,7 @@ import Position(Position(..), unknownPosition)
 import Syntax.Name(
          QName(..),
          primitiveAlternative, primitiveUnit, primitiveTuple,
-         primitivePrint, primitiveUnderscore
+         primitiveMain, primitivePrint, primitiveUnderscore
        )
 import Syntax.GroupEquations(groupEquations)
 import Syntax.AST(
@@ -119,7 +119,9 @@ desugarProgramM (Program decls) = do
                    Left msg ->
                      failM DesugaringErrorDuplicatedValueDefinition msg
                    Right equations -> return equations
-    desugarLetrec equations (EInt unknownPosition 0)
+    let pos = unknownPosition
+    desugarLetrec equations
+                  (EVar pos primitiveMain)
 
 valueDeclaration :: Declaration -> [Equation]
 valueDeclaration (ValueDeclaration eq)  = [eq]
@@ -152,7 +154,7 @@ desugarLetrec equations body =
      -}
 
      -- Traducción del letrec à la Leroy
-     return $ termLetrec (zip vars rhss') body'
+     return $ termLetrec (reverse (zip vars rhss')) body'
 
      {- Traducción original del letrec problemática porque
         no anda en call-by-value -}
@@ -251,7 +253,7 @@ desugarExpr (EVar _ x)
 desugarExpr (EApp _ (EVar _ x) e)
   | x == primitivePrint       =
     do t <- desugarExpr e
-       return $ C.Primitive C.Print [t]
+       return $ C.Command C.Print [t]
 -- Binary
 desugarExpr (EApp _ (EApp _ (EVar _ x) e1) e2)
   | x == primitiveAlternative =

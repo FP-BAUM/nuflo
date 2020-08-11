@@ -65,6 +65,7 @@ eval term = rec initialState
           die ("Runtime error:\n" ++ show err)
         Right (normalForms, state') -> do
           {- Show final result -}
+          mapM_ runNormalForm normalForms
           --putStrLn (show (stateThreads state'))
           {----}
           --mapM_ (putStrLn . show) normalForms
@@ -99,7 +100,8 @@ isNormalForm (C.Fresh _ _)      = False
 isNormalForm (C.Seq t1 t2)      = isStuck t1 && isNormalForm t2
 isNormalForm (C.Unif t1 t2)     = isNormalForm t1 && isNormalForm t2 &&
                                   (notIsValue t1 || notIsValue t2)
-isNormalForm (C.Primitive _ ts) = all isNormalForm ts && any isStuck ts
+isNormalForm (C.Function _ ts)  = all isNormalForm ts && any isStuck ts
+isNormalForm (C.Command  _ ts)  = all isNormalForm ts
 isNormalForm
   (C.App (C.LamL _ _ _) t2)     = isStuck t2
 isNormalForm (C.App t1 t2)      = isNormalForm t1 && isNormalForm t2
@@ -128,17 +130,19 @@ isFree x (C.Fix y t)        = x /= y && isFree x t
 isFree x (C.App t1 t2)      = isFree x t1 || isFree x t2
 isFree x (C.Seq t1 t2)      = isFree x t1 || isFree x t2
 isFree x (C.Unif t1 t2)     = isFree x t1 || isFree x t2
-isFree x (C.Primitive b ts) = any (isFree x) ts
+isFree x (C.Function _ ts)  = any (isFree x) ts
+isFree x (C.Command _ ts)   = any (isFree x) ts
 
 isFreeP :: QName -> C.Program -> Bool
 isFreeP x C.Fail      = False
 isFreeP x (C.Alt t p) = isFree x t || isFreeP x p
 
 isValue :: C.Term -> Bool
-isValue (C.Num _)      = True
-isValue (C.Var _)      = True
-isValue (C.LamL _ _ _) = True
-isValue t              = isStructure t
+isValue (C.Num _)        = True
+isValue (C.Var _)        = True
+isValue (C.LamL _ _ _)   = True
+isValue (C.Command _ ts) = all isValue ts
+isValue t                = isStructure t
 
 notIsValue :: C.Term -> Bool
 notIsValue = not . isValue
@@ -190,21 +194,34 @@ stepThread' (C.Unif v w)
 stepThread' (C.Unif t1 t2)   = do (g1, p1) <- stepThread' t1
                                   (g2, p2) <- stepThread' t2
                                   return (g1 ++ g2, C.Unif <$> p1 <*> p2)
-stepThread' (C.Primitive b ts)
-  | all isValue ts           = do p <- applyBuiltin b ts
-                                  return ([], p)
-stepThread' (C.Primitive b ts) = do
+stepThread' (C.Function f ts)
+  | all isValue ts            = do p <- applyPrimitiveFunction f ts
+                                   return ([], p)
+stepThread' (C.Function f ts) = do
   (gs, ps) <- unzip <$> mapM stepThread' ts
-  return (concat gs, [C.Primitive b ts' | ts' <- sequence ps])
+  return (concat gs, [C.Function f ts' | ts' <- sequence ps])
+stepThread' (C.Command f ts) = do
+  (gs, ps) <- unzip <$> mapM stepThread' ts
+  return (concat gs, [C.Command f ts' | ts' <- sequence ps])
 
 -- Note: all the arguments are already values
-applyBuiltin :: C.Builtin -> [C.Term] -> M [C.Term]
-applyBuiltin C.Print [value] = do
-  putStrLnEM (show value)
-  return [C.consOk]
-applyBuiltin b args =
-  error ("Unimplemented builtin " ++ show b
+applyPrimitiveFunction :: C.PrimitiveFunction -> [C.Term] -> M [C.Term]
+applyPrimitiveFunction C.IntAdd [C.Num x, C.Num y] = do
+  return [C.Num (x + y)]
+--applyPrimitiveFunction C.Print [v] = do
+--  putStrLnEM (show v)
+--  return [C.consOk]
+applyPrimitiveFunction f args =
+  error ("Unimplemented primitive function " ++ show f
          ++ " with arity " ++ show (length args))
+
+runNormalForm :: C.Term -> IO ()
+runNormalForm (C.Command C.Print [t]) = do
+  putStrLn (show t)
+runNormalForm (C.Command f args) =
+  error ("Unimplemented primitive command " ++ show f
+         ++ " with arity " ++ show (length args))
+runNormalForm _ = return ()
 
 singletonSubst :: QName -> C.Term -> Subst
 singletonSubst x v = M.insert x v M.empty
@@ -273,9 +290,12 @@ applySubst subst (C.Unif t1 t2) = do
   t1' <- applySubst subst t1
   t2' <- applySubst subst t2
   return $ C.Unif t1' t2'
-applySubst subst (C.Primitive b ts) = do
+applySubst subst (C.Function f ts) = do
   ts' <- mapM (applySubst subst) ts
-  return $ C.Primitive b ts'
+  return $ C.Function f ts'
+applySubst subst (C.Command f ts) = do
+  ts' <- mapM (applySubst subst) ts
+  return $ C.Command f ts'
 
 applySubstP :: Subst -> C.Program -> M C.Program
 applySubstP subst C.Fail      = return C.Fail

@@ -11,8 +11,8 @@ import Syntax.Name(
          isWellFormedOperatorName, unqualifiedName, splitParts,
          allNameParts,
          modulePRIM, moduleMain, arrowSymbol,
-         primitivePrint, primitiveArrow, primitiveUnit, primitiveInt,
-         primitiveUnderscore
+         primitiveMain, primitivePrint, primitiveArrow, primitiveUnit,
+         primitiveInt, primitiveUnderscore
        )
 import Syntax.AST(
          AnnProgram(..), Program,
@@ -213,7 +213,8 @@ declareQNameM qname = do
   if isTop
    then do moduleName <- getCurrentModuleName
            let uname = unqualifiedName qname in
-             if qname == qualify moduleName uname
+             if qname == qualify moduleName uname ||
+                qname == primitiveMain
               then do -- Declare name in current module
                       modifyRootModule (declareName qname)
                       -- If it is an undeclared operator, declare it
@@ -299,6 +300,7 @@ parseM = do
   exportAllNamesFromModuleM modulePRIM
   declareQNameM primitiveInt
   declareQNameM primitiveUnderscore
+  declareQNameM primitiveMain
   declareQNameM primitivePrint
   declareOperatorM RightAssoc 50 primitiveArrow
 
