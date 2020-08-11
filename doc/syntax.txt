@@ -89,6 +89,9 @@ or
     INSTANCE <classname> <expr> <optionalConstraints>
       WHERE LBRACE <valueDeclarations> RBRACE
   |
+    /* Mutual recursion */
+    MUTUAL LBRACE <declaration*> RBRACE
+  |
     /* Type signature */
     <typeSignature>
   |

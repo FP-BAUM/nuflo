@@ -61,6 +61,10 @@ data AnnDeclaration a =
       instanceConstraints :: [AnnConstraint a],
       instanceMethods     :: [AnnEquation a]
     }
+  | MutualDeclaration {
+      mutualAnnotation    :: a,
+      mutualDeclarations  :: [AnnDeclaration a]
+    }
   deriving Eq
 
 data AnnSignature a = Signature {
@@ -169,6 +173,8 @@ instance EraseAnnotations AnnDeclaration where
     InstanceDeclaration () x (eraseAnnotations y)
                              (map eraseAnnotations z)
                              (map eraseAnnotations w)
+  eraseAnnotations (MutualDeclaration _ x) =
+    MutualDeclaration () (map eraseAnnotations x)
 
 instance EraseAnnotations AnnSignature where
   eraseAnnotations (Signature _ x y z) =
@@ -306,6 +312,11 @@ instance Show (AnnDeclaration a) where
                       showOptionalConstraints constraints ++ " where"] ++
       map (indent . show) equations
     )
+  show (MutualDeclaration _ mutualDeclarations) =
+    joinLines (
+      ["mutual"] ++
+      map (indent . show) mutualDeclarations
+    )
 
 instance Show (AnnSignature a) where
   show (Signature _ name typ constraints) =
@@ -378,6 +389,8 @@ instance UnfoldPlaceholders AnnDeclaration where
   unfoldPlaceholders h d@(InstanceDeclaration a name typ cs eqs) = do
     InstanceDeclaration a name typ cs <$>
       mapM (unfoldPlaceholders h) eqs
+  unfoldPlaceholders h d@(MutualDeclaration a ds) = do
+    MutualDeclaration a <$> mapM (unfoldPlaceholders h) ds
 
 instance UnfoldPlaceholders AnnEquation where
   unfoldPlaceholders h (Equation a lhs rhs) =

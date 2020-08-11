@@ -40,6 +40,7 @@ keywords = M.fromList [
   ("λ", T_Lambda),
   ("let", T_Let),
   ("module", T_Module),
+  ("mutual", T_Mutual),
   ("type", T_Type),
   ("of", T_Of),
   ("where", T_Where)

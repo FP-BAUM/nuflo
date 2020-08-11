@@ -49,6 +49,7 @@ data ErrorType =
   | TypeErrorUnificationClash
   | TypeErrorSynonymLoop
   | TypeErrorUndefinedClassMethod
+  | TypeErrorNestedMutualDeclarations
   | ClassErrorConstrainedParameter
   | InstanceErrorDuplicateInstance
   | InstanceErrorDuplicatedMethodDefinition

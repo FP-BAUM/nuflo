@@ -247,6 +247,8 @@ inferKindDeclarationM (InstanceDeclaration pos className typ
                ("Argument \"" ++ show arg ++ "\" of type constructor " ++
                 "cannot be a datatype.")
        else return ()
+inferKindDeclarationM (MutualDeclaration pos decls) = do
+  mapM_ inferKindDeclarationM decls
 
 inferKindConstructorM :: Expr -> Signature -> M ()
 inferKindConstructorM dataType

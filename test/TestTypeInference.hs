@@ -92,10 +92,10 @@ tests = TestSuite "TYPE INFERENCE" [
       "main = f (f x)"
     ]),
 
-    testProgramError "Occurs check failure" (unlines [
+    testProgramOK "Self application of polymorphic function" (unlines [
       "f = f",
       "main = f f"
-    ]) TypeErrorUnificationOccursCheck,
+    ]),
 
     testProgramOK "Application with type declaration" (unlines [
       "data Bool where",
@@ -179,7 +179,7 @@ tests = TestSuite "TYPE INFERENCE" [
       " true : Bool",
       " false : Bool",
       "main : Bool",
-      "main = let f x = x ; x = true in f x"
+      "main = let f (.x) = x ; x = true in f x"
     ]),
 
     testProgramOK "Explicit polymorphic declaration" (unlines [

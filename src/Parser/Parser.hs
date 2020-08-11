@@ -473,6 +473,8 @@ parseToplevelDeclaration = do
                      return [d]
     T_Instance -> do d <- parseInstanceDeclaration
                      return [d]
+    T_Mutual   -> do d <- parseMutualDeclaration
+                     return [d]
     _          -> do d <- parseTypeSignatureOrValueDeclaration
                      return [d]
 
@@ -632,6 +634,17 @@ parseFixityDeclaration assoc = do
   operatorName  <- parseId
   currentModule <- getCurrentModuleName 
   declareOperatorM assoc precedence (qualify currentModule operatorName)
+
+parseMutualDeclaration :: M Declaration
+parseMutualDeclaration = do
+  match T_Mutual
+  pos          <- currentPosition
+  match T_LBrace
+  enterScopeM
+  declarations <- parseDeclarations
+  exitScopeM
+  match T_RBrace
+  return $ MutualDeclaration pos declarations
 
 parseTypeSignatureOrValueDeclaration :: M Declaration
 parseTypeSignatureOrValueDeclaration = do

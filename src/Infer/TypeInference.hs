@@ -597,34 +597,66 @@ collectSignatureM sig@(Signature pos name typ constraints) = do
 
 inferTypeDeclarationsM :: [Declaration] -> M [Declaration]
 inferTypeDeclarationsM decls =
-    let definedVars = S.unions (map declarationHeadVar decls)
+    let definedVars = S.unions (map declarationHeadVars decls)
      in do mapM_ bindToFreshTypeIfNotLocallyBound (S.toList definedVars)
-           rec S.empty decls
+           rec Nothing decls
   where
-    declarationHeadVar (ValueDeclaration (Equation _ lhs _)) =
+    declarationHeadVars (ValueDeclaration (Equation _ lhs _)) =
       S.fromList [fromJust (exprHeadVariable lhs)]
-    declarationHeadVar _ = S.empty
+    declarationHeadVars (MutualDeclaration _ decls) =
+      S.unions (map declarationHeadVars decls)
+    declarationHeadVars _ = S.empty
 
-    rec :: S.Set QName -> [Declaration] -> M [Declaration]
-    rec defined [] = do
-      if not (S.null defined)
-       then do generalizeLocalBindings defined
-               return []
-       else return []
-    rec defined (decl@(ValueDeclaration equation) : decls) =
-      let name = fromJust . exprHeadVariable . equationLHS $ equation in do
-        continue (S.insert name defined) decl decls
-    rec defined (decl : decls) = do
-      if not (S.null defined)
-       then generalizeLocalBindings defined
-       else return ()
-      continue S.empty decl decls
-
-    continue :: S.Set QName -> Declaration -> [Declaration] -> M [Declaration]
-    continue defined decl decls = do
+    -- Infer a list of type declarations, generalizing the types
+    rec :: Maybe QName -> [Declaration] -> M [Declaration]
+    rec prev [] = do
+      recGeneralize prev Nothing
+      return []
+    rec prev (decl@(ValueDeclaration equation) : decls) = do
+      let name = fromJust . exprHeadVariable . equationLHS $ equation
+      recGeneralize prev (Just name)
       decl'  <- inferTypeDeclarationM decl
-      decls' <- rec defined decls
+      decls' <- rec (Just name) decls
       return (decl' ++ decls')
+    rec prev (MutualDeclaration pos decls : moreDecls) = do
+      setPosition pos
+      -- TODO: collect signatures
+      (names, decls') <- recMutual decls
+      generalizeLocalBindings names
+      moreDecls' <- rec Nothing moreDecls
+      return (decls' ++ moreDecls')
+    rec prev (decl : decls) = do
+      recGeneralize prev Nothing
+      decl'  <- inferTypeDeclarationM decl
+      decls' <- rec prev decls
+      return (decl' ++ decls')
+
+    -- Infer a list of type declarations without generalizing the types
+    recMutual :: [Declaration] -> M (S.Set QName, [Declaration])
+    recMutual [] = return (S.empty, [])
+    recMutual (decl@(ValueDeclaration equation) : decls) = do
+      let name = fromJust . exprHeadVariable . equationLHS $ equation
+      decl'           <- inferTypeDeclarationM decl
+      (names, decls') <- recMutual decls
+      return (S.insert name names, decl' ++ decls')
+    recMutual (decl@(MutualDeclaration pos _) : decls) = do
+      setPosition pos
+      failM TypeErrorNestedMutualDeclarations
+            "Nested mutual declarations"
+    recMutual (decl : decls) = do
+      decl'           <- inferTypeDeclarationM decl
+      (names, decls') <- recMutual decls
+      return (names, decl' ++ decls')
+
+    recGeneralize :: Maybe QName -> Maybe QName -> M ()
+    recGeneralize Nothing     _       = return ()
+    recGeneralize (Just name) Nothing = generalizeName name
+    recGeneralize (Just name) (Just name')
+      | name == name' = return ()
+      | otherwise     = generalizeName name
+
+    generalizeName :: QName -> M ()
+    generalizeName name = generalizeLocalBindings (S.singleton name)
 
 inferTypeDeclarationM :: Declaration -> M [Declaration]
 inferTypeDeclarationM decl@(DataDeclaration _ _ _) = return [decl]
@@ -640,6 +672,8 @@ inferTypeDeclarationM (InstanceDeclaration pos className typ
                                            constraints methods) = do
   decl <- inferTypeInstanceDeclarationM pos className typ constraints methods
   return [decl]
+inferTypeDeclarationM (MutualDeclaration _ _) =
+  error "(Mutual declaration should not be found)"
 
 constrainedType :: [Constraint] -> Expr -> M ConstrainedType
 constrainedType constraints expr =
@@ -661,7 +695,9 @@ inferTypeEquationM (Equation pos lhs rhs) = do
     (TypeScheme names (ConstrainedType lfuncConstraints lfuncType)) <-
       lookupType lfunc
     if not (null names)
-      then error "(Local variable may not be generalized)"
+      then error ("(Local variables "
+                  ++ show names
+                  ++ " may not be generalized)")
       else return ()
     mapM_ addGlobalTypeConstraint lfuncConstraints
     (largsConstraints, largsTypes, largs') <-
