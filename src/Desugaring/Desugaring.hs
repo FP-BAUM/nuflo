@@ -143,11 +143,16 @@ desugarLetrec equations body =
      exitScope
 
      {- DEBUG del evaluador sin letrec -}
+     {-
      return $
        foldr
           (\ (x, e) b -> termLet x e b)
           body'
           (zip vars rhss')
+     -}
+
+     -- Traducción del letrec à la Leroy
+     return $ termLetrec (zip vars rhss') body'
 
      {- Traducción original del letrec problemática porque
         no anda en call-by-value -}
@@ -160,6 +165,70 @@ desugarLetrec equations body =
                               (termTuple rhss'))))
                    body'
      -}
+
+-- letrec x1 = e1
+--        ...
+--        xn = en
+--     in b
+--
+-- is desugared as
+--
+-- let x1 = fix(x1. \x2...xn. e1)
+--     x2 = fix(x2. \x3...xn.
+--                let x1 = x1 x2 ... xn     in
+--                  e2)
+--     ...
+--     xk = fix(xk. \xk+1...xn.
+--                let xk-1 = xk-1 xk ... xn in
+--                ...
+--                let x2   = x2 ... xn      in
+--                let x1   = x1 x2 ... xn   in
+--                  ek)
+--     ...
+--     xn = fix(xn. let xn-1 = xn-1 xn    in
+--                  ...
+--                  let x1 = x1 x2 ... xn in
+--                    en)
+-- in let xn-1 = xn-1 xn in
+--    ... 
+--    let x2 = x2 x3 ... xn in
+--    let x1 = x1 x2 ... xn in
+--      b
+termLetrec :: [(QName, C.Term)] -> C.Term -> C.Term
+termLetrec bindings body = rec [] bindings body
+  where
+    rec :: [QName] -> [(QName, C.Term)] -> C.Term -> C.Term
+    rec prev []                    body = bindPrev prev [] body
+    rec prev ((var, value) : next) body =
+      let next' = map fst next in
+        termLet var
+                (C.Fix var
+                       (bindNext next'
+                         (bindPrev prev next' value)))
+                (rec (var : prev) next body)
+
+    -- bindNext [xk+1, ..., xn] e
+    -- builds the term
+    --   "\ xk+1 ... xn -> e"
+    bindNext :: [QName] -> C.Term -> C.Term
+    bindNext next e = foldr C.lam e next
+
+    -- bindPrev [xk, ..., x1] [xk+1, ..., xn] e
+    -- builds the term
+    --   "let xk = xk xk+1 ... xn
+    --        ...
+    --        x1 = x1 x2 ... xn
+    --     in e"
+    bindPrev :: [QName] -> [QName] -> C.Term -> C.Term
+    bindPrev []           next e = e
+    bindPrev (var : prev) next e =
+      termLet var (app var next)
+              (bindPrev prev (var : next) e)
+
+    -- app xk [xk+1, ..., xn]
+    -- builds the term "xk xk+1 ... xn"
+    app :: QName -> [QName] -> C.Term
+    app head args = foldl C.App (C.Var head) (map C.Var args)
 
 termLet :: QName -> C.Term -> C.Term -> C.Term
 termLet var value body = C.App (C.Lam var (progSingleton body)) value
@@ -174,13 +243,23 @@ progSingleton :: C.Term -> C.Program
 progSingleton t = C.Alt t C.Fail
 
 desugarExpr :: Expr ->  M C.Term
--- Begin: primitives
+---- Begin: primitives
+-- Nullary
 desugarExpr (EVar _ x)
   | x == primitiveUnit        = return C.consOk
+-- Unary
 desugarExpr (EApp _ (EVar _ x) e)
-  | x == primitivePrint       = do t <- desugarExpr e
-                                   return $ C.Primitive C.Print [t]
--- End: primitives
+  | x == primitivePrint       =
+    do t <- desugarExpr e
+       return $ C.Primitive C.Print [t]
+-- Binary
+desugarExpr (EApp _ (EApp _ (EVar _ x) e1) e2)
+  | x == primitiveAlternative =
+    do t1 <- desugarExpr e1
+       t2 <- desugarExpr e2
+       z <- freshVariable
+       return $ C.App (C.Lam z (C.Alt t1 (C.Alt t2 C.Fail))) C.consOk
+---- End: primitives
 desugarExpr (EVar _ x)
   | x == primitiveUnderscore  = do x' <- freshVariable
                                    return $ C.Fresh x' (C.Var x')

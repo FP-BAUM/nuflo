@@ -1,5 +1,5 @@
 module Calculus.Terms(
-         Builtin(..), Term(..), Program(..), Location, consOk
+         Builtin(..), Term(..), Program(..), Location, consOk, lam
        ) where
 
 import Syntax.Name(QName(..), primitiveOk)
@@ -31,4 +31,7 @@ type Location = Integer
 
 consOk :: Term
 consOk = Cons primitiveOk
+
+lam :: QName -> Term -> Term
+lam x t = Lam x (Alt t Fail)
 

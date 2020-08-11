@@ -532,6 +532,7 @@ inferTypeProgramM (Program decls) = do
               (tFun (TVar tA) (TVar primitiveUnit))))
   bindType primitiveUnderscore
            (TypeScheme [tA] (ConstrainedType [] (TVar tA)))
+  enterScopeM
   -- Infer
   mapM_ collectTypeDeclarationM decls
   mapM_ collectSignaturesM decls

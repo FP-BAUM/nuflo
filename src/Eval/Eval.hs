@@ -20,6 +20,7 @@ data EvalState = EvalState {
                  }
 
 data Goal = Goal C.Term C.Term
+  deriving Show
 
 type Subst = M.Map QName C.Term
 

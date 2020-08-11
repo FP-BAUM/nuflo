@@ -11,8 +11,8 @@ import Syntax.Name(
          isWellFormedOperatorName, unqualifiedName, splitParts,
          allNameParts,
          modulePRIM, moduleMain, arrowSymbol,
-         primitiveArrow, primitiveUnit, primitiveInt,
-         primitivePrint, primitiveUnderscore
+         primitivePrint, primitiveArrow, primitiveUnit, primitiveInt,
+         primitiveUnderscore
        )
 import Syntax.AST(
          AnnProgram(..), Program,
