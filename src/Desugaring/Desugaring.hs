@@ -10,7 +10,8 @@ import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Position(Position(..), unknownPosition)
 import Syntax.Name(
          QName(..),
-         primitiveAlternative, primitiveUnit, primitiveTuple,
+         primitiveAlternative, primitiveSequence, primitiveUnification,
+         primitiveUnit, primitiveTuple,
          primitiveMain, primitivePrint, primitiveUnderscore
        )
 import Syntax.GroupEquations(groupEquations)
@@ -201,6 +202,14 @@ desugarExpr (EApp _ (EApp _ (EVar _ x) e1) e2)
        t2 <- desugarExpr e2
        z <- freshVariable
        return $ C.App (C.Lam z (C.Alt t1 (C.Alt t2 C.Fail))) C.consOk
+  | x == primitiveSequence =
+    do t1 <- desugarExpr e1
+       t2 <- desugarExpr e2
+       return $ C.Seq t1 t2
+  | x == primitiveUnification =
+    do t1 <- desugarExpr e1
+       t2 <- desugarExpr e2
+       return $ C.Unif t1 t2
 ---- End: primitives
 desugarExpr (EVar _ x)
   | x == primitiveUnderscore  = do x' <- freshVariable

@@ -5,7 +5,8 @@ module Syntax.Name(
          QName(..), readName, qualify, moduleNameFromQName, unqualifiedName,
          modulePRIM, moduleMain, arrowSymbol,
          primitiveArrow, primitiveUnit, primitiveInt,
-         primitiveAlternative, primitiveTuple, primitiveUnderscore,
+         primitiveAlternative, primitiveSequence, primitiveUnification, 
+         primitiveTuple, primitiveUnderscore,
          primitiveMain, primitivePrint, primitiveOk
        ) where
 
@@ -102,6 +103,12 @@ primitiveInt = qualify modulePRIM "Int"
 
 primitiveAlternative :: QName
 primitiveAlternative = qualify modulePRIM ("_<>_")
+
+primitiveSequence :: QName
+primitiveSequence = qualify modulePRIM ("_>>_")
+
+primitiveUnification :: QName
+primitiveUnification = qualify modulePRIM ("_~~_")
 
 primitiveTuple :: QName
 primitiveTuple = qualify modulePRIM "{Tuple}"

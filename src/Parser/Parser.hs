@@ -12,7 +12,9 @@ import Syntax.Name(
          allNameParts,
          modulePRIM, moduleMain, arrowSymbol,
          primitiveMain, primitivePrint, primitiveArrow, primitiveUnit,
-         primitiveInt, primitiveUnderscore
+         primitiveInt,
+         primitiveAlternative, primitiveSequence, primitiveUnification,
+         primitiveUnderscore
        )
 import Syntax.AST(
          AnnProgram(..), Program,
@@ -303,6 +305,9 @@ parseM = do
   declareQNameM primitiveMain
   declareQNameM primitivePrint
   declareOperatorM RightAssoc 50 primitiveArrow
+  declareOperatorM RightAssoc 60 primitiveAlternative
+  declareOperatorM RightAssoc 70 primitiveSequence
+  declareOperatorM RightAssoc 80 primitiveUnification
 
   -- Parse
   decls <- parseModules 

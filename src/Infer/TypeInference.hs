@@ -8,9 +8,13 @@ import Data.Maybe(fromJust)
 import Error(Error(..), ErrorType(..))
 import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Position(Position(..), unknownPosition)
-import Syntax.Name(QName(..), primitiveArrow, primitiveInt,
-                   primitiveAlternative, unqualifiedName,
-                   primitiveUnit, primitivePrint, primitiveUnderscore)
+import Syntax.Name(
+         QName(..), primitiveArrow, primitiveInt,
+         unqualifiedName,
+         primitiveUnit,
+         primitiveAlternative, primitiveSequence, primitiveUnification,
+         primitivePrint, primitiveUnderscore
+       )
 import Syntax.AST(
          AnnProgram(..), Program,
          AnnDeclaration(..), Declaration,
@@ -522,9 +526,16 @@ inferTypeProgramM (Program decls) = do
   addTypeConstant primitiveInt
   -- Declare types of built-in functions
   let tA = Name "{a}"
+  let tB = Name "{b}"
   bindType primitiveAlternative
            (TypeScheme [tA] (ConstrainedType []
               (tFun (TVar tA) (tFun (TVar tA) (TVar tA)))))
+  bindType primitiveSequence
+           (TypeScheme [tA, tB] (ConstrainedType []
+              (tFun (TVar tA) (tFun (TVar tB) (TVar tB)))))
+  bindType primitiveUnification
+           (TypeScheme [tA] (ConstrainedType []
+              (tFun (TVar tA) (tFun (TVar tA) (TVar primitiveUnit)))))
   bindType primitiveUnit
            (TypeScheme [] (ConstrainedType [] (TVar primitiveUnit)))
   bindType primitivePrint
