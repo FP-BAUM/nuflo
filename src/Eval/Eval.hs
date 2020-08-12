@@ -90,21 +90,21 @@ splitNormalForms (t : terms) =
        else (normalForms, t : pending)
 
 isNormalForm :: C.Term -> Bool
-isNormalForm (C.Var _)          = True
-isNormalForm (C.Num _)          = True
-isNormalForm (C.Cons _)         = True
-isNormalForm (C.Lam _ _)        = False
-isNormalForm (C.LamL _ _ _)     = True
-isNormalForm (C.Fix _ _)        = False
-isNormalForm (C.Fresh _ _)      = False
-isNormalForm (C.Seq t1 t2)      = isStuck t1 && isNormalForm t2
-isNormalForm (C.Unif t1 t2)     = isNormalForm t1 && isNormalForm t2 &&
-                                  (notIsValue t1 || notIsValue t2)
-isNormalForm (C.Function _ ts)  = all isNormalForm ts && any isStuck ts
-isNormalForm (C.Command  _ ts)  = all isNormalForm ts
+isNormalForm (C.Var _)         = True
+isNormalForm (C.Num _)         = True
+isNormalForm (C.Cons _)        = True
+isNormalForm (C.Lam _ _)       = False
+isNormalForm (C.LamL _ _ _)    = True
+isNormalForm (C.Fix _ _)       = False
+isNormalForm (C.Fresh _ _)     = False
+isNormalForm (C.Seq t1 t2)     = isStuck t1 && isNormalForm t2
+isNormalForm (C.Unif t1 t2)    = isNormalForm t1 && isNormalForm t2 &&
+                                 (notIsValue t1 || notIsValue t2)
+isNormalForm (C.Function _ ts) = all isNormalForm ts && any isStuck ts
+isNormalForm (C.Command  _ ts) = all isNormalForm ts
 isNormalForm
-  (C.App (C.LamL _ _ _) t2)     = isStuck t2
-isNormalForm (C.App t1 t2)      = isNormalForm t1 && isNormalForm t2
+  (C.App (C.LamL _ _ _) t2)    = isStuck t2
+isNormalForm (C.App t1 t2)     = isNormalForm t1 && isNormalForm t2
 
 isVar :: C.Term -> Bool
 isVar (C.Var _)      = True

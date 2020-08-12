@@ -1,6 +1,7 @@
 module Desugaring.Desugaring(desugarProgram) where
 
 import qualified Data.Set as S
+import qualified Data.Map as M
 import Data.Maybe(fromJust)
 
 import qualified Calculus.Terms as C
@@ -121,7 +122,9 @@ desugarProgramM (Program decls) = do
                    Right equations -> return equations
     let pos = unknownPosition
     desugarLetrec equations
-                  (EVar pos primitiveMain)
+                  -- "main" is always applied to () by default
+                  (EApp pos (EVar pos primitiveMain)
+                            (EVar pos primitiveUnit))
 
 valueDeclaration :: Declaration -> [Equation]
 valueDeclaration (ValueDeclaration eq)  = [eq]
@@ -143,94 +146,31 @@ desugarLetrec equations body =
      rhss' <- mapM desugarExpr rhss
      body' <- desugarExpr body
      exitScope
+     termLetrec (reverse (zip vars rhss')) body'
 
-     {- DEBUG del evaluador sin letrec -}
-     {-
+termLetrec :: [(QName, C.Term)] -> C.Term -> M C.Term
+termLetrec bindings body = do
+   let n = fromIntegral (length bindings)
+   tuple <- freshVariable
+   iths  <- mapM (ith n tuple) [0 .. n - 1]
+   let (vars, values) = unzip bindings
+       subst = M.fromList (zipWith (\ x i -> (x, i)) vars iths)
+    in do
+     let body'   = C.applySubst subst body
+     let values' = map (C.applySubst subst) values
      return $
-       foldr
-          (\ (x, e) b -> termLet x e b)
-          body'
-          (zip vars rhss')
-     -}
-
-     -- Traducción del letrec à la Leroy
-     return $ termLetrec (reverse (zip vars rhss')) body'
-
-     {- Traducción original del letrec problemática porque
-        no anda en call-by-value -}
-     {-
-     return $
-       termLet rec (C.Fix rec
-                     (termFresh vars
-                       (C.Seq (C.Unif (C.Var rec)
-                                      (termTuple (map C.Var vars)))
-                              (termTuple rhss'))))
-                   body'
-     -}
-
--- letrec x1 = e1
---        ...
---        xn = en
---     in b
---
--- is desugared as
---
--- let x1 = fix(x1. \x2...xn. e1)
---     x2 = fix(x2. \x3...xn.
---                let x1 = x1 x2 ... xn     in
---                  e2)
---     ...
---     xk = fix(xk. \xk+1...xn.
---                let xk-1 = xk-1 xk ... xn in
---                ...
---                let x2   = x2 ... xn      in
---                let x1   = x1 x2 ... xn   in
---                  ek)
---     ...
---     xn = fix(xn. let xn-1 = xn-1 xn    in
---                  ...
---                  let x1 = x1 x2 ... xn in
---                    en)
--- in let xn-1 = xn-1 xn in
---    ... 
---    let x2 = x2 x3 ... xn in
---    let x1 = x1 x2 ... xn in
---      b
-termLetrec :: [(QName, C.Term)] -> C.Term -> C.Term
-termLetrec bindings body = rec [] bindings body
+       termLet tuple (C.Fix tuple
+                         (termFresh vars
+                           (termTuple values')))
+                     body'
   where
-    rec :: [QName] -> [(QName, C.Term)] -> C.Term -> C.Term
-    rec prev []                    body = bindPrev prev [] body
-    rec prev ((var, value) : next) body =
-      let next' = map fst next in
-        termLet var
-                (C.Fix var
-                       (bindNext next'
-                         (bindPrev prev next' value)))
-                (rec (var : prev) next body)
-
-    -- bindNext [xk+1, ..., xn] e
-    -- builds the term
-    --   "\ xk+1 ... xn -> e"
-    bindNext :: [QName] -> C.Term -> C.Term
-    bindNext next e = foldr C.lam e next
-
-    -- bindPrev [xk, ..., x1] [xk+1, ..., xn] e
-    -- builds the term
-    --   "let xk = xk xk+1 ... xn
-    --        ...
-    --        x1 = x1 x2 ... xn
-    --     in e"
-    bindPrev :: [QName] -> [QName] -> C.Term -> C.Term
-    bindPrev []           next e = e
-    bindPrev (var : prev) next e =
-      termLet var (app var next)
-              (bindPrev prev (var : next) e)
-
-    -- app xk [xk+1, ..., xn]
-    -- builds the term "xk xk+1 ... xn"
-    app :: QName -> [QName] -> C.Term
-    app head args = foldl C.App (C.Var head) (map C.Var args)
+    ith :: Integer -> QName -> Integer -> M C.Term
+    ith n tuple i = do
+      xs <- mapM (const freshVariable) [0.. n - 1]
+      return $
+         termFresh xs
+           (C.Seq (C.Unif (C.Var tuple) (termTuple (map C.Var xs)))
+                  (C.Var (xs !! fromIntegral i)))
 
 termLet :: QName -> C.Term -> C.Term -> C.Term
 termLet var value body = C.App (C.Lam var (progSingleton body)) value

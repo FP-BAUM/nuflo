@@ -1,8 +1,11 @@
 module Calculus.Terms(
          PrimitiveFunction(..),
          PrimitiveCommand(..),
-         Term(..), Program(..), Location, consOk, lam
+         Term(..), Program(..), Location, consOk, lam,
+         applySubst
        ) where
+
+import qualified Data.Map as M
 
 import Syntax.Name(QName(..), primitiveOk)
 
@@ -37,4 +40,32 @@ consOk = Cons primitiveOk
 
 lam :: QName -> Term -> Term
 lam x t = Lam x (Alt t Fail)
+
+applySubst :: M.Map QName Term -> Term -> Term
+applySubst subst (Var x)     = M.findWithDefault (Var x) x subst
+applySubst subst (Cons c)    = Cons c
+applySubst subst (Num n)     = Num n
+applySubst subst (Fresh x t) =
+  Fresh x $ applySubst (M.insert x (Var x) subst) t
+applySubst subst (Lam x p) =
+  Lam x $ applySubstP (M.insert x (Var x) subst) p
+applySubst subst (LamL l x p) =
+  LamL l x $ applySubstP (M.insert x (Var x) subst) p
+applySubst subst (Fix x t) =
+  Fix x $ applySubst (M.insert x (Var x) subst) t
+applySubst subst (App t1 t2) =
+  App (applySubst subst t1) (applySubst subst t2)
+applySubst subst (Seq t1 t2) =
+  Seq (applySubst subst t1) (applySubst subst t2)
+applySubst subst (Unif t1 t2) =
+  Unif (applySubst subst t1) (applySubst subst t2)
+applySubst subst (Function f ts) =
+  Function f (map (applySubst subst) ts)
+applySubst subst (Command f ts) =
+  Command f (map (applySubst subst) ts)
+
+applySubstP :: M.Map QName Term -> Program -> Program
+applySubstP subst Fail      = Fail
+applySubstP subst (Alt t p) = Alt (applySubst subst t)
+                                      (applySubstP subst p)
 
