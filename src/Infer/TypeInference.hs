@@ -13,7 +13,7 @@ import Syntax.Name(
          unqualifiedName,
          primitiveUnit,
          primitiveAlternative, primitiveSequence, primitiveUnification,
-         primitivePrint, primitiveUnderscore
+         primitivePrint, primitiveMain, primitiveUnderscore
        )
 import Syntax.AST(
          AnnProgram(..), Program,
@@ -548,7 +548,14 @@ inferTypeProgramM (Program decls) = do
   mapM_ collectTypeDeclarationM decls
   mapM_ collectSignaturesM decls
   decls' <- inferTypeDeclarationsM decls
-  unfoldProgramPlaceholdersM (Program decls')
+  result <- unfoldProgramPlaceholdersM (Program decls')
+  checkMainType -- Check the type of "main"
+  return result
+
+checkMainType :: M ()
+checkMainType = do
+  TypeScheme _ (ConstrainedType _ typ) <- lookupType primitiveMain
+  unifyTypes typ (tFun (TVar primitiveUnit) (TVar primitiveUnit))
 
 collectTypeDeclarationM :: Declaration -> M ()
 collectTypeDeclarationM (TypeDeclaration pos typ value) = do
