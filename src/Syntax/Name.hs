@@ -102,13 +102,13 @@ primitiveInt :: QName
 primitiveInt = qualify modulePRIM "Int"
 
 primitiveAlternative :: QName
-primitiveAlternative = qualify modulePRIM ("_<>_")
+primitiveAlternative = qualify modulePRIM ("_|_")
 
 primitiveSequence :: QName
-primitiveSequence = qualify modulePRIM ("_>>_")
+primitiveSequence = qualify modulePRIM ("_&_")
 
 primitiveUnification :: QName
-primitiveUnification = qualify modulePRIM ("_~~_")
+primitiveUnification = qualify modulePRIM ("_~_")
 
 primitiveTuple :: QName
 primitiveTuple = qualify modulePRIM "{Tuple}"

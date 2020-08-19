@@ -75,16 +75,17 @@ freeVariables :: Term -> S.Set QName
 freeVariables (Var name)          = S.singleton name
 freeVariables (Cons name)         = S.empty
 freeVariables (Num n)             = S.empty
-freeVariables (Fresh name t1)     = freeVariables t1 S.\\ S.singleton name
+freeVariables (Fresh name t)      = freeVariables t S.\\ S.singleton name
 freeVariables (Lam name p)        = freeVariablesP p S.\\ S.singleton name
 freeVariables (LamL loc name p)   = freeVariablesP p S.\\ S.singleton name
-freeVariables (Fix name t1)       = freeVariables t1 S.\\ S.singleton name
+freeVariables (Fix name t)        = freeVariables t S.\\ S.singleton name
 freeVariables (App t1 t2)         = freeVariables t1 `S.union` freeVariables t2
 freeVariables (Seq t1 t2)         = freeVariables t1 `S.union` freeVariables t2
 freeVariables (Unif t1 t2)        = freeVariables t1 `S.union` freeVariables t2
-freeVariables (Function pf terms) = S.unions $ map freeVariables terms
-freeVariables (Command pf terms)  = S.unions $ map freeVariables terms
+freeVariables (Function _ terms)  = S.unions $ map freeVariables terms
+freeVariables (Command _ terms)   = S.unions $ map freeVariables terms
 
 freeVariablesP :: Program -> S.Set QName
 freeVariablesP Fail = S.empty
 freeVariablesP (Alt t p) = freeVariables t `S.union` freeVariablesP p
+

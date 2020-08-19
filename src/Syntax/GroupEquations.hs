@@ -19,15 +19,15 @@ groupEquations eqs =
     Right s   -> Right groupedEqs
     Left name -> Left ("Duplicated declaration for \"" ++ show name ++ "\".")
   where
-    groupedEqs       = map joinEquations (groupEquationsByName eqs)
-    functionNames    = map (fromJust . exprHeadVariable . equationLHS)
-                           groupedEqs
-    duplicatedNames  =
+    groupedEqs    = map joinEquations (groupEquationsByName eqs)
+    functionNames = map (fromJust . exprHeadVariable . equationLHS)
+                        groupedEqs
+    duplicatedNames =
       foldl (\ set elem ->
               case set of
-                Right s   -> if S.member elem s
-                              then Left elem
-                              else Right $ S.insert elem s
+                Right s -> if S.member elem s
+                            then Left elem
+                            else Right $ S.insert elem s
                 Left name -> Left name)
             (Right S.empty)
             functionNames
@@ -35,31 +35,21 @@ groupEquations eqs =
 -- Precondition: all the equations define the same function name
 joinEquations :: [Equation] -> Equation
 joinEquations [] = error "(Group of equations cannot be empty)"
-joinEquations eqs@((Equation pos lhs _) : _) =
-  if maxArgs == 0
-   then let rhs' = foldl1 exprAlternative (map equationRHS eqs)
-         in Equation pos lhs rhs'
-   else let functionName = fromJust (exprHeadVariable lhs)
-            body = foldr (\ name -> ELambda pos (EUnboundVar pos name))
-                         innerBody
-                         paramNames 
-         in Equation pos (EUnboundVar pos functionName) body
+joinEquations eqs@(Equation pos0 lhs0 _ : _) =
+  let functionName = fromJust (exprHeadVariable lhs0) in
+    Equation pos0 (EVar pos0 functionName)
+             (foldr (\ name -> ELambda pos0 (EUnboundVar pos0 name))
+                   (foldl1 exprAlternative (map applyEquation eqs))
+                   paramNames)
   where
     maxArgs = maximum (map numberOfArguments eqs)
     paramNames = map mangleParameterName [1..maxArgs]
-    pad :: [Expr] -> [Expr]
-    pad exprs =
-      exprs ++ replicate (maxArgs - length exprs)
-                         (EVar pos primitiveUnderscore)
-    innerBody = ECase pos guard (map branch eqs)
-      where
-        guard :: Expr
-        guard = makeTuple pos (map (EVar pos) paramNames)
-        branch :: Equation -> CaseBranch
-        branch (Equation pos lhs rhs) =
-          let patterns = fromJust (exprHeadArguments lhs)
-              pattern  = makeTuple pos (pad patterns)
-           in CaseBranch pos pattern rhs
+    params     = map (EVar pos0) paramNames
+    applyEquation (Equation pos lhs rhs) =
+      let patterns = fromJust (exprHeadArguments lhs) in
+        foldl (EApp pos)
+              (foldr (ELambda pos) rhs patterns)
+              params
 
 mangleParameterName :: Int -> QName
 mangleParameterName i = Name ("param{" ++ show i ++ "}")

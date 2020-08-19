@@ -73,7 +73,7 @@ topoSort graph =
       (visited, marked) <- get
       case Map.lookup v marked of
         Nothing -> return []
-        Just _  -> error "Ya fue visitado -- no es un DAG."
+        Just _  -> error "Already visited: not a DAG."
       case Map.lookup v visited of
         Just _  -> return []
         Nothing -> do
@@ -106,7 +106,7 @@ dependencyGraphL decls =
     var = fst
 
     deps :: IdL -> [DeclarationL] -> [DeclarationL] -> [IdL]
-    deps x prevs []                = error "empty dependency list"
+    deps x prevs []                = error "Empty dependencies."
     deps x prevs (decl@(y, e) : ds)
       | x == y    = intersect nodes (varsL e)
       | otherwise = deps x (decl:prevs) ds
@@ -185,3 +185,4 @@ dependencySortL decls =
     sortedIds =
       map (\ idx -> Map.findWithDefault [] idx idxToNodes)
           (topoSort componentDepgraph)
+
