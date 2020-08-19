@@ -7,7 +7,7 @@ import Error(Error(..), ErrorType(..))
 import Lexer.Lexer(tokenize)
 import Parser.Parser(parse)
 import Infer.KindInference(inferKinds)
-import Infer.TypeInference(inferTypes)
+import Infer.TypeInference(inferTypeWithoutMain)
 
 testProgram :: String -> String -> Either ErrorType () -> Test
 testProgram description source expected =
@@ -16,7 +16,7 @@ testProgram description source expected =
              (do tokens <- tokenize "test" source
                  ast    <- parse tokens
                  inferKinds ast
-                 inferTypes ast))
+                 inferTypeWithoutMain ast))
            expected
   where 
     normalizeResult (Left  e) = Left (errorType e)

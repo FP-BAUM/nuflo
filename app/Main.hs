@@ -9,7 +9,7 @@ import Lexer.Lexer(tokenize)
 import Parser.Reader(readSource)
 import Parser.Parser(parse)
 import Infer.KindInference(inferKinds)
-import Infer.TypeInference(inferTypes)
+import Infer.TypeInference(inferTypeWithMain)
 import Desugaring.Desugaring(desugarProgram)
 import Eval.Eval(eval)
 
@@ -80,7 +80,7 @@ runTypeInference filename = do
           case inferKinds program of
             Left e    -> die e
             Right () -> do
-              case inferTypes program of
+              case inferTypeWithMain program of
                 Left e -> die e
                 Right program' -> putStrLn (show program')
 
@@ -96,7 +96,7 @@ runDesugaring filename = do
           case inferKinds program of
             Left e    -> die e
             Right () -> do
-              case inferTypes program of
+              case inferTypeWithMain program of
                 Left e -> die e
                 Right program' -> do
                   case desugarProgram program' of
@@ -115,7 +115,7 @@ runEvaluator filename = do
           case inferKinds program of
             Left e    -> die e
             Right () -> do
-              case inferTypes program of
+              case inferTypeWithMain program of
                 Left e -> die e
                 Right program' -> do
                   case desugarProgram program' of

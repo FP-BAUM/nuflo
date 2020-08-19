@@ -1,4 +1,7 @@
-module Infer.TypeInference(inferTypes) where
+module Infer.TypeInference(
+         inferTypeWithMain,
+         inferTypeWithoutMain,
+       ) where
 
 import qualified Data.Set as S
 import qualified Data.Map as M
@@ -41,25 +44,36 @@ import Calculus.Types(
        )
 import Syntax.GroupEquations(groupEquations)
 
-inferTypes :: Program -> Either Error Program
-inferTypes program = evalFS (inferTypeProgramM program) initialState
-  where initialState = TypeInferState {
-                         statePosition              = unknownPosition
-                       , stateNextFresh             = 0
-                       , stateTypeConstants         = S.empty
-                       , stateTypeSynonyms          = M.empty
-                       , stateEnvironment           = [M.empty]
-                       , stateSubstitution          = M.empty
-                       , stateClassParameters       = M.empty
-                       , stateClassMethodSignatures = M.empty
-                       , stateTypeVarRenaming       = M.empty
-                       ---- Constraints
-                       , stateMethodInfo            = M.empty
-                       , stateFreshPlaceholder      = 0
-                       , stateGlobalInstances       = M.empty
-                       , stateConstraintEnv         = M.empty
-                       , statePlaceholderHeap       = M.empty
-                       }
+inferTypeWithMain :: Program -> Either Error Program
+inferTypeWithMain program =
+  evalFS (do result <- inferTypeProgramM program;
+             checkMainType -- check the type of "main"
+             return result)
+         initialState
+
+inferTypeWithoutMain :: Program -> Either Error Program
+inferTypeWithoutMain program =
+  evalFS (inferTypeProgramM program)
+         initialState
+
+initialState :: TypeInferState
+initialState = TypeInferState {
+                 statePosition              = unknownPosition
+               , stateNextFresh             = 0
+               , stateTypeConstants         = S.empty
+               , stateTypeSynonyms          = M.empty
+               , stateEnvironment           = [M.empty]
+               , stateSubstitution          = M.empty
+               , stateClassParameters       = M.empty
+               , stateClassMethodSignatures = M.empty
+               , stateTypeVarRenaming       = M.empty
+               ---- Constraints
+               , stateMethodInfo            = M.empty
+               , stateFreshPlaceholder      = 0
+               , stateGlobalInstances       = M.empty
+               , stateConstraintEnv         = M.empty
+               , statePlaceholderHeap       = M.empty
+               }
 
 ---- Type inference monad
 
@@ -548,9 +562,7 @@ inferTypeProgramM (Program decls) = do
   mapM_ collectTypeDeclarationM decls
   mapM_ collectSignaturesM decls
   decls' <- inferTypeDeclarationsM decls
-  result <- unfoldProgramPlaceholdersM (Program decls')
-  checkMainType -- Check the type of "main"
-  return result
+  unfoldProgramPlaceholdersM (Program decls')
 
 checkMainType :: M ()
 checkMainType = do
