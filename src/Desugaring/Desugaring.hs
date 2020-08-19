@@ -26,6 +26,7 @@ import Syntax.AST(
          exprFreeVariables,
          exprHeadVariable, exprHeadArguments
        )
+import Desugaring.Deps(Dependency(..), dependencySortL)
 
 desugarProgram :: Program -> Either Error C.Term
 desugarProgram program = evalFS (desugarProgramM program) initialState
@@ -149,8 +150,22 @@ desugarLetrec equations body =
      exitScope
      termLetrec (reverse (zip vars rhss')) body'
 
+
 termLetrec :: [(QName, C.Term)] -> C.Term -> M C.Term
-termLetrec bindings body = do
+termLetrec bindings body = do 
+    let bindingList = dependencySortL bindings
+    bind bindingList body
+  where bind :: [Dependency (QName, C.Term)] -> C.Term -> M C.Term
+        bind [] body = return body
+        bind (DpAcyclic (x, t) : bindings) body = do
+          body' <- bind bindings body
+          return $ termLet x t body'
+        bind (DpFunctions binding : bindings) body = do
+          body' <- bind bindings body
+          termLetrec' binding body'
+
+termLetrec' :: [(QName, C.Term)] -> C.Term -> M C.Term
+termLetrec' bindings body = do
    let n = fromIntegral (length bindings)
    tuple <- freshVariable
    iths  <- mapM (ith n tuple) [0 .. n - 1]

@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Desugaring.Deps(
-        Dependency(..), dependencySortL, dependencySortK,
+        Dependency(..), dependencySortL,
         Graph, graphFromList, topoSort, transpose,
         -- Only for unit testing:
         dfs, stronglyConnectedComponents,
@@ -12,10 +12,10 @@ import qualified Data.Map as Map(
         Map, empty, insert, lookup, findWithDefault, keys, fromList,
         delete, map
     )
+import qualified Data.Set as S
 import Data.List(union, intersect, (\\), nub)
-
-import ExpressionL
-import ExpressionK
+import qualified Calculus.Terms as C
+import Syntax.Name(QName(..))
 
 type Graph a = Map.Map a [a]
 
@@ -85,23 +85,14 @@ topoSort graph =
 unionMap :: Eq b => (a -> [b]) -> [a] -> [b]
 unionMap f = foldr union [] . map f
 
+type ExprL = C.Term
+
 varsL :: ExprL -> [IdL]
-varsL (VarL x)          = [x]
-varsL (ConstantL _)     = []
-varsL (LamL x b)        = varsL b
-varsL (AppL e1 e2)      = varsL e1 `union` varsL e2
-varsL (LetL decls e)    = unionMap varsD decls `union` varsL e
-  where
-    varsD (ValueDL _ e) = varsL e
-varsL (MatchL _ e bs o)  = varsL e `union` unionMap varsB bs `union` varsM o
-  where
-    varsB (MatchBranchL _ e) = varsL e
-    varsM Nothing  = []
-    varsM (Just e) = varsL e
-varsL (RecordL es)      = unionMap varsL es
-varsL (SelectL _ e)     = varsL e
-varsL (PrimitiveL _ es) = unionMap varsL es
-varsL (ForeignL _ es)   = unionMap varsL es
+varsL = S.toList . C.freeVariables
+
+type DeclarationL = (QName, C.Term)
+
+type IdL = QName
 
 dependencyGraphL :: [DeclarationL] -> DepGraph
 dependencyGraphL decls =
@@ -112,38 +103,13 @@ dependencyGraphL decls =
     nodes = map var decls
 
     var :: DeclarationL -> IdL
-    var (ValueDL x _) = x
+    var = fst
 
     deps :: IdL -> [DeclarationL] -> [DeclarationL] -> [IdL]
-    deps x prevs (decl@(ValueDL y e) : ds)
-      | x == y    = intersect nodes (varsL e) `union`
-                      if isFunction e
-                       then []
-                       else definedValues prevs
+    deps x prevs []                = error "empty dependency list"
+    deps x prevs (decl@(y, e) : ds)
+      | x == y    = intersect nodes (varsL e)
       | otherwise = deps x (decl:prevs) ds
-
-    definedValues :: [DeclarationL] -> [IdL]
-    definedValues = map var . filter (\ (ValueDL x e) -> not (isFunction e))
-
-    isFunction :: ExprL -> Bool
-    isFunction (LamL _ _) = True
-    isFunction _          = False
-
-dependencyGraphK :: [DeclarationK] -> DepGraph
-dependencyGraphK decls =
-    Map.fromList $
-      map (\ v -> (v, deps v decls)) nodes
-  where
-    nodes :: [IdK]
-    nodes = map var decls
-
-    var :: DeclarationK -> IdK
-    var (ValueDK x _ _) = x
-
-    deps :: IdK -> [DeclarationK] -> [IdK]
-    deps x (decl@(ValueDK y _ e) : ds)
-      | x == y    = intersect nodes (nub (allIds e))
-      | otherwise = deps x ds
 
 -- Kosaraju
 stronglyConnectedComponents :: forall a. Ord a => Graph a -> [[a]]
@@ -201,7 +167,7 @@ dependencySortL decls =
     idToDecl :: IdL -> DeclarationL
     idToDecl id = Map.findWithDefault (error "") id m
       where m = Map.fromList $
-                  map (\ decl@(ValueDL x _) -> (x, decl)) decls
+                  map (\ decl@(x, _) -> (x, decl)) decls
 
     idsToDecl :: [IdL] -> Dependency DeclarationL
     idsToDecl [id]
@@ -210,7 +176,8 @@ dependencySortL decls =
       | otherwise =
         let decl = idToDecl id in
           case decl of
-            ValueDL _ (LamL _ _) -> DpFunctions [decl]
+            (_, (C.LamL _ _ _)) -> DpFunctions [decl]
+            (_, (C.Lam _ _)) -> DpFunctions [decl]
             _                    -> DpAcyclic decl
     idsToDecl lst  = DpFunctions $ map idToDecl lst
 
@@ -218,48 +185,3 @@ dependencySortL decls =
     sortedIds =
       map (\ idx -> Map.findWithDefault [] idx idxToNodes)
           (topoSort componentDepgraph)
-
-dependencySortK :: [DeclarationK] -> [Dependency DeclarationK]
-dependencySortK decls =
-    reverse $ map idsToDecl sortedIds
-  where
-    invflat :: (a, [b]) -> [(b, a)]
-    invflat (x, ys) = zip ys (repeat x)
-
-    nodeDepgraph :: DepGraph
-    nodeDepgraph = dependencyGraphK decls
-
-    sccs :: [(ComponentIdx, [IdK])]
-    sccs = zip [0..] (stronglyConnectedComponents nodeDepgraph)
-
-    idxToNodes :: Map.Map ComponentIdx [IdK]
-    idxToNodes = Map.fromList sccs
-
-    nodeToIdx :: Map.Map IdK ComponentIdx
-    nodeToIdx = Map.fromList (concatMap invflat sccs)
-
-    componentDeps :: ComponentIdx -> [ComponentIdx]
-    componentDeps idx = nub $ do
-      v <- Map.findWithDefault [] idx idxToNodes
-      w <- Map.findWithDefault [] v nodeDepgraph
-      return $ Map.findWithDefault (error "") w nodeToIdx
-
-    componentDepgraph :: Graph ComponentIdx
-    componentDepgraph =
-        Map.fromList $ map
-          (\ (idx, _) -> (idx, componentDeps idx \\ [idx]))
-          sccs
-
-    idToDecl :: IdK -> DeclarationK
-    idToDecl id = Map.findWithDefault (error "") id m
-      where m = Map.fromList $
-                  map (\ decl@(ValueDK x _ _) -> (x, decl)) decls
-
-    idsToDecl :: [IdK] -> Dependency DeclarationK
-    idsToDecl lst = DpFunctions $ map idToDecl lst
-
-    sortedIds :: [[IdK]]
-    sortedIds =
-      map (\ idx -> Map.findWithDefault [] idx idxToNodes)
-          (topoSort componentDepgraph)
-

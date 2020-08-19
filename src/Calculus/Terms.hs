@@ -2,10 +2,12 @@ module Calculus.Terms(
          PrimitiveFunction(..),
          PrimitiveCommand(..),
          Term(..), Program(..), Location, consOk, lam,
-         applySubst
+         applySubst,
+         freeVariables
        ) where
 
 import qualified Data.Map as M
+import qualified Data.Set as S
 
 import Syntax.Name(QName(..), primitiveOk)
 
@@ -69,3 +71,20 @@ applySubstP subst Fail      = Fail
 applySubstP subst (Alt t p) = Alt (applySubst subst t)
                                       (applySubstP subst p)
 
+freeVariables :: Term -> S.Set QName
+freeVariables (Var name)          = S.singleton name
+freeVariables (Cons name)         = S.empty
+freeVariables (Num n)             = S.empty
+freeVariables (Fresh name t1)     = freeVariables t1 S.\\ S.singleton name
+freeVariables (Lam name p)        = freeVariablesP p S.\\ S.singleton name
+freeVariables (LamL loc name p)   = freeVariablesP p S.\\ S.singleton name
+freeVariables (Fix name t1)       = freeVariables t1 S.\\ S.singleton name
+freeVariables (App t1 t2)         = freeVariables t1 `S.union` freeVariables t2
+freeVariables (Seq t1 t2)         = freeVariables t1 `S.union` freeVariables t2
+freeVariables (Unif t1 t2)        = freeVariables t1 `S.union` freeVariables t2
+freeVariables (Function pf terms) = S.unions $ map freeVariables terms
+freeVariables (Command pf terms)  = S.unions $ map freeVariables terms
+
+freeVariablesP :: Program -> S.Set QName
+freeVariablesP Fail = S.empty
+freeVariablesP (Alt t p) = freeVariables t `S.union` freeVariablesP p
