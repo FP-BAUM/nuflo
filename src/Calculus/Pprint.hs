@@ -23,7 +23,7 @@ pp ns t@(App _ _)  =
   let (f, xs) = splitArgs t in
     case showOpAsMixfix ns f xs of
       Just res -> res
-      Nothing  -> unwords (map (pp ns) (f : xs))
+      Nothing  -> unwords (pp ns f : map (ppParen ns) xs)
 -- Stuck terms
 pp ns _            = "{stuck}"
 
@@ -34,6 +34,10 @@ ppQName ns qname
 
 parenthesize :: String -> String
 parenthesize x = "(" ++ x ++ ")"
+
+ppParen :: Namespace -> Term -> String
+ppParen ns t@(App _ _) = parenthesize (pp ns t)
+ppParen ns t           = pp ns t
 
 showOpAsMixfix :: Namespace -> Term -> [Term] -> Maybe String
 showOpAsMixfix ns (Var f)  args = showNameAsMixfix ns f args
@@ -50,7 +54,7 @@ showNameAsMixfix ns f args =
        then let (actualArgs, remainingArgs) = splitAt arity args
                 actualArgs'    = mixfixParenthesizedArgs
                                    ns associativity precedence actualArgs
-                remainingArgs' = map (pp ns) remainingArgs
+                remainingArgs' = map (ppParen ns) remainingArgs
                 result = mixfixIntersperse operator actualArgs'
              in if null remainingArgs
                  then return result
