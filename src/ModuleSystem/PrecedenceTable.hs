@@ -1,8 +1,8 @@
 module ModuleSystem.PrecedenceTable(
          PrecedenceTable, PrecedenceLevel, Associativity(..),
-         Precedence, emptyPrecedenceTable, precedenceLevel,
+         Precedence(..), emptyPrecedenceTable, precedenceLevel,
          declareOperator, precedenceTableLevels, isOperator,
-         isOperatorPart, operatorFixity
+         isOperatorPart, operatorAssociativity, operatorPrecedence
        ) where
 
 import qualified Data.Map as M
@@ -14,12 +14,13 @@ import Syntax.Name(
          moduleNameFromQName, unqualifiedName
        )
 
-data Associativity = RightAssoc | LeftAssoc | NonAssoc
+data Associativity = LeftAssoc | RightAssoc | NonAssoc
   deriving (Show, Eq, Ord)
 
 data PrecedenceTable = PT {
       ptPrecedenceLevels :: M.Map Precedence PrecedenceLevel,
       ptAssociativities  :: M.Map QName Associativity,
+      ptPrecedences      :: M.Map QName Precedence,
       ptAllOperatorParts :: S.Set QName
     }
   deriving (Show, Eq)
@@ -32,6 +33,7 @@ emptyPrecedenceTable :: PrecedenceTable
 emptyPrecedenceTable = PT {
                          ptPrecedenceLevels = M.empty,
                          ptAssociativities  = M.empty,
+                         ptPrecedences      = M.empty,
                          ptAllOperatorParts = S.empty
                        }
 
@@ -52,6 +54,8 @@ addOperator assoc precedence qname table =
                     (ptPrecedenceLevels table),
          ptAssociativities =
            M.insert qname assoc (ptAssociativities table),
+         ptPrecedences =
+           M.insert qname precedence (ptPrecedences table),
          ptAllOperatorParts =
            ptAllOperatorParts table `S.union`
            S.fromList (
@@ -73,10 +77,17 @@ isOperator qname table = M.member qname (ptAssociativities table)
 isOperatorPart :: QName -> PrecedenceTable -> Bool
 isOperatorPart qname table = S.member qname (ptAllOperatorParts table)
 
-operatorFixity :: QName -> PrecedenceTable -> Associativity
-operatorFixity op table =
+operatorAssociativity :: QName -> PrecedenceTable -> Associativity
+operatorAssociativity op table =
   M.findWithDefault
     (error ("Undefined operator \"" ++ show op ++ "\"."))
     op
     (ptAssociativities table)
+
+operatorPrecedence :: QName -> PrecedenceTable -> Precedence
+operatorPrecedence op table =
+  M.findWithDefault
+    (error ("Undefined operator \"" ++ show op ++ "\"."))
+    op
+    (ptPrecedences table)
 

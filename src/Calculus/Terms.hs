@@ -2,8 +2,7 @@ module Calculus.Terms(
          PrimitiveFunction(..),
          PrimitiveCommand(..),
          Term(..), Program(..), Location, consOk, lam,
-         applySubst,
-         freeVariables
+         applySubst, freeVariables, splitArgs
        ) where
 
 import qualified Data.Map as M
@@ -88,4 +87,9 @@ freeVariables (Command _ terms)   = S.unions $ map freeVariables terms
 freeVariablesP :: Program -> S.Set QName
 freeVariablesP Fail = S.empty
 freeVariablesP (Alt t p) = freeVariables t `S.union` freeVariablesP p
+
+splitArgs :: Term -> (Term, [Term])
+splitArgs (App t s) = let (head, args) = splitArgs t
+                         in (head, args ++ [s])
+splitArgs t         = (t, [])
 

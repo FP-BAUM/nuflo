@@ -1,6 +1,6 @@
 
 module Syntax.Name(
-         splitParts, allNameParts,
+         splitParts, allNameParts, nameArity,
          isWellFormedName, isWellFormedOperatorName,
          QName(..), readName, qualify, moduleNameFromQName, unqualifiedName,
          modulePRIM, moduleMain, arrowSymbol,
@@ -23,6 +23,9 @@ splitParts (x : xs)   = let (p : ps) = splitParts xs in
 
 allNameParts :: String -> [String]
 allNameParts id = id : (filter (/= "_") (splitParts id))
+
+nameArity :: String -> Int
+nameArity name = length (filter (== "_") (splitParts name))
 
 -- A name part is well-formed if it is not a keyword nor an integer.
 isWellFormedNamePart :: String -> Bool

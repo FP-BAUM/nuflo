@@ -7,11 +7,11 @@ import Error(Error(..))
 import Position(positionRegion)
 import Lexer.Lexer(tokenize)
 import Parser.Reader(readSource)
-import Parser.Parser(parse)
+import Parser.Parser(parse, parseAndGetNamespace)
 import Infer.KindInference(inferKinds)
 import Infer.TypeInference(inferTypeWithMain)
 import Desugaring.Desugaring(desugarProgram)
-import Eval.Eval(eval)
+import Eval.Eval(evalInNamespace)
 
 import TestMain(runAllTests)
 
@@ -109,9 +109,9 @@ runEvaluator filename = do
   case res of
     Left  e      -> die e
     Right tokens -> do
-      case parse tokens of
+      case parseAndGetNamespace tokens of
         Left e        -> die e
-        Right program -> do
+        Right (program, namespace) -> do
           case inferKinds program of
             Left e    -> die e
             Right () -> do
@@ -120,7 +120,7 @@ runEvaluator filename = do
                 Right program' -> do
                   case desugarProgram program' of
                     Left e -> die e
-                    Right termC -> eval termC
+                    Right termC -> evalInNamespace namespace termC
 
 usage :: IO ()
 usage = do

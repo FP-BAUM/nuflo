@@ -150,19 +150,17 @@ desugarLetrec equations body =
      exitScope
      termLetrec (reverse (zip vars rhss')) body'
 
-
 termLetrec :: [(QName, C.Term)] -> C.Term -> M C.Term
-termLetrec bindings body = do 
-    let bindingList = dependencySortL bindings
-    bind bindingList body
-  where bind :: [Dependency (QName, C.Term)] -> C.Term -> M C.Term
-        bind [] body = return body
-        bind (DpAcyclic (x, t) : bindings) body = do
-          body' <- bind bindings body
-          return $ termLet x t body'
-        bind (DpFunctions binding : bindings) body = do
-          body' <- bind bindings body
-          termLetrec' binding body'
+termLetrec bindings body = rec (dependencySortL bindings) body
+  where
+    rec :: [Dependency (QName, C.Term)] -> C.Term -> M C.Term
+    rec [] body = return body
+    rec (DpAcyclic (x, t) : bindingList) body = do
+      body' <- rec bindingList body
+      return $ termLet x t body'
+    rec (DpFunctions bindings : bindingList) body = do
+      body' <- rec bindingList body
+      termLetrec' bindings body'
 
 termLetrec' :: [(QName, C.Term)] -> C.Term -> M C.Term
 termLetrec' bindings body = do

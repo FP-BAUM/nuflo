@@ -1,11 +1,11 @@
-module Parser.Parser(parse) where
+module Parser.Parser(parse, parseAndGetNamespace) where
 
 import qualified Data.Set as S
 import Data.List(isPrefixOf)
 
 import Error(Error(..), ErrorType(..), ErrorMessage)
 import Position(Position(..), unknownPosition)
-import FailState(FailState, getFS, modifyFS, putFS, evalFS, failFS)
+import FailState(FailState, getFS, modifyFS, putFS, evalFS, runFS, failFS)
 import Syntax.Name(
          QName(..), readName, qualify, moduleNameFromQName,
          isWellFormedOperatorName, unqualifiedName, splitParts,
@@ -28,6 +28,7 @@ import Syntax.AST(
        )
 import Lexer.Token(Token(..), TokenType(..))
 
+import ModuleSystem.Namespace(Namespace, makeNamespace)
 import ModuleSystem.Module(
          Module,
            emptyModule, addSubmodule, exportAllNamesFromModule, exportNames,
@@ -43,20 +44,31 @@ import ModuleSystem.PrecedenceTable(
          PrecedenceTable(..), Associativity(..),
          PrecedenceLevel, Precedence, precedenceTableLevels,
          emptyPrecedenceTable, declareOperator, isOperator, isOperatorPart,
-         operatorFixity
+         operatorAssociativity
        )
 
 parse :: [Token] -> Either Error Program
-parse tokens = evalFS parseM initialState
-  where initialState =
-          ParserState {
-            stateInput           = tokens,
-            statePosition        = tokensPosition tokens unknownPosition,
-            stateRootModule      = emptyModule,
-            stateNameContext     = error "Empty name context.",
-            statePrecedenceTable = emptyPrecedenceTable,
-            stateScopeLevel      = 0 
-          }
+parse tokens = evalFS parseM (initialState tokens)
+
+parseAndGetNamespace :: [Token] -> Either Error (Program, Namespace)
+parseAndGetNamespace tokens =
+  case runFS parseM (initialState tokens) of
+    Left err -> Left err
+    Right (program, state) ->
+      Right (program, makeNamespace (stateRootModule state)
+                                    (stateNameContext state)
+                                    (statePrecedenceTable state))
+
+initialState :: [Token] -> ParserState
+initialState tokens =
+  ParserState {
+    stateInput           = tokens,
+    statePosition        = tokensPosition tokens unknownPosition,
+    stateRootModule      = emptyModule,
+    stateNameContext     = error "Empty name context.",
+    statePrecedenceTable = emptyPrecedenceTable,
+    stateScopeLevel      = 0 
+  }
 
 ---- Some constants
 
@@ -270,13 +282,13 @@ isOperatorPartM qname = do
 isLeftAssocM :: QName -> M Bool
 isLeftAssocM op = do
   table <- getPrecedenceTable
-  case operatorFixity op table of
+  case operatorAssociativity op table of
     LeftAssoc -> return True
     _         -> return False
 
 isRightAssoc :: QName -> PrecedenceTable -> Bool
 isRightAssoc op table =
-  case operatorFixity op table of
+  case operatorAssociativity op table of
     RightAssoc -> True
     _          -> False
 

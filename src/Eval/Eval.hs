@@ -1,14 +1,16 @@
 
-module Eval.Eval(eval) where
+module Eval.Eval(eval, evalInNamespace) where
 
 import System.Exit(die)
 import qualified Data.Map as M
 
 import qualified Calculus.Terms as C
 import Syntax.Name(QName(..))
+import ModuleSystem.Namespace(Namespace, emptyNamespace)
 import Eval.EvalMonad(EvalMonad, failEM, getEM, putEM, modifyEM, logEM,
                       putStrLnEM,
                       runEM, execEM, evalEM)
+import Calculus.Pprint(pprintInNamespace)
 
 data Result = End (IO ())
             | Next (IO (C.Term, Result))
@@ -49,7 +51,10 @@ putThreads threads = do
 type M = EvalMonad EvalState
 
 eval :: C.Term -> IO ()
-eval term = rec initialState
+eval term = evalInNamespace emptyNamespace term
+
+evalInNamespace :: Namespace -> C.Term -> IO ()
+evalInNamespace namespace term = rec initialState
   where
     initialState :: EvalState
     initialState = EvalState {
@@ -65,10 +70,8 @@ eval term = rec initialState
           die ("Runtime error:\n" ++ show err)
         Right (normalForms, state') -> do
           {- Show final result -}
-          mapM_ runNormalForm normalForms
-          --putStrLn (show (stateThreads state'))
-          {----}
-          --mapM_ (putStrLn . show) normalForms
+          mapM_ (runNormalForm namespace) normalForms
+          {--}
           if null $ stateThreads state'
            then return ()
            else rec state'
@@ -113,11 +116,6 @@ isVar _              = False
 programToList :: C.Program -> [C.Term]
 programToList C.Fail      = []
 programToList (C.Alt t p) = t : programToList p
-
-splitArgs :: C.Term -> (C.Term, [C.Term])
-splitArgs (C.App t s) = let (head, args) = splitArgs t
-                         in (head, args ++ [s])
-splitArgs t           = (t, [])
 
 isFree :: QName -> C.Term -> Bool
 isFree x (C.Var y)          = x == y
@@ -215,13 +213,13 @@ applyPrimitiveFunction f args =
   error ("Unimplemented primitive function " ++ show f
          ++ " with arity " ++ show (length args))
 
-runNormalForm :: C.Term -> IO ()
-runNormalForm (C.Command C.Print [t]) = do
-  putStrLn (show t)
-runNormalForm (C.Command f args) =
+runNormalForm :: Namespace -> C.Term -> IO ()
+runNormalForm namespace (C.Command C.Print [t]) = do
+  putStrLn (pprintInNamespace namespace t)
+runNormalForm _ (C.Command f args) =
   error ("Unimplemented primitive command " ++ show f
          ++ " with arity " ++ show (length args))
-runNormalForm _ = return ()
+runNormalForm _ _ = return ()
 
 singletonSubst :: QName -> C.Term -> Subst
 singletonSubst x v = M.insert x v M.empty
@@ -249,8 +247,8 @@ mgu (Goal (C.LamL l _ _) (C.LamL l' _ _) : xs)
 mgu (Goal (C.LamL l _ _) (C.LamL l' _ _) : xs)
                     = return Nothing
 mgu (Goal v w : xs) =
-  let (v', v_args) = splitArgs v
-      (w', w_args) = splitArgs w
+  let (v', v_args) = C.splitArgs v
+      (w', w_args) = C.splitArgs w
    in case (v', w') of
      (C.Cons c, C.Cons d)
        | c == d && length v_args == length w_args
