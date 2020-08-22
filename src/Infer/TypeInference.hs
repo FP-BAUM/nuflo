@@ -16,7 +16,7 @@ import Syntax.Name(
          unqualifiedName,
          primitiveUnit,
          primitiveAlternative, primitiveSequence, primitiveUnification,
-         primitivePrint, primitiveMain, primitiveUnderscore
+         primitivePrint, primitiveMain, primitiveUnderscore, primitiveFail
        )
 import Syntax.AST(
          AnnProgram(..), Program,
@@ -209,7 +209,10 @@ bindToFreshTypeIfNotLocallyBound x = do
   state <- getFS
   if M.member x (head (stateEnvironment state))
    then return ()
-   else bindToFreshType x
+   else if x == primitiveMain
+         then bindType x (TypeScheme [] (ConstrainedType [] primitiveMainType))
+         else bindToFreshType x
+
 
 getAllBoundVars :: M (S.Set QName)
 getAllBoundVars = do
@@ -250,11 +253,11 @@ addTypeConstant name =
 freshenVariables :: [QName] -> ConstrainedType
                  -> M ([PlaceholderId], ConstrainedType)
 freshenVariables genVarNames constrainedType = do
-  sub <- M.fromList <$> mapM (\ name -> do ft <- freshType 
-                                           return (name, ft))
-                             genVarNames
-  constrainedType' <- unfoldConstrainedType constrainedType
-  freshenConstrainedType sub constrainedType'
+    sub <- M.fromList <$> mapM (\ name -> do ft <- freshType
+                                             return (name, ft))
+                               genVarNames
+    constrainedType' <- unfoldConstrainedType constrainedType
+    freshenConstrainedType sub constrainedType'
   where
     freshenConstrainedType :: TypeSubstitution ->  ConstrainedType
                            -> M ([PlaceholderId], ConstrainedType)
@@ -557,6 +560,8 @@ inferTypeProgramM (Program decls) = do
               (tFun (TVar tA) (TVar primitiveUnit))))
   bindType primitiveUnderscore
            (TypeScheme [tA] (ConstrainedType [] (TVar tA)))
+  bindType primitiveFail
+           (TypeScheme [tA] (ConstrainedType [] (TVar tA)))
   enterScopeM
   -- Infer
   mapM_ collectTypeDeclarationM decls
@@ -564,10 +569,13 @@ inferTypeProgramM (Program decls) = do
   decls' <- inferTypeDeclarationsM decls
   unfoldProgramPlaceholdersM (Program decls')
 
+primitiveMainType :: Type
+primitiveMainType = tFun (TVar primitiveUnit) (TVar primitiveUnit)
+
 checkMainType :: M ()
 checkMainType = do
-  TypeScheme _ (ConstrainedType _ typ) <- lookupType primitiveMain
-  unifyTypes typ (tFun (TVar primitiveUnit) (TVar primitiveUnit))
+  TypeScheme gs (ConstrainedType _ typ) <- lookupType primitiveMain
+  unifyTypes typ primitiveMainType
 
 collectTypeDeclarationM :: Declaration -> M ()
 collectTypeDeclarationM (TypeDeclaration pos typ value) = do

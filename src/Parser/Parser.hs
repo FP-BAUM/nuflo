@@ -11,8 +11,8 @@ import Syntax.Name(
          isWellFormedOperatorName, unqualifiedName, splitParts,
          allNameParts,
          modulePRIM, moduleMain, arrowSymbol,
-         primitiveMain, primitivePrint, primitiveArrow, primitiveUnit,
-         primitiveInt,
+         primitiveMain, primitivePrint, primitiveFail,
+         primitiveArrow, primitiveUnit, primitiveInt,
          primitiveAlternative, primitiveSequence, primitiveUnification,
          primitiveUnderscore
        )
@@ -316,6 +316,7 @@ parseM = do
   declareQNameM primitiveUnderscore
   declareQNameM primitiveMain
   declareQNameM primitivePrint
+  declareQNameM primitiveFail
   declareOperatorM RightAssoc 50 primitiveArrow
   declareOperatorM RightAssoc 60 primitiveAlternative
   declareOperatorM RightAssoc 70 primitiveSequence

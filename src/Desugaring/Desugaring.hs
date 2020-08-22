@@ -11,7 +11,7 @@ import Position(Position(..), unknownPosition)
 import Syntax.Name(
          QName(..),
          primitiveAlternative, primitiveSequence, primitiveUnification,
-         primitiveUnit, primitiveTuple,
+         primitiveFail, primitiveUnit, primitiveTuple,
          primitiveMain, primitivePrint, primitiveUnderscore
        )
 import Syntax.GroupEquations(groupEquations)
@@ -201,37 +201,51 @@ progSingleton t = C.Alt t C.Fail
 desugarExpr :: Expr ->  M C.Term
 ---- Begin: primitives
 -- Nullary
-desugarExpr (EVar _ x)
-  | x == primitiveUnit        = return C.consOk
+desugarExpr (EVar pos x)
+  | x == primitiveUnit = return C.consOk
+  | x == primitiveFail = do
+    y <- freshVariable
+    return $ C.App (C.Lam y C.Fail) C.consOk
+  -- Eta expansions of binary operators
+  | x == primitiveAlternative = do
+    y <- freshVariable
+    z <- freshVariable
+    return $ C.lam y (C.Lam z (C.Alt (C.Var y) (C.Alt (C.Var z) C.Fail)))
+  | x == primitiveSequence = do
+    y <- freshVariable
+    z <- freshVariable
+    return $ C.lam y (C.lam z (C.Var z))
+  | x == primitiveUnification = do
+    y <- freshVariable
+    z <- freshVariable
+    return $ C.lam y (C.lam z (C.Unif (C.Var y) (C.Var z)))
 -- Unary
 desugarExpr (EApp _ (EVar _ x) e)
-  | x == primitivePrint       =
-    do t <- desugarExpr e
-       return $ C.Command C.Print [t]
+  | x == primitivePrint = do
+    t <- desugarExpr e
+    return $ C.Command C.Print [t]
 -- Binary
+--   Note: these are not equivalent to their eta expansions.
 desugarExpr (EApp _ (EApp _ (EVar _ x) e1) e2)
-  | x == primitiveAlternative =
-    do t1 <- desugarExpr e1
-       t2 <- desugarExpr e2
-       z <- freshVariable
-       return $ C.App (C.Lam z (C.Alt t1 (C.Alt t2 C.Fail))) C.consOk
-  | x == primitiveSequence =
-    do t1 <- desugarExpr e1
-       t2 <- desugarExpr e2
-       return $ C.Seq t1 t2
-  | x == primitiveUnification =
-    do t1 <- desugarExpr e1
-       t2 <- desugarExpr e2
-       return $ C.Unif t1 t2
+  | x == primitiveAlternative = do
+    t1 <- desugarExpr e1
+    t2 <- desugarExpr e2
+    z <- freshVariable
+    return $ C.App (C.Lam z (C.Alt t1 (C.Alt t2 C.Fail))) C.consOk
+  | x == primitiveSequence = do
+    t1 <- desugarExpr e1
+    t2 <- desugarExpr e2
+    return $ C.Seq t1 t2
 ---- End: primitives
 desugarExpr (EVar _ x)
-  | x == primitiveUnderscore  = do x' <- freshVariable
-                                   return $ C.Fresh x' (C.Var x')
-  | otherwise                 = do
-      b <- isBoundToConstructor x
-      return $ if b
-                then C.Cons x
-                else C.Var x
+  | x == primitiveUnderscore = do
+    x' <- freshVariable
+    return $ C.Fresh x' (C.Var x')
+  | otherwise                = do
+    b <- isBoundToConstructor x
+    return $ if b
+              then C.Cons x
+              else C.Var x
 desugarExpr (EUnboundVar _ x) = return $ C.Var x
 desugarExpr (EInt _ x)        = return $ C.Num x
 desugarExpr (EApp _ e1 e2)    = do t1 <- desugarExpr e1

@@ -7,7 +7,7 @@ module Syntax.Name(
          primitiveArrow, primitiveUnit, primitiveInt,
          primitiveAlternative, primitiveSequence, primitiveUnification, 
          primitiveTuple, primitiveUnderscore,
-         primitiveMain, primitivePrint, primitiveOk
+         primitiveMain, primitivePrint, primitiveFail, primitiveOk
        ) where
 
 import Lexer.Categories(isKeyword, isInteger)
@@ -124,6 +124,9 @@ primitiveMain = qualify modulePRIM "main"
 
 primitivePrint :: QName
 primitivePrint = qualify modulePRIM "print"
+
+primitiveFail :: QName
+primitiveFail = qualify modulePRIM "fail"
 
 primitiveOk :: QName
 primitiveOk = qualify modulePRIM "ok"
