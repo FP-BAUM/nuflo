@@ -189,6 +189,10 @@ stepThread' (C.Seq t1 t2)    = do (g1, p1) <- stepThread' t1
                                   return (g1 ++ g2, C.Seq <$> p1 <*> p2)
 stepThread' (C.Unif v w)
   | isValue v && isValue w   = return ([Goal v w], [C.consOk])
+---- (Experimental swap rules)
+--stepThread' (C.Unif t1 (C.Seq t2 t3)) = return ([], [C.Seq t2 (C.Unif t1 t3)])
+--stepThread' (C.Unif (C.Seq t1 t2) t3) = return ([], [C.Seq t1 (C.Unif t2 t3)])
+---- (End of experimental swap rules)
 stepThread' (C.Unif t1 t2)   = do (g1, p1) <- stepThread' t1
                                   (g2, p2) <- stepThread' t2
                                   return (g1 ++ g2, C.Unif <$> p1 <*> p2)
