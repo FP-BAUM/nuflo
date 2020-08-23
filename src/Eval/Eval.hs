@@ -189,10 +189,37 @@ stepThread' (C.Seq t1 t2)    = do (g1, p1) <- stepThread' t1
                                   return (g1 ++ g2, C.Seq <$> p1 <*> p2)
 stepThread' (C.Unif v w)
   | isValue v && isValue w   = return ([Goal v w], [C.consOk])
----- (Experimental swap rules)
---stepThread' (C.Unif t1 (C.Seq t2 t3)) = return ([], [C.Seq t2 (C.Unif t1 t3)])
---stepThread' (C.Unif (C.Seq t1 t2) t3) = return ([], [C.Seq t1 (C.Unif t2 t3)])
----- (End of experimental swap rules)
+---- (Experimental rules)
+stepThread' (C.Unif t1 (C.Seq t2 t3)) = return ([], [C.Seq t2 (C.Unif t1 t3)])
+stepThread' (C.Unif (C.Seq t1 t2) t3) = return ([], [C.Seq t1 (C.Unif t2 t3)])
+stepThread' (C.Unif t1 t2)
+  | generalizedClash || generalizedMatch =
+      if generalizedClash
+       then return ([], [])
+       else return ([], [foldr C.Seq C.consOk
+                               (zipWith C.Unif (wsArgs t1) (wsArgs t2))])
+  where
+    generalizedClash =
+         (isLamL t1 && isLamL t2 && lLocation t1 /= lLocation t2)
+      || (isWeakStructure t1 && isLamL t2)
+      || (isLamL t1 && isWeakStructure t2)
+      || (isWeakStructure t1 && isWeakStructure t2 && wsType t1 /= wsType t2)
+    generalizedMatch =
+      isWeakStructure t1 && isWeakStructure t2 && wsType t1 == wsType t2
+    isLamL (C.LamL _ _ _)       = True
+    isLamL _                    = False
+    lLocation (C.LamL l _ _)    = l
+    lLocation _                 = error "Not an allocated abstraction"
+    isWeakStructure (C.Cons _)  = True
+    isWeakStructure (C.App t _) = isWeakStructure t
+    isWeakStructure _           = False
+    wsType (C.Cons c)           = (c, 0)
+    wsType (C.App t _)          = let (c, n) = wsType t in (c, n + 1)
+    wsType _                    = error "Not a weak structure"
+    wsArgs (C.Cons c)           = []
+    wsArgs (C.App t s)          = s : wsArgs t
+    wsArgs _                    = error "Not a weak structure"
+---- (End of experimental rules)
 stepThread' (C.Unif t1 t2)   = do (g1, p1) <- stepThread' t1
                                   (g2, p2) <- stepThread' t2
                                   return (g1 ++ g2, C.Unif <$> p1 <*> p2)
