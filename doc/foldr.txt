@@ -1,0 +1,61 @@
+
+
+data List a where
+  []  : List a
+  _∷_ : a → List a → List a
+
+foldr : (a → b → b) → b → List a → b
+foldr f z []       = z
+foldr f z (x ∷ xs) = f x (foldr f z xs)
+
+infixr 100 _∷_
+_++_ : List a → List a → List a
+
+
+-- Con la siguiente definición de append,
+-- (prefijo []) NO se cuelga:
+--   []       ++ ys = ys
+--   (x ∷ xs) ++ ys = x ∷ (xs ++ ys)
+
+-- Con la siguiente definición de append,
+-- (prefijo []) se cuelga.
+_++_ = foldr (\ x r ys → x ∷ r ys)
+             (\ ys → ys)
+
+prefijo : List a → List a
+prefijo (xs ++ ys) = xs
+
+main () = print (prefijo [])
+
+--------------------------
+
+El motivo es que la regla beta es call-by-value y esto
+traba los redexes clash.
+
+Ej.:
+
+  (\x.c)Omega ~ d
+
+no clashea.
+
+--------------------------
+F = \ x r ys -> x : r ys
+Z = \ ys -> ys
+
+  prefijo []
+= ([] ~ (xs ++ ys)) & xs
+= ([] ~ foldr F Z xs ys) & xs
+=   ([] ~ foldr F Z [] ys) & []
+  | ([] ~ foldr F Z (x : xs) ys) & (x : xs)
+=   ([] ~ ys) & []
+  | ([] ~ foldr F Z (x : xs) ys) & (x : xs)
+
+Lo que se cuelga es esto:
+  [] ~ foldr F Z (x : xs) ys
+= [] ~ F x (foldr F Z xs) ys
+= [] ~ F x (foldr F Z [] | foldr F Z (y : xs)) ys
+= [] ~ F x (Z | F y (foldr F Z xs)) ys
+=   ([] ~ F x Z ys)
+  | ([] ~ F x (F y (foldr F Z xs)) ys)
+= [] ~ F x (F y (foldr F Z xs)) ys
+
