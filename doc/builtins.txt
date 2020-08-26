@@ -24,3 +24,5 @@ data Int where
 data Char where
   'a', 'b', '\n' : Char
 
+data String where
+  

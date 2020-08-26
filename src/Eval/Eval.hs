@@ -139,6 +139,7 @@ isFreeP x (C.Alt t p) = isFree x t || isFreeP x p
 
 isValue :: C.Term -> Bool
 isValue (C.ConstInt _)   = True
+isValue (C.ConstChar _)  = True
 isValue (C.Var _)        = True
 isValue (C.LamL _ _ _)   = True
 isValue (C.Command _ ts) = all isValue ts
@@ -260,8 +261,10 @@ singletonSubst x v = M.insert x v M.empty
 
 mgu :: [Goal] -> M (Maybe Subst)
 mgu []         = return (Just M.empty)
-mgu (Goal (C.ConstInt n) (C.ConstInt m) : xs)
-  | n == m     = mgu xs
+mgu (Goal (C.ConstInt n1) (C.ConstInt n2) : xs)
+  | n1 == n2   = mgu xs
+mgu (Goal (C.ConstChar c1) (C.ConstChar c2) : xs)
+  | c1 == c2   = mgu xs
 mgu (Goal (C.Var x) (C.Var y) : xs)
   | x == y     = mgu xs
 mgu (Goal (C.Var x) v : xs)
