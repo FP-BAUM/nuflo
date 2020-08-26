@@ -24,5 +24,7 @@ data Int where
 data Char where
   'a', 'b', '\n' : Char
 
-data String where
-  
+data List a where
+  List:nil  : List a
+  List:cons : a -> List a -> List a
+

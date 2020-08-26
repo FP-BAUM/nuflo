@@ -12,7 +12,8 @@ import Syntax.Name(
          QName(..),
          primitiveAlternative, primitiveSequence, primitiveUnification,
          primitiveFail, primitiveUnit, primitiveTuple,
-         primitiveMain, primitivePrint, primitiveUnderscore
+         primitiveMain, primitivePrint, primitiveUnderscore,
+         primitiveListNil, primitiveListCons
        )
 import Syntax.GroupEquations(groupEquations)
 import Syntax.AST(
@@ -38,7 +39,12 @@ desugarProgram program = evalFS (desugarProgramM program) initialState
   }
 
 builtinConstructors :: [QName]
-builtinConstructors = [primitiveAlternative, primitiveTuple]
+builtinConstructors = [
+    primitiveAlternative,
+    primitiveTuple,
+    primitiveListNil,
+    primitiveListCons
+  ]
 
 data DesugarState = DesugarState {
     statePosition     :: Position,

@@ -16,7 +16,8 @@ import Syntax.Name(
          unqualifiedName,
          primitiveUnit,
          primitiveAlternative, primitiveSequence, primitiveUnification,
-         primitivePrint, primitiveMain, primitiveUnderscore, primitiveFail
+         primitivePrint, primitiveMain, primitiveUnderscore, primitiveFail,
+         primitiveList, primitiveListNil, primitiveListCons
        )
 import Syntax.AST(
          AnnProgram(..), Program,
@@ -542,6 +543,7 @@ inferTypeProgramM (Program decls) = do
   addTypeConstant primitiveUnit
   addTypeConstant primitiveInt
   addTypeConstant primitiveChar
+  addTypeConstant primitiveList
   -- Declare types of built-in functions
   let tA = Name "{a}"
   let tB = Name "{b}"
@@ -563,6 +565,14 @@ inferTypeProgramM (Program decls) = do
            (TypeScheme [tA] (ConstrainedType [] (TVar tA)))
   bindType primitiveFail
            (TypeScheme [tA] (ConstrainedType [] (TVar tA)))
+  bindType primitiveListNil
+           (TypeScheme [tA] (ConstrainedType []
+             (TApp (TVar primitiveList) (TVar tA))))
+  bindType primitiveListCons
+           (TypeScheme [tA] (ConstrainedType []
+             (tFun (TVar tA)
+               (tFun (TApp (TVar primitiveList) (TVar tA))
+                     (TApp (TVar primitiveList) (TVar tA))))))
   enterScopeM
   -- Infer
   mapM_ collectTypeDeclarationM decls
