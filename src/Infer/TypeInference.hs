@@ -214,7 +214,6 @@ bindToFreshTypeIfNotLocallyBound x = do
          then bindType x (TypeScheme [] (ConstrainedType [] primitiveMainType))
          else bindToFreshType x
 
-
 getAllBoundVars :: M (S.Set QName)
 getAllBoundVars = do
   state <- getFS
@@ -263,8 +262,7 @@ freshenVariables genVarNames constrainedType = do
     freshenConstrainedType :: TypeSubstitution ->  ConstrainedType
                            -> M ([PlaceholderId], ConstrainedType)
     freshenConstrainedType sub (ConstrainedType typeConstraints typ) = do
-      (plhs, remainingConstraints) <-
-        freshenConstraints sub typeConstraints
+      (plhs, remainingConstraints) <- freshenConstraints sub typeConstraints
       return (plhs,
               ConstrainedType remainingConstraints (substituteType sub typ))
     
@@ -960,38 +958,38 @@ unifyTypes t1 t2 = do
       cs <- getConstraintsForMetavar x
       mapM_ (\ (cls, plh) -> solveConstraint cls plh t) cs
 
-    solveConstraint :: QName -> PlaceholderId -> Type -> M ()
-    solveConstraint className plh (TMetavar metavar) = do
-      mq  <- getConstraintPlaceholder className metavar
+solveConstraint :: QName -> PlaceholderId -> Type -> M ()
+solveConstraint className plh (TMetavar metavar) = do
+  mq  <- getConstraintPlaceholder className metavar
+  pos <- currentPosition
+  case mq of
+    Just q  -> instantiatePlaceholder plh (EPlaceholder pos q)
+    Nothing -> setMetavarPlaceholder className metavar plh
+solveConstraint className plh typ =
+  case typeHead typ of
+    TVar typeConstructor -> do
       pos <- currentPosition
-      case mq of
-        Just q  -> instantiatePlaceholder plh (EPlaceholder pos q)
-        Nothing -> setMetavarPlaceholder className metavar plh
-    solveConstraint className plh typ =
-      case typeHead typ of
-        TVar typeConstructor -> do
-          pos <- currentPosition
-          inst <- lookupGlobalInstance className typeConstructor
-          -- Create placeholders plh1, ..., plhN, one per subgoal
-          plhs <- mapM (const freshPlaceholder)
-                       (globalInstanceConstraints inst)
-          -- Instantiate the main placeholder in
-          --   instance{className}{typeConstructor} plh1 ... plhN
-          instantiatePlaceholder plh
-              (foldl (EApp pos)
-                     (EVar pos (mangleInstanceName className typeConstructor))
-                     (map (EPlaceholder pos) plhs))
-          let typeArguments = typeArgs typ
-          let paramDict = M.fromList
-                            (zip (globalInstanceTypeParameters inst)
-                                 typeArguments)
-          -- Recursively solve subgoals
-          mapM_ (\ ((cls, param), plh) ->
-                  solveConstraint cls plh
-                    (M.findWithDefault undefined param paramDict)) 
-                (zip (globalInstanceConstraints inst) plhs)
-          return ()
-        _ -> error "(Head of constrained type must be a type variable)"
+      inst <- lookupGlobalInstance className typeConstructor
+      -- Create placeholders plh1, ..., plhN, one per subgoal
+      plhs <- mapM (const freshPlaceholder)
+                   (globalInstanceConstraints inst)
+      -- Instantiate the main placeholder in
+      --   instance{className}{typeConstructor} plh1 ... plhN
+      instantiatePlaceholder plh
+          (foldl (EApp pos)
+                 (EVar pos (mangleInstanceName className typeConstructor))
+                 (map (EPlaceholder pos) plhs))
+      let typeArguments = typeArgs typ
+      let paramDict = M.fromList
+                        (zip (globalInstanceTypeParameters inst)
+                             typeArguments)
+      -- Recursively solve subgoals
+      mapM_ (\ ((cls, param), plh) ->
+              solveConstraint cls plh
+                (M.findWithDefault undefined param paramDict)) 
+            (zip (globalInstanceConstraints inst) plhs)
+      return ()
+    _ -> error "(Head of constrained type must be a type variable)"
 
 type InferResult = (ConstrainedType, Expr)
 
@@ -1022,16 +1020,20 @@ inferTypeEVarM :: (Position -> QName -> Expr)
 inferTypeEVarM eVar pos x = do
   setPosition pos
   -- Lookup the type scheme.
-  TypeScheme gvars constrainedType   <- lookupType x
+  TypeScheme gvars constrainedType <- lookupType x
   -- Instantiate all general variables into fresh metavariables.
   -- Each general variable affected by a class constraint
   -- produces a new placeholder for the instance.
-  (plhs, constrainedType') <- freshenVariables gvars constrainedType
+  (plhsMeta, ConstrainedType cs typ) <- freshenVariables gvars constrainedType
+  -- Solve the remaining constraints
+  plhsRigid <- mapM (const freshPlaceholder) cs
+  mapM_ (\ (TypeConstraint cls typ, plh) -> do
+           solveConstraint cls plh typ) (zip cs plhsRigid)
   -- Return the variable applied to all the placeholders.
-  return (constrainedType',
+  return (ConstrainedType cs typ,
           foldl (\ e p -> EApp pos e (EPlaceholder pos p))
                 (eVar pos x)
-                plhs)
+                (plhsMeta ++ plhsRigid))
 
 -- e1 e2
 inferTypeEAppM :: Position -> Expr -> Expr -> M InferResult
