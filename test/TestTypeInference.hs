@@ -34,11 +34,16 @@ testProgramError description source expected =
 tests :: Test
 tests = TestSuite "TYPE INFERENCE" [
 
-  TestSuite "Int" [
+  TestSuite "Constants" [
 
-    testProgramOK "Simple integer" (unlines [
+    testProgramOK "Integers" (unlines [
       "start : Int",
       "start = 1"
+    ]),
+
+    testProgramOK "Characters" (unlines [
+      "start : Char",
+      "start = 'a'"
     ]),
 
     testProgramError "Reject non-int declared as int" (unlines [

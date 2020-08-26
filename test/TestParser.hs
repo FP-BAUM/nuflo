@@ -327,7 +327,11 @@ tests = TestSuite "PARSER" [
 
       testExprOK "Integer constant"
          "x = 42" 
-         (EInt () 42)
+         (EInt () 42),
+
+      testExprOK "Character constant"
+         "x = 'a'" 
+         (EChar () 'a')
 
     ],
 
