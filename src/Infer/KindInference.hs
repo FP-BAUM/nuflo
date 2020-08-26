@@ -150,6 +150,7 @@ inferKindProgramM (Program decls) = do
   bindKind primitiveList (KFun KType KType)
   addDataTypeM primitiveInt
   addDataTypeM primitiveChar
+  addDataTypeM primitiveList
   -- Infer kinds of all declarations
   mapM_ declareTypeM decls
   mapM_ inferKindDeclarationM decls
