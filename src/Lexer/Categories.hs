@@ -26,7 +26,6 @@ keywords = M.fromList [
   ("as", T_As),
   ("case", T_Case),
   ("class", T_Class),
-  (":", T_Colon),
   ("data", T_Data),
   ("fresh", T_Fresh),
   ("=", T_Eq),

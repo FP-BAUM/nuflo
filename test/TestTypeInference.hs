@@ -136,9 +136,9 @@ tests = TestSuite "TYPE INFERENCE" [
     testProgramOK "Pattern matching - binding" (unlines [
       "data Bool where",
       " true : Bool",
-      "data List a where",
-      " nil  : List a",
-      " cons : a -> List a -> List a",
+      "data LST a where",
+      " nil  : LST a",
+      " cons : a -> LST a -> LST a",
       "start : Bool",
       "start = (\\ (cons x xs) -> x) (cons true nil)"
     ]),
@@ -146,10 +146,10 @@ tests = TestSuite "TYPE INFERENCE" [
     testProgramError "Match type with arrow" (unlines [
       "data Bool where",
       " true : Bool",
-      "data List a where",
-      " nil  : List a",
-      " cons : a -> List a -> List a",
-      "start : List Bool",
+      "data LST a where",
+      " nil  : LST a",
+      " cons : a -> LST a -> LST a",
+      "start : LST Bool",
       "start = (\\ (cons x xs) -> x) (cons true nil)"
     ]) TypeErrorUnificationClash,
 
@@ -235,9 +235,9 @@ tests = TestSuite "TYPE INFERENCE" [
       "data Bool where",
       " true : Bool",
       " false : Bool",
-      "data List a where",
-      " nil  : List a",
-      " cons : a -> List a -> List a",
+      "data LST a where",
+      " nil  : LST a",
+      " cons : a -> LST a -> LST a",
       "start x = case x of",
       " (cons y ys) -> false",
       " nil         -> true"
@@ -247,9 +247,9 @@ tests = TestSuite "TYPE INFERENCE" [
       "data Bool where",
       " true : Bool",
       " false : Bool",
-      "data List a where",
-      " nil  : List a",
-      " cons : a -> List a -> List a",
+      "data LST a where",
+      " nil  : LST a",
+      " cons : a -> LST a -> LST a",
       "start x = case x of",
       " (cons y ys) -> false",
       " true        -> true"
@@ -259,9 +259,9 @@ tests = TestSuite "TYPE INFERENCE" [
       "data Bool where",
       " true : Bool",
       " false : Bool",
-      "data List a where",
-      " nil  : List a",
-      " cons : a -> List a -> List a",
+      "data LST a where",
+      " nil  : LST a",
+      " cons : a -> LST a -> LST a",
       "start x = case x of",
       " (cons y ys) -> nil",
       " nil         -> true"
@@ -354,18 +354,18 @@ tests = TestSuite "TYPE INFERENCE" [
     ]),
 
     testProgramOK "Partially applied type synonym" (unlines [
-      "data List a where { nil : List a ; cons : a -> List a -> List a }",
+      "data LST a where { nil : LST a ; cons : a -> LST a -> LST a }",
       "data Bool where { true : Bool }",
       "type FF f a b = f b -> f a",
-      "f : FF List Int Bool",
+      "f : FF LST Int Bool",
       "f (cons true nil) = cons 1 nil"
     ]),
 
     testProgramError "Partially applied type synonym - fail" (unlines [
-      "data List a where { nil : List a ; cons : a -> List a -> List a }",
+      "data LST a where { nil : LST a ; cons : a -> LST a -> LST a }",
       "data Bool where { true : Bool }",
       "type FF f a b = f b -> f a",
-      "f : FF List Int Bool",
+      "f : FF LST Int Bool",
       "f (cons 1 nil) = cons 1 nil"
     ]) TypeErrorUnificationClash,
 
@@ -464,14 +464,14 @@ tests = TestSuite "TYPE INFERENCE" [
       "data Bool where",
       "  True  : Bool",
       "  False : Bool",
-      "data List a where",
-      "  Nil   : List a",
-      "  Cons  : a -> List a -> List a",
+      "data LST a where",
+      "  Nil   : LST a",
+      "  Cons  : a -> LST a -> LST a",
       "class Eq a where",
       "  == : a -> a -> Bool",
       "instance Eq Bool where",
       "  == x y = True",
-      "instance Eq (List a) where",
+      "instance Eq (LST a) where",
       "  == Nil         Nil         = True",
       "  == (Cons x xs) (Cons y ys) = True"
     ]),

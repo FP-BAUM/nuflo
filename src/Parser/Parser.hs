@@ -10,7 +10,7 @@ import Syntax.Name(
          QName(..), readName, qualify, moduleNameFromQName,
          isWellFormedOperatorName, unqualifiedName, splitParts,
          allNameParts,
-         modulePRIM, moduleMain, arrowSymbol,
+         modulePRIM, moduleMain, arrowSymbol, colonSymbol,
          primitiveMain, primitivePrint, primitiveFail,
          primitiveArrow, primitiveUnit,
          primitiveInt, primitiveChar,
@@ -328,6 +328,7 @@ parseM = do
   declareOperatorM RightAssoc 60 primitiveAlternative
   declareOperatorM RightAssoc 70 primitiveSequence
   declareOperatorM RightAssoc 80 primitiveUnification
+  declareOperatorM RightAssoc 90 primitiveListCons
 
   -- Parse
   decls <- parseModules 
@@ -581,16 +582,12 @@ parseSignatures = parseSuite parseSignature
 parseSignature :: M Signature
 parseSignature = do
   pos  <- currentPosition
-  expr <- parseExpr
-  case expr of
-    EVar _ name -> do
-      declareQNameM name
-      match T_Colon
-      typ <- parseExpr
-      constraints <- parseOptionalConstraints
-      return $ Signature pos name typ constraints
-    _ -> failM ParseErrorExpectedNameForSignature
-                ("Expected a name. Got: " ++ show expr)
+  name <- parseAndResolveQName
+  declareQNameM name
+  matchColon
+  typ <- parseExpr
+  constraints <- parseOptionalConstraints
+  return $ Signature pos name typ constraints
 
 parseInstanceDeclaration :: M Declaration
 parseInstanceDeclaration = do
@@ -680,8 +677,8 @@ parseTypeSignatureOrValueDeclaration = do
                  t' <- peekType
                  putFS state
                  case t' of
-                   T_Colon -> parseTypeSignature
-                   _       -> parseValueDeclaration
+                   T_Id c | c == colonSymbol -> parseTypeSignature
+                   _                         -> parseValueDeclaration
     _ -> parseValueDeclaration
 
 parseTypeSignature :: M Declaration
@@ -734,6 +731,9 @@ parseQNames = parseSequence (peekIsAny [T_Semicolon, T_RBrace])
 matchArrow :: M ()
 matchArrow = match (T_Id arrowSymbol)
 
+matchColon :: M ()
+matchColon = match (T_Id colonSymbol)
+
 checkArrow :: M Bool
 checkArrow = do
   t <- peekType
@@ -784,7 +784,6 @@ isEndOfExpression = do
     T_Semicolon -> True
     T_Eq        -> True
     T_Of        -> True
-    T_Colon     -> True
     T_Where     -> True
     _           -> False
 

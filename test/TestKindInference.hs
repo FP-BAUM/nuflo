@@ -74,11 +74,11 @@ tests = TestSuite "KIND INFERENCE" [
   ]) KindErrorConstructorShouldReturnDataType,
 
   testProgramOK "Allow type signature of base kind (*)" (unlines [
-    "data List a where",
+    "data LST a where",
     "x : Int",
-    "y : List Int",
-    "z : List (List Int)",
-    "f : Int → List (List Int) → List Int"
+    "y : LST Int",
+    "z : LST (LST Int)",
+    "f : Int → LST (LST Int) → LST Int"
   ]),
 
   testProgramError "Reject type signature with malformed type" (unlines [
@@ -86,8 +86,8 @@ tests = TestSuite "KIND INFERENCE" [
   ]) KindErrorMalformedType,
 
   testProgramError "Reject type signature not of base kind (*)" (unlines [
-    "data List a where",
-    "x : List"
+    "data LST a where",
+    "x : LST"
   ]) KindErrorUnifyClash,
 
   testProgramError "Reject type signature by occurs check (1)" (unlines [
@@ -101,22 +101,22 @@ tests = TestSuite "KIND INFERENCE" [
   ]) KindErrorUnifyOccursCheck,
 
   testProgramOK "Allow free variables in signatures" (unlines [
-    "data List a where",
-    "  []   : List a",
-    "  _::_ : a → List a → List a",
-    "map : (a → b) → List a → List b"
+    "data LST a where",
+    "  NIL  : LST a",
+    "  _::_ : a → LST a → LST a",
+    "map : (a → b) → LST a → LST b"
   ]),
 
   testProgramOK "Check kinds of type declarations (1)" (unlines [
-    "data List a where",
-    "type LL a = List (List a)",
+    "data LST a where",
+    "type LL a = LST (LST a)",
     "x : LL (LL Int)",
     "y : LL (LL (Int → Int) → LL (Int → Int))"
   ]),
 
   testProgramError "Check kinds of type declarations (2)" (unlines [
-    "data List a where",
-    "type LL a = List (List a)",
+    "data LST a where",
+    "type LL a = LST (LST a)",
     "x : LL (LL (_→_ Int))"
   ]) KindErrorUnifyClash,
 
@@ -184,21 +184,21 @@ tests = TestSuite "KIND INFERENCE" [
   ]),
 
   testProgramError "Check kinds of constraints (4)" (unlines [
-    "data List a where",
-    "  []  : List a",
-    "  _∷_ : a → List a → List a",
+    "data LST a where",
+    "  NIL : LST a",
+    "  _∷_ : a → LST a → LST a",
     "class Monad m where",
     "  return : a → m a",
-    "x : List m    {Monad m}"
+    "x : LST m    {Monad m}"
   ]) KindErrorUnifyClash,
 
   testProgramOK "Check kinds of constraints (5)" (unlines [
-    "data List a where",
-    "  []  : List a",
-    "  _∷_ : a → List a → List a",
+    "data LST a where",
+    "  NIL : LST a",
+    "  _∷_ : a → LST a → LST a",
     "class Monad m where",
     "  return : a → m a",
-    "mapM : m (List a) → List (m a)   {Monad m}"
+    "mapM : m (LST a) → LST (m a)   {Monad m}"
   ]),
 
   testProgramOK "Empty instance of empty class" (unlines [
@@ -219,31 +219,31 @@ tests = TestSuite "KIND INFERENCE" [
 
   testProgramError "Check instance kinds (1)" (unlines [
     "data Bool where",
-    "data List a where",
-    "  _∷_ : a → List a → List a",
+    "data LST a where",
+    "  _∷_ : a → LST a → LST a",
     "class Eq a where",
     "  _==_ : a → a → Bool",
-    "instance Eq List where"
+    "instance Eq LST where"
   ]) KindErrorUnifyClash,
 
   testProgramOK "Check instance kinds (2)" (unlines [
     "data Bool where",
-    "data List a where",
-    "  _∷_ : a → List a → List a",
+    "data LST a where",
+    "  _∷_ : a → LST a → LST a",
     "class Eq a where",
     "  _==_ : a → a → Bool",
     "instance Eq Bool where",
-    "instance Eq (List a) {Eq a} where"
+    "instance Eq (LST a) {Eq a} where"
   ]),
 
   testProgramError "Check instance kinds (3)" (unlines [
     "data Bool where",
-    "data List a where",
-    "  _∷_ : a → List a → List a",
+    "data LST a where",
+    "  _∷_ : a → LST a → LST a",
     "class Eq a where",
     "  _==_ : a → a → Bool",
     "instance Eq Bool where",
-    "instance Eq (List a) {Eq List} where"
+    "instance Eq (LST a) {Eq LST} where"
   ]) KindErrorUnifyClash,
 
   testProgramError "Reject instance declaration with synonym" (unlines [
@@ -255,14 +255,14 @@ tests = TestSuite "KIND INFERENCE" [
 
   testProgramError "Reject argument in instance declaration" (unlines [
     "data Bool where",
-    "data List a where",
+    "data LST a where",
     "class Eq a where",
-    "instance Eq (List Bool) where"
+    "instance Eq (LST Bool) where"
   ]) KindErrorInstanceArgCannotBeDatatype,
 
   testProgramError "Check kinds inside let/where" (unlines [
-    "data List a where",
-    "main = x where x : List"
+    "data LST a where",
+    "main = x where x : LST"
   ]) KindErrorUnifyClash,
 
   testProgramOK "Empty program" ""

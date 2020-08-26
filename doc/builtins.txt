@@ -1,20 +1,18 @@
 
-_->_ : * -> * -> *
+infixr 50 _->_ : * -> * -> *
 
 =====================================
 
-_&_ : a -> b -> b
-
-fail : a
-
-_|_ : a -> a -> a
-
-_~_ : a -> a -> ()
+infixr 60 _|_ : a -> a -> a
+infixr 70 _&_ : a -> b -> b
+infixr 80 _~_ : a -> a -> ()
 
 data () where
   () : ()
 
 print : () -> ()
+
+fail : a
 
 =====================================
 
@@ -24,7 +22,8 @@ data Int where
 data Char where
   'a', 'b', '\n' : Char
 
+infixr 90 _:_
 data List a where
-  List:nil  : List a
-  List:cons : a -> List a -> List a
+  []  : List a
+  _:_ : a -> List a -> List a
 

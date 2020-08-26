@@ -3,7 +3,7 @@ module Syntax.Name(
          splitParts, allNameParts, nameArity,
          isWellFormedName, isWellFormedOperatorName,
          QName(..), readName, qualify, moduleNameFromQName, unqualifiedName,
-         modulePRIM, moduleMain, arrowSymbol,
+         modulePRIM, moduleMain, arrowSymbol, colonSymbol,
          primitiveArrow, primitiveUnit,
          primitiveInt, primitiveChar,
          primitiveAlternative, primitiveSequence, primitiveUnification, 
@@ -97,6 +97,9 @@ moduleMain = Name "Main"
 arrowSymbol :: String
 arrowSymbol = "→"
 
+colonSymbol :: String
+colonSymbol = ":"
+
 primitiveArrow :: QName
 primitiveArrow = qualify modulePRIM ("_" ++ arrowSymbol ++ "_")
 
@@ -140,8 +143,8 @@ primitiveList :: QName
 primitiveList = qualify modulePRIM "List"
 
 primitiveListNil :: QName
-primitiveListNil = qualify modulePRIM "List:nil"
+primitiveListNil = qualify modulePRIM "[]"
 
 primitiveListCons :: QName
-primitiveListCons = qualify modulePRIM "List:cons"
+primitiveListCons = qualify modulePRIM "_:_"
 
