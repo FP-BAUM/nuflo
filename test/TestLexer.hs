@@ -80,6 +80,27 @@ tests = TestSuite "LEXER" [
       T_RBrace
     ],
 
+  -- Character constants
+  testOK "Characters"
+    "'a' 'b' '\\\\' '\\\'' '\\\"'"
+ -- '\\a' '\\b' '\\f' '\\n' '\\r' '\\t' '\\v'
+    [
+      T_LBrace,
+      T_Char 'a', T_Char 'b', T_Char '\\', T_Char '\'',
+      T_Char '\"',
+      -- T_Char '\a', T_Char '\b', T_Char '\f', T_Char '\n',
+      -- T_Char '\r', T_Char '\t', T_Char '\v',
+      T_RBrace
+    ],
+
+  testError "Invalid escape sequence"
+    "'\\z'"
+    LexerErrorInvalidEscapeSequence,
+
+  testError "Invalid character constant"
+    "'a"
+    LexerErrorInvalidCharacterConstant,
+
   -- Identifiers
   testOK "Identifiers"
     "_ a _a a_ _a_ a_a a_a_ _a_a :a a:b b: if.then.else. == - - ∀|- 1a" 

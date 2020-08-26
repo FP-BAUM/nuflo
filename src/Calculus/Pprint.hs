@@ -15,11 +15,12 @@ pprintInNamespace ns t = pp ns t
 
 pp :: Namespace -> Term -> String
 -- Values
-pp ns (Var x)      = ppQName ns x
-pp ns (Cons c)     = ppQName ns c
-pp ns (Num n)      = show n
-pp ns (LamL l _ _) = "{closure}"
-pp ns t@(App _ _)  =
+pp ns (Var x)       = ppQName ns x
+pp ns (Cons c)      = ppQName ns c
+pp ns (ConstInt n)  = show n
+pp ns (ConstChar c) = show c
+pp ns (LamL l _ _)  = "{closure}"
+pp ns t@(App _ _)   =
   let (f, xs) = splitArgs t in
     case showOpAsMixfix ns f xs of
       Just res -> res
@@ -114,17 +115,18 @@ parenthesizationThresholds n NonAssoc   p = replicate n (p + 1)
 --
 precedenceLevel :: Namespace -> Term -> Precedence -> Precedence
 -- Values
-precedenceLevel ns (Var x)      mx = mx
-precedenceLevel ns (Cons c)     mx = mx
-precedenceLevel ns (Num n)      mx = mx
-precedenceLevel ns (LamL l _ _) mx = mx
-precedenceLevel ns t@(App _ _)  mx =
+precedenceLevel ns (Var x)       mx = mx
+precedenceLevel ns (Cons c)      mx = mx
+precedenceLevel ns (ConstInt _)  mx = mx
+precedenceLevel ns (ConstChar _) mx = mx
+precedenceLevel ns (LamL l _ _)  mx = mx
+precedenceLevel ns t@(App _ _)   mx =
   let (f, xs) = splitArgs t in
     case mixfixOpPrecedenceLevel ns f xs of
       Just res -> res
       Nothing  -> mx
 -- Stuck terms
-precedenceLevel ns _            mx = mx
+precedenceLevel ns _             mx = mx
 
 mixfixOpPrecedenceLevel :: Namespace -> Term -> [Term] -> Maybe Precedence
 mixfixOpPrecedenceLevel ns (Var f)  args = mixfixNamePrecedenceLevel ns f args

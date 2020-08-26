@@ -4,7 +4,8 @@ module Syntax.Name(
          isWellFormedName, isWellFormedOperatorName,
          QName(..), readName, qualify, moduleNameFromQName, unqualifiedName,
          modulePRIM, moduleMain, arrowSymbol,
-         primitiveArrow, primitiveUnit, primitiveInt,
+         primitiveArrow, primitiveUnit,
+         primitiveInt, primitiveChar,
          primitiveAlternative, primitiveSequence, primitiveUnification, 
          primitiveTuple, primitiveUnderscore,
          primitiveMain, primitivePrint, primitiveFail, primitiveOk
@@ -103,6 +104,9 @@ primitiveUnit = qualify modulePRIM "()"
 
 primitiveInt :: QName
 primitiveInt = qualify modulePRIM "Int"
+
+primitiveChar :: QName
+primitiveChar = qualify modulePRIM "Char"
 
 primitiveAlternative :: QName
 primitiveAlternative = qualify modulePRIM ("_|_")

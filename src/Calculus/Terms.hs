@@ -18,7 +18,8 @@ data PrimitiveCommand = Print
 
 data Term = Var QName
           | Cons QName
-          | Num Integer
+          | ConstInt Integer
+          | ConstChar Char
           | Fresh QName Term
           | Lam QName Program
           | LamL Location QName Program
@@ -43,9 +44,10 @@ lam :: QName -> Term -> Term
 lam x t = Lam x (Alt t Fail)
 
 applySubst :: M.Map QName Term -> Term -> Term
-applySubst subst (Var x)     = M.findWithDefault (Var x) x subst
-applySubst subst (Cons c)    = Cons c
-applySubst subst (Num n)     = Num n
+applySubst subst (Var x)       = M.findWithDefault (Var x) x subst
+applySubst subst (Cons c)      = Cons c
+applySubst subst (ConstInt n)  = ConstInt n
+applySubst subst (ConstChar n) = ConstChar n
 applySubst subst (Fresh x t) =
   Fresh x $ applySubst (M.insert x (Var x) subst) t
 applySubst subst (Lam x p) =
@@ -73,7 +75,8 @@ applySubstP subst (Alt t p) = Alt (applySubst subst t)
 freeVariables :: Term -> S.Set QName
 freeVariables (Var name)          = S.singleton name
 freeVariables (Cons name)         = S.empty
-freeVariables (Num n)             = S.empty
+freeVariables (ConstInt _)        = S.empty
+freeVariables (ConstChar _)       = S.empty
 freeVariables (Fresh name t)      = freeVariables t S.\\ S.singleton name
 freeVariables (Lam name p)        = freeVariablesP p S.\\ S.singleton name
 freeVariables (LamL loc name p)   = freeVariablesP p S.\\ S.singleton name

@@ -94,7 +94,8 @@ splitNormalForms (t : terms) =
 
 isNormalForm :: C.Term -> Bool
 isNormalForm (C.Var _)         = True
-isNormalForm (C.Num _)         = True
+isNormalForm (C.ConstInt _)    = True
+isNormalForm (C.ConstChar _)   = True
 isNormalForm (C.Cons _)        = True
 isNormalForm (C.Lam _ _)       = False
 isNormalForm (C.LamL _ _ _)    = True
@@ -120,7 +121,8 @@ programToList (C.Alt t p) = t : programToList p
 isFree :: QName -> C.Term -> Bool
 isFree x (C.Var y)          = x == y
 isFree x (C.Cons _)         = False
-isFree x (C.Num _)          = False
+isFree x (C.ConstInt _)     = False
+isFree x (C.ConstChar _)    = False
 isFree x (C.Fresh y t)      = x /= y && isFree x t
 isFree x (C.Lam y p)        = x /= y && isFreeP x p
 isFree x (C.LamL _ y p)     = x /= y && isFreeP x p
@@ -136,7 +138,7 @@ isFreeP x C.Fail      = False
 isFreeP x (C.Alt t p) = isFree x t || isFreeP x p
 
 isValue :: C.Term -> Bool
-isValue (C.Num _)        = True
+isValue (C.ConstInt _)   = True
 isValue (C.Var _)        = True
 isValue (C.LamL _ _ _)   = True
 isValue (C.Command _ ts) = all isValue ts
@@ -162,33 +164,34 @@ stepThread term = do
     Just subst -> mapM (applySubst subst) terms
 
 stepThread' :: C.Term -> M ([Goal], [C.Term])
-stepThread' e@(C.Var _)      = return ([], [e])
-stepThread' e@(C.Cons _)     = return ([], [e])
-stepThread' e@(C.Num _)      = return ([], [e])
-stepThread' (C.Fresh x t)    = do x' <- freshVar
-                                  t' <- renameVar t x x'
-                                  stepThread' t'
-stepThread' (C.Lam x p)      = do l <- freshLocation
-                                  return ([], [C.LamL l x p])
-stepThread' e@(C.LamL _ _ _) = do l <- freshLocation
-                                  return ([], [e])
+stepThread' e@(C.Var _)       = return ([], [e])
+stepThread' e@(C.Cons _)      = return ([], [e])
+stepThread' e@(C.ConstInt _)  = return ([], [e])
+stepThread' e@(C.ConstChar _) = return ([], [e])
+stepThread' (C.Fresh x t)     = do x' <- freshVar
+                                   t' <- renameVar t x x'
+                                   stepThread' t'
+stepThread' (C.Lam x p)       = do l <- freshLocation
+                                   return ([], [C.LamL l x p])
+stepThread' e@(C.LamL _ _ _)  = do l <- freshLocation
+                                   return ([], [e])
 stepThread' (C.App (C.LamL _ x p) v)
-  | isValue v                = do
+  | isValue v                 = do
     p' <- applySubstP (singletonSubst x v) p
     return ([], programToList p')
-stepThread' e@(C.Fix x t)    = do
+stepThread' e@(C.Fix x t)     = do
   t' <- applySubst (singletonSubst x e) t
   return ([], [t'])
-stepThread' (C.App t1 t2)    = do (g1, p1) <- stepThread' t1
-                                  (g2, p2) <- stepThread' t2
-                                  return (g1 ++ g2, C.App <$> p1 <*> p2)
+stepThread' (C.App t1 t2)     = do (g1, p1) <- stepThread' t1
+                                   (g2, p2) <- stepThread' t2
+                                   return (g1 ++ g2, C.App <$> p1 <*> p2)
 stepThread' (C.Seq v t)
-  | isValue v                = stepThread' t
-stepThread' (C.Seq t1 t2)    = do (g1, p1) <- stepThread' t1
-                                  (g2, p2) <- stepThread' t2
-                                  return (g1 ++ g2, C.Seq <$> p1 <*> p2)
+  | isValue v                 = stepThread' t
+stepThread' (C.Seq t1 t2)     = do (g1, p1) <- stepThread' t1
+                                   (g2, p2) <- stepThread' t2
+                                   return (g1 ++ g2, C.Seq <$> p1 <*> p2)
 stepThread' (C.Unif v w)
-  | isValue v && isValue w   = return ([Goal v w], [C.consOk])
+  | isValue v && isValue w    = return ([Goal v w], [C.consOk])
 ---- (Experimental rules)
 stepThread' (C.Unif t1 (C.Seq t2 t3)) = return ([], [C.Seq t2 (C.Unif t1 t3)])
 stepThread' (C.Unif (C.Seq t1 t2) t3) = return ([], [C.Seq t1 (C.Unif t2 t3)])
@@ -235,8 +238,8 @@ stepThread' (C.Command f ts) = do
 
 -- Note: all the arguments are already values
 applyPrimitiveFunction :: C.PrimitiveFunction -> [C.Term] -> M [C.Term]
-applyPrimitiveFunction C.IntAdd [C.Num x, C.Num y] = do
-  return [C.Num (x + y)]
+applyPrimitiveFunction C.IntAdd [C.ConstInt x, C.ConstInt y] = do
+  return [C.ConstInt (x + y)]
 --applyPrimitiveFunction C.Print [v] = do
 --  putStrLnEM (show v)
 --  return [C.consOk]
@@ -257,7 +260,7 @@ singletonSubst x v = M.insert x v M.empty
 
 mgu :: [Goal] -> M (Maybe Subst)
 mgu []         = return (Just M.empty)
-mgu (Goal (C.Num n) (C.Num m) : xs)
+mgu (Goal (C.ConstInt n) (C.ConstInt m) : xs)
   | n == m     = mgu xs
 mgu (Goal (C.Var x) (C.Var y) : xs)
   | x == y     = mgu xs
@@ -287,11 +290,12 @@ mgu (Goal v w : xs) =
      _ -> return Nothing
 
 applySubst :: Subst -> C.Term -> M C.Term
-applySubst subst var@(C.Var name) = do
+applySubst subst var@(C.Var name)  = do
   return $ M.findWithDefault var name subst
-applySubst subst const@(C.Cons _) = return const
-applySubst subst num@(C.Num _)    = return num
-applySubst subst (C.Fresh x term) = do
+applySubst subst e@(C.Cons _)      = return e
+applySubst subst e@(C.ConstInt _)  = return e
+applySubst subst e@(C.ConstChar _) = return e
+applySubst subst (C.Fresh x term)  = do
   x' <- freshVar
   term' <- applySubst (M.insert x (C.Var x') subst) term
   return $ C.Fresh x' term'

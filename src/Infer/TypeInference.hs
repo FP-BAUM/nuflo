@@ -40,7 +40,7 @@ import Calculus.Types(
          substituteType,
          typeSchemeMetavariables, typeSchemeFreeVariables,
          constrainedTypeFreeVariables,
-         tFun, tInt, typeHead, typeArgs, unTVar
+         tFun, tInt, tChar, typeHead, typeArgs, unTVar
        )
 import Syntax.GroupEquations(groupEquations)
 
@@ -986,6 +986,7 @@ type InferResult = (ConstrainedType, Expr)
 
 inferTypeExprM :: Expr -> M InferResult
 inferTypeExprM (EInt pos n)               = inferTypeEIntM pos n
+inferTypeExprM (EChar pos c)              = inferTypeECharM pos c
 inferTypeExprM (EVar pos x)               = inferTypeEVarM EVar pos x
 inferTypeExprM (EUnboundVar pos x)        = inferTypeEVarM EUnboundVar pos x
 inferTypeExprM (EApp pos e1 e2)           = inferTypeEAppM pos e1 e2
@@ -999,6 +1000,10 @@ inferTypeExprM (EPlaceholder _ _)         =
 -- Integer constant (n)
 inferTypeEIntM :: Position -> Integer -> M InferResult
 inferTypeEIntM pos n = return (ConstrainedType [] tInt, EInt pos n)
+
+-- Character constant (n)
+inferTypeECharM :: Position -> Char -> M InferResult
+inferTypeECharM pos n = return (ConstrainedType [] tChar, EChar pos n)
 
 -- Variable (x)
 inferTypeEVarM :: (Position -> QName -> Expr)

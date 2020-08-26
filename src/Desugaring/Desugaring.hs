@@ -247,7 +247,8 @@ desugarExpr (EVar _ x)
               then C.Cons x
               else C.Var x
 desugarExpr (EUnboundVar _ x) = return $ C.Var x
-desugarExpr (EInt _ x)        = return $ C.Num x
+desugarExpr (EInt _ x)        = return $ C.ConstInt x
+desugarExpr (EChar _ x)       = return $ C.ConstChar x
 desugarExpr (EApp _ e1 e2)    = do t1 <- desugarExpr e1
                                    t2 <- desugarExpr e2
                                    return $ C.App t1 t2

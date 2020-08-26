@@ -12,7 +12,8 @@ import Syntax.Name(
          allNameParts,
          modulePRIM, moduleMain, arrowSymbol,
          primitiveMain, primitivePrint, primitiveFail,
-         primitiveArrow, primitiveUnit, primitiveInt,
+         primitiveArrow, primitiveUnit,
+         primitiveInt, primitiveChar,
          primitiveAlternative, primitiveSequence, primitiveUnification,
          primitiveUnderscore
        )
@@ -313,6 +314,7 @@ parseM = do
   enterModule modulePRIM
   exportAllNamesFromModuleM modulePRIM
   declareQNameM primitiveInt
+  declareQNameM primitiveChar
   declareQNameM primitiveUnderscore
   declareQNameM primitiveMain
   declareQNameM primitivePrint
@@ -1017,6 +1019,9 @@ parseAtom = do
     T_Int n  -> do pos <- currentPosition
                    getToken
                    return $ EInt pos n
+    T_Char c -> do pos <- currentPosition
+                   getToken
+                   return $ EChar pos c
     T_LParen -> do pos <- currentPosition
                    match T_LParen
                    t <- peekType

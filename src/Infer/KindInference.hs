@@ -301,6 +301,7 @@ inferKindExpressionM :: Expr -> M ()
 inferKindExpressionM (EVar _ _)           = return ()
 inferKindExpressionM (EUnboundVar _ _)    = return ()
 inferKindExpressionM (EInt _ _)           = return ()
+inferKindExpressionM (EChar _ _)          = return ()
 inferKindExpressionM (EApp _ f x)         = do inferKindExpressionM f
                                                inferKindExpressionM x
 inferKindExpressionM (ELambda _ x b)      = inferKindExpressionM b

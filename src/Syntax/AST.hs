@@ -98,6 +98,7 @@ data AnnExpr a =
     EVar a QName                           -- variable
   | EUnboundVar a QName                    -- force unbound variable
   | EInt a Integer                         -- integer constant
+  | EChar a Char                           -- character constant
   | EApp a (AnnExpr a) (AnnExpr a)         -- application
   | ELambda a (AnnExpr a) (AnnExpr a)      -- lambda
   | ELet a [AnnDeclaration a] (AnnExpr a)  -- let
@@ -110,6 +111,7 @@ exprAnnotation :: AnnExpr a -> a
 exprAnnotation (EVar a _)         = a
 exprAnnotation (EUnboundVar a _)  = a
 exprAnnotation (EInt a _)         = a
+exprAnnotation (EChar a _)        = a
 exprAnnotation (EApp a _ _)       = a
 exprAnnotation (ELambda a _ _)    = a
 exprAnnotation (ELet a _ _)       = a
@@ -195,6 +197,7 @@ instance EraseAnnotations AnnExpr where
   eraseAnnotations (EVar _ q)          = EVar () q
   eraseAnnotations (EUnboundVar _ q)   = EUnboundVar () q
   eraseAnnotations (EInt _ n)          = EInt () n
+  eraseAnnotations (EChar _ n)         = EChar () n
   eraseAnnotations (EApp _ e1 e2)      = EApp () (eraseAnnotations e1)
                                                  (eraseAnnotations e2)
   eraseAnnotations (ELambda _ param e) = ELambda ()
@@ -233,6 +236,7 @@ exprFreeVariables bound (EVar _ x)        = if x `S.member` bound
                                              else S.fromList [x]
 exprFreeVariables bound (EUnboundVar _ x) = S.fromList [x]
 exprFreeVariables bound (EInt _ _)        = S.empty
+exprFreeVariables bound (EChar _ _)       = S.empty
 exprFreeVariables bound (EApp _ e1 e2)    = exprFreeVariables bound e1
                                             `S.union`
                                             exprFreeVariables bound e2
@@ -344,6 +348,7 @@ instance Show (AnnExpr a) where
   show (EVar _ qname)         = show qname
   show (EUnboundVar _ qname)  = "." ++ show qname
   show (EInt _ n)             = show n
+  show (EChar _ c)            = show c
   show (EApp _ f x)           = "(" ++ show f ++ " " ++ show x ++ ")"
   show (ELambda _ param body) =
     "\\ " ++ show param ++ " -> " ++ show body
@@ -401,6 +406,7 @@ instance UnfoldPlaceholders AnnExpr where
   unfoldPlaceholders h e@(EVar _ _)        = return e
   unfoldPlaceholders h e@(EUnboundVar _ _) = return e
   unfoldPlaceholders h e@(EInt _ _)        = return e
+  unfoldPlaceholders h e@(EChar _ _)       = return e
   unfoldPlaceholders h (EApp a e1 e2)      =
     EApp a <$> unfoldPlaceholders h e1
            <*> unfoldPlaceholders h e2
