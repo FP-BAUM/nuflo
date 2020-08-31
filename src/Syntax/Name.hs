@@ -1,10 +1,15 @@
 
 module Syntax.Name(
-         splitParts, allNameParts,
+         splitParts, allNameParts, nameArity,
          isWellFormedName, isWellFormedOperatorName,
          QName(..), readName, qualify, moduleNameFromQName, unqualifiedName,
-         modulePRIM, moduleMain, arrowSymbol, primitiveArrow, primitiveInt,
-         primitiveAlternative, primitiveTuple
+         modulePRIM, moduleMain, arrowSymbol, colonSymbol,
+         primitiveArrow, primitiveUnit,
+         primitiveInt, primitiveChar,
+         primitiveAlternative, primitiveSequence, primitiveUnification, 
+         primitiveTuple, primitiveUnderscore,
+         primitiveMain, primitivePrint, primitiveFail, primitiveOk,
+         primitiveList, primitiveListNil, primitiveListCons
        ) where
 
 import Lexer.Categories(isKeyword, isInteger)
@@ -20,6 +25,9 @@ splitParts (x : xs)   = let (p : ps) = splitParts xs in
 
 allNameParts :: String -> [String]
 allNameParts id = id : (filter (/= "_") (splitParts id))
+
+nameArity :: String -> Int
+nameArity name = length (filter (== "_") (splitParts name))
 
 -- A name part is well-formed if it is not a keyword nor an integer.
 isWellFormedNamePart :: String -> Bool
@@ -89,21 +97,54 @@ moduleMain = Name "Main"
 arrowSymbol :: String
 arrowSymbol = "→"
 
-intSymbol :: String
-intSymbol = "Int"
-
-alternativeSymbol :: String
-alternativeSymbol  = "<>"
+colonSymbol :: String
+colonSymbol = ":"
 
 primitiveArrow :: QName
 primitiveArrow = qualify modulePRIM ("_" ++ arrowSymbol ++ "_")
 
+primitiveUnit :: QName
+primitiveUnit = qualify modulePRIM "()"
+
 primitiveInt :: QName
-primitiveInt = qualify modulePRIM intSymbol
+primitiveInt = qualify modulePRIM "Int"
+
+primitiveChar :: QName
+primitiveChar = qualify modulePRIM "Char"
 
 primitiveAlternative :: QName
-primitiveAlternative = qualify modulePRIM ("_" ++ alternativeSymbol ++ "_")
+primitiveAlternative = qualify modulePRIM ("_|_")
+
+primitiveSequence :: QName
+primitiveSequence = qualify modulePRIM ("_&_")
+
+primitiveUnification :: QName
+primitiveUnification = qualify modulePRIM ("_~_")
 
 primitiveTuple :: QName
 primitiveTuple = qualify modulePRIM "{Tuple}"
+
+primitiveUnderscore :: QName
+primitiveUnderscore = qualify modulePRIM "_"
+
+primitiveMain :: QName
+primitiveMain = qualify modulePRIM "main"
+
+primitivePrint :: QName
+primitivePrint = qualify modulePRIM "print"
+
+primitiveFail :: QName
+primitiveFail = qualify modulePRIM "fail"
+
+primitiveOk :: QName
+primitiveOk = qualify modulePRIM "ok"
+
+primitiveList :: QName
+primitiveList = qualify modulePRIM "List"
+
+primitiveListNil :: QName
+primitiveListNil = qualify modulePRIM "[]"
+
+primitiveListCons :: QName
+primitiveListCons = qualify modulePRIM "_:_"
 

@@ -15,6 +15,7 @@ data Token = Token {
 data TokenType =
     T_EOF
   | T_Int Integer
+  | T_Char Char
   | T_Id String
   -- Keywords
   | T_As
@@ -33,6 +34,7 @@ data TokenType =
   | T_Lambda
   | T_Let
   | T_Module
+  | T_Mutual
   | T_Of
   | T_Type
   | T_Where

@@ -49,6 +49,7 @@ tokenizeM ""                           = return []
 tokenizeM cs@(c : _) | isWhitespace c  = ignoreWhitespace cs
 tokenizeM cs@('-' : '-' : _)           = ignoreSingleLineComment cs
 tokenizeM cs@('{' : '-' : _)           = ignoreMultiLineComment cs
+tokenizeM cs@('\'' : _)                = readChar cs
 tokenizeM cs@(c : _) | isPunctuation c = readPunctuation cs
 tokenizeM cs@(c : _) | isIdent c       = readName cs
 tokenizeM (c : _)                      =
@@ -87,6 +88,34 @@ ignoreMultiLineComment cs = rec 0 cs
       consumeChar c
       rec n cs
 
+readChar :: String -> M [Token]
+readChar []                     = error "No char."
+readChar ('\'' : '\\' : c : '\'' : cs) =
+  case lookup c escapeChars of
+    Just c' -> do
+      start <- currentPosition
+      consumeString ['\'', '\\', c, '\'']
+      end <- currentPosition
+      let t = Token start end (T_Char c')
+      ts <- tokenizeM cs
+      return (t : ts)
+    Nothing -> failM LexerErrorInvalidEscapeSequence
+                     ("Invalid escape sequence: " ++ [c])
+  where
+    escapeChars = [
+      ('\\', '\\'), ('\'', '\''), ('\"', '\"'), ('a', '\a'), ('b', '\b'),
+      ('f', '\f'), ('n', '\n'), ('r', '\r'), ('t', '\t'), ('v', '\v')
+     ]
+readChar ('\'' : c : '\'' : cs) = do
+  start <- currentPosition
+  consumeString ['\'', c, '\'']
+  end <- currentPosition
+  let t = Token start end (T_Char c)
+  ts <- tokenizeM cs
+  return (t : ts)
+readChar _ = failM LexerErrorInvalidCharacterConstant
+                   "Invalid character constant."
+
 readPunctuation :: String -> M [Token]
 readPunctuation []       = error "No punctuation."
 readPunctuation (c : cs) = do
@@ -94,8 +123,8 @@ readPunctuation (c : cs) = do
   consumeChar c
   end <- currentPosition
   let t = Token start end (punctuationType c)
-   in do ts <- tokenizeM cs
-         return (t : ts)
+  ts <- tokenizeM cs
+  return (t : ts)
 
 readName :: String -> M [Token]
 readName cs = do

@@ -55,7 +55,7 @@ tests = TestSuite "LEXER" [
   testOK "Keywords"
     (unlines [
       "{",
-      "as case class : data fresh{} = import",
+      "as case class data fresh{} = import",
       "in", -- closing layout keyword (must be alone)
       "infix infixl infixr",
       "instance \\ λ let{} module of{} type where{}",
@@ -63,7 +63,7 @@ tests = TestSuite "LEXER" [
     ])
     [
       T_LBrace,
-      T_As, T_Case, T_Class, T_Colon, T_Data, T_Fresh, T_LBrace, T_RBrace,
+      T_As, T_Case, T_Class, T_Data, T_Fresh, T_LBrace, T_RBrace,
       T_Eq, T_Import, T_In,
       T_Infix, T_Infixl, T_Infixr, T_Instance, T_Lambda, T_Lambda,
       T_Let, T_LBrace, T_RBrace, T_Module, T_Of, T_LBrace, T_RBrace,
@@ -79,6 +79,27 @@ tests = TestSuite "LEXER" [
       T_Int 0, T_Int 1, T_Int 42, T_Int 1, T_Int 10,
       T_RBrace
     ],
+
+  -- Character constants
+  testOK "Characters"
+    "'a' 'b' '\\\\' '\\\'' '\\\"'"
+ -- '\\a' '\\b' '\\f' '\\n' '\\r' '\\t' '\\v'
+    [
+      T_LBrace,
+      T_Char 'a', T_Char 'b', T_Char '\\', T_Char '\'',
+      T_Char '\"',
+      -- T_Char '\a', T_Char '\b', T_Char '\f', T_Char '\n',
+      -- T_Char '\r', T_Char '\t', T_Char '\v',
+      T_RBrace
+    ],
+
+  testError "Invalid escape sequence"
+    "'\\z'"
+    LexerErrorInvalidEscapeSequence,
+
+  testError "Invalid character constant"
+    "'a"
+    LexerErrorInvalidCharacterConstant,
 
   -- Identifiers
   testOK "Identifiers"

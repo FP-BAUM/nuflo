@@ -1,30 +1,24 @@
-Reduce a function with mutiple equations to a function with only an equation
 
--- If we have a function f with mutiple equations:
+Reduce a function with mutiple equations to a function with only an equation:
 
+If we have a function f with mutiple equations:
+--
 f args1 = body1                           
 ...
 f argsN = bodyN
 ---
 
--- We obtain the maximum argument's count
-
--- REPORT:
+first, we calculate the number of arguments:
 
 M := max(length(args1), ..., length(argsN))
 
--- 
-# IF M > 0:
+and we produce the following code:
  
 f = \ x1 ... xM ->
-      case tuple{M} x1 ... xM of
-        tuple{M} args1++(pad) -> body1
-        ...
-        tuple{M} argsN++(pad) -> bodyN
-        
-# IF M = 0:
-f = body1 (+) ... (+) bodyN
-
+          ((\ args1 -> body1) x1 ... xM)
+        | ((\ args2 -> body2) x1 ... xM)
+        | ...
+        | ((\ argsN -> bodyN) x1 ... xM)
 
 --------------------------- Desugar mutual recursive let algorithm ---------------------------
 
@@ -40,13 +34,13 @@ f = body1 (+) ... (+) bodyN
    -- Con un solo patrón:
    \ p . A
    ===>
-   \ x . fresh y1...ym. (x==p), A
+   \ x . fresh y1...ym. (x ~ p), A
 
 
    -- Con varios patrones:
    \ p1 ... pn . A
    ===>
-   \ x1 ... xn . fresh y1...ym. (x1==p1),...,(xn==pn),A
+   \ x1 ... xn . fresh y1...ym. (x1 ~ p1) & ... & (xn ~ pn) & A
    
    x1,...,xn son variables frescas
    y1,...,ym son las variables libres de p1...pn
@@ -64,12 +58,16 @@ f = body1 (+) ... (+) bodyN
         fn = An
     in B   
     ===>
-    let {R} = fix {R}.
-                fresh f1 ... fn.
-                  ({R} == {Tuple} f1 ... fn) , {Tuple} A1 ... An
-      in
-        fresh f1 ... fn.
-          ({R} == ({Tuple} f1 ... fn)) , B
+    let T = fix(T. {Tuple} A1* ... An*) in
+      B*
+
+    donde X*
+    denota el resultado
+    de reemplazar en X las ocurrencias de f_i por pi_i(T).
+    Además:
+      pi_i(T) = fresh x1, ..., xn in 
+                  (T == {Tuple} x1 ... xn) &
+                  xi
 
 --------------------------- Desugar Case of ---------------------------
 
@@ -80,9 +78,9 @@ case e of
 
 Should be transformed to:
 
-(\ x ->   fresh Y1 in ((x == p1); b1)
-        + ...
-        + fresh Yn in ((x == pN); bN))
+(\ x ->   fresh Y1 in ((x == p1) & b1)
+        | ...
+        | fresh Yn in ((x == pN) & bN))
     e
 
 Where Y_i are the free variables of p_i

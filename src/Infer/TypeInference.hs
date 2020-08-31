@@ -1,4 +1,7 @@
-module Infer.TypeInference(inferTypes) where
+module Infer.TypeInference(
+         inferTypeWithMain,
+         inferTypeWithoutMain,
+       ) where
 
 import qualified Data.Set as S
 import qualified Data.Map as M
@@ -8,8 +11,14 @@ import Data.Maybe(fromJust)
 import Error(Error(..), ErrorType(..))
 import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Position(Position(..), unknownPosition)
-import Syntax.Name(QName(..), primitiveArrow, primitiveInt,
-                   primitiveAlternative, unqualifiedName)
+import Syntax.Name(
+         QName(..), primitiveArrow, primitiveInt, primitiveChar,
+         unqualifiedName,
+         primitiveUnit,
+         primitiveAlternative, primitiveSequence, primitiveUnification,
+         primitivePrint, primitiveMain, primitiveUnderscore, primitiveFail,
+         primitiveList, primitiveListNil, primitiveListCons
+       )
 import Syntax.AST(
          AnnProgram(..), Program,
          AnnDeclaration(..), Declaration,
@@ -32,29 +41,40 @@ import Calculus.Types(
          substituteType,
          typeSchemeMetavariables, typeSchemeFreeVariables,
          constrainedTypeFreeVariables,
-         tFun, tInt, typeHead, typeArgs, unTVar
+         tFun, tInt, tChar, typeHead, typeArgs, unTVar
        )
 import Syntax.GroupEquations(groupEquations)
 
-inferTypes :: Program -> Either Error Program
-inferTypes program = evalFS (inferTypeProgramM program) initialState
-  where initialState = TypeInferState {
-                         statePosition              = unknownPosition
-                       , stateNextFresh             = 0
-                       , stateTypeConstants         = S.empty
-                       , stateTypeSynonyms          = M.empty
-                       , stateEnvironment           = [M.empty]
-                       , stateSubstitution          = M.empty
-                       , stateClassParameters       = M.empty
-                       , stateClassMethodSignatures = M.empty
-                       , stateTypeVarRenaming       = M.empty
-                       ---- Constraints
-                       , stateMethodInfo            = M.empty
-                       , stateFreshPlaceholder      = 0
-                       , stateGlobalInstances       = M.empty
-                       , stateConstraintEnv         = M.empty
-                       , statePlaceholderHeap       = M.empty
-                       }
+inferTypeWithMain :: Program -> Either Error Program
+inferTypeWithMain program =
+  evalFS (do result <- inferTypeProgramM program;
+             checkMainType -- check the type of "main"
+             return result)
+         initialState
+
+inferTypeWithoutMain :: Program -> Either Error Program
+inferTypeWithoutMain program =
+  evalFS (inferTypeProgramM program)
+         initialState
+
+initialState :: TypeInferState
+initialState = TypeInferState {
+                 statePosition              = unknownPosition
+               , stateNextFresh             = 0
+               , stateTypeConstants         = S.empty
+               , stateTypeSynonyms          = M.empty
+               , stateEnvironment           = [M.empty]
+               , stateSubstitution          = M.empty
+               , stateClassParameters       = M.empty
+               , stateClassMethodSignatures = M.empty
+               , stateTypeVarRenaming       = M.empty
+               ---- Constraints
+               , stateMethodInfo            = M.empty
+               , stateFreshPlaceholder      = 0
+               , stateGlobalInstances       = M.empty
+               , stateConstraintEnv         = M.empty
+               , statePlaceholderHeap       = M.empty
+               }
 
 ---- Type inference monad
 
@@ -190,7 +210,9 @@ bindToFreshTypeIfNotLocallyBound x = do
   state <- getFS
   if M.member x (head (stateEnvironment state))
    then return ()
-   else bindToFreshType x
+   else if x == primitiveMain
+         then bindType x (TypeScheme [] (ConstrainedType [] primitiveMainType))
+         else bindToFreshType x
 
 getAllBoundVars :: M (S.Set QName)
 getAllBoundVars = do
@@ -231,17 +253,16 @@ addTypeConstant name =
 freshenVariables :: [QName] -> ConstrainedType
                  -> M ([PlaceholderId], ConstrainedType)
 freshenVariables genVarNames constrainedType = do
-  sub <- M.fromList <$> mapM (\ name -> do ft <- freshType 
-                                           return (name, ft))
-                             genVarNames
-  constrainedType' <- unfoldConstrainedType constrainedType
-  freshenConstrainedType sub constrainedType'
+    sub <- M.fromList <$> mapM (\ name -> do ft <- freshType
+                                             return (name, ft))
+                               genVarNames
+    constrainedType' <- unfoldConstrainedType constrainedType
+    freshenConstrainedType sub constrainedType'
   where
     freshenConstrainedType :: TypeSubstitution ->  ConstrainedType
                            -> M ([PlaceholderId], ConstrainedType)
     freshenConstrainedType sub (ConstrainedType typeConstraints typ) = do
-      (plhs, remainingConstraints) <-
-        freshenConstraints sub typeConstraints
+      (plhs, remainingConstraints) <- freshenConstraints sub typeConstraints
       return (plhs,
               ConstrainedType remainingConstraints (substituteType sub typ))
     
@@ -517,17 +538,53 @@ inferTypeProgramM :: Program -> M Program
 inferTypeProgramM (Program decls) = do
   -- Declare built-in type constructors
   addTypeConstant primitiveArrow
+  addTypeConstant primitiveUnit
   addTypeConstant primitiveInt
+  addTypeConstant primitiveChar
+  addTypeConstant primitiveList
   -- Declare types of built-in functions
   let tA = Name "{a}"
+  let tB = Name "{b}"
   bindType primitiveAlternative
            (TypeScheme [tA] (ConstrainedType []
-             (tFun (TVar tA) (tFun (TVar tA) (TVar tA)))))
+              (tFun (TVar tA) (tFun (TVar tA) (TVar tA)))))
+  bindType primitiveSequence
+           (TypeScheme [tA, tB] (ConstrainedType []
+              (tFun (TVar tA) (tFun (TVar tB) (TVar tB)))))
+  bindType primitiveUnification
+           (TypeScheme [tA] (ConstrainedType []
+              (tFun (TVar tA) (tFun (TVar tA) (TVar primitiveUnit)))))
+  bindType primitiveUnit
+           (TypeScheme [] (ConstrainedType [] (TVar primitiveUnit)))
+  bindType primitivePrint
+           (TypeScheme [tA] (ConstrainedType []
+              (tFun (TVar tA) (TVar primitiveUnit))))
+  bindType primitiveUnderscore
+           (TypeScheme [tA] (ConstrainedType [] (TVar tA)))
+  bindType primitiveFail
+           (TypeScheme [tA] (ConstrainedType [] (TVar tA)))
+  bindType primitiveListNil
+           (TypeScheme [tA] (ConstrainedType []
+             (TApp (TVar primitiveList) (TVar tA))))
+  bindType primitiveListCons
+           (TypeScheme [tA] (ConstrainedType []
+             (tFun (TVar tA)
+               (tFun (TApp (TVar primitiveList) (TVar tA))
+                     (TApp (TVar primitiveList) (TVar tA))))))
+  enterScopeM
   -- Infer
   mapM_ collectTypeDeclarationM decls
   mapM_ collectSignaturesM decls
   decls' <- inferTypeDeclarationsM decls
   unfoldProgramPlaceholdersM (Program decls')
+
+primitiveMainType :: Type
+primitiveMainType = tFun (TVar primitiveUnit) (TVar primitiveUnit)
+
+checkMainType :: M ()
+checkMainType = do
+  TypeScheme gs (ConstrainedType _ typ) <- lookupType primitiveMain
+  unifyTypes typ primitiveMainType
 
 collectTypeDeclarationM :: Declaration -> M ()
 collectTypeDeclarationM (TypeDeclaration pos typ value) = do
@@ -587,14 +644,66 @@ collectSignatureM sig@(Signature pos name typ constraints) = do
 
 inferTypeDeclarationsM :: [Declaration] -> M [Declaration]
 inferTypeDeclarationsM decls =
-    let definedVars = S.unions (map declarationHeadVar decls)
+    let definedVars = S.unions (map declarationHeadVars decls)
      in do mapM_ bindToFreshTypeIfNotLocallyBound (S.toList definedVars)
-           decls' <- mapM inferTypeDeclarationM decls
-           return $ concat decls'
+           rec Nothing decls
   where
-    declarationHeadVar (ValueDeclaration (Equation _ lhs _)) =
+    declarationHeadVars (ValueDeclaration (Equation _ lhs _)) =
       S.fromList [fromJust (exprHeadVariable lhs)]
-    declarationHeadVar _ = S.empty
+    declarationHeadVars (MutualDeclaration _ decls) =
+      S.unions (map declarationHeadVars decls)
+    declarationHeadVars _ = S.empty
+
+    -- Infer a list of type declarations, generalizing the types
+    rec :: Maybe QName -> [Declaration] -> M [Declaration]
+    rec prev [] = do
+      recGeneralize prev Nothing
+      return []
+    rec prev (decl@(ValueDeclaration equation) : decls) = do
+      let name = fromJust . exprHeadVariable . equationLHS $ equation
+      recGeneralize prev (Just name)
+      decl'  <- inferTypeDeclarationM decl
+      decls' <- rec (Just name) decls
+      return (decl' ++ decls')
+    rec prev (MutualDeclaration pos decls : moreDecls) = do
+      setPosition pos
+      -- TODO: collect signatures
+      (names, decls') <- recMutual decls
+      generalizeLocalBindings names
+      moreDecls' <- rec Nothing moreDecls
+      return (decls' ++ moreDecls')
+    rec prev (decl : decls) = do
+      recGeneralize prev Nothing
+      decl'  <- inferTypeDeclarationM decl
+      decls' <- rec prev decls
+      return (decl' ++ decls')
+
+    -- Infer a list of type declarations without generalizing the types
+    recMutual :: [Declaration] -> M (S.Set QName, [Declaration])
+    recMutual [] = return (S.empty, [])
+    recMutual (decl@(ValueDeclaration equation) : decls) = do
+      let name = fromJust . exprHeadVariable . equationLHS $ equation
+      decl'           <- inferTypeDeclarationM decl
+      (names, decls') <- recMutual decls
+      return (S.insert name names, decl' ++ decls')
+    recMutual (decl@(MutualDeclaration pos _) : decls) = do
+      setPosition pos
+      failM TypeErrorNestedMutualDeclarations
+            "Nested mutual declarations"
+    recMutual (decl : decls) = do
+      decl'           <- inferTypeDeclarationM decl
+      (names, decls') <- recMutual decls
+      return (names, decl' ++ decls')
+
+    recGeneralize :: Maybe QName -> Maybe QName -> M ()
+    recGeneralize Nothing     _       = return ()
+    recGeneralize (Just name) Nothing = generalizeName name
+    recGeneralize (Just name) (Just name')
+      | name == name' = return ()
+      | otherwise     = generalizeName name
+
+    generalizeName :: QName -> M ()
+    generalizeName name = generalizeLocalBindings (S.singleton name)
 
 inferTypeDeclarationM :: Declaration -> M [Declaration]
 inferTypeDeclarationM decl@(DataDeclaration _ _ _) = return [decl]
@@ -602,13 +711,16 @@ inferTypeDeclarationM decl@(TypeDeclaration _ _ _) = return [decl]
 inferTypeDeclarationM (ValueDeclaration equation) = do
   equation' <- inferTypeEquationM equation
   return [ValueDeclaration equation']
-inferTypeDeclarationM decl@(TypeSignature _) = return [decl]
+inferTypeDeclarationM decl@(TypeSignature _) = do
+  return [decl]
 inferTypeDeclarationM (ClassDeclaration pos className typeName methods) = do
   inferTypeClassDeclarationM pos className typeName methods
 inferTypeDeclarationM (InstanceDeclaration pos className typ
                                            constraints methods) = do
   decl <- inferTypeInstanceDeclarationM pos className typ constraints methods
   return [decl]
+inferTypeDeclarationM (MutualDeclaration _ _) =
+  error "(Mutual declaration should not be found)"
 
 constrainedType :: [Constraint] -> Expr -> M ConstrainedType
 constrainedType constraints expr =
@@ -630,7 +742,9 @@ inferTypeEquationM (Equation pos lhs rhs) = do
     (TypeScheme names (ConstrainedType lfuncConstraints lfuncType)) <-
       lookupType lfunc
     if not (null names)
-      then error "(Local variable may not be generalized)"
+      then error ("(Local variables "
+                  ++ show names
+                  ++ " may not be generalized)")
       else return ()
     mapM_ addGlobalTypeConstraint lfuncConstraints
     (largsConstraints, largsTypes, largs') <-
@@ -730,8 +844,8 @@ unfoldTypeConstraint (TypeConstraint name typ) = do
 -- environment that can be generalized with a forall. Update all the
 -- bindings in the local environment so that all these type variables
 -- become generalized.
-generalizeLocalBindings :: M ()
-generalizeLocalBindings = do
+generalizeLocalBindings :: S.Set QName -> M ()
+generalizeLocalBindings affectedNames = do
     (genMetavars, genVars) <- generalizableVariables
     rib <- head <$> getEnvironment
     mapM_ (uncurry $ generalizeLocalBinding genMetavars genVars) (M.toList rib)
@@ -756,12 +870,18 @@ generalizeLocalBindings = do
       return (genMetavars, genVars `S.union` S.fromList (map unTVar genVars'))
     getVars :: M.Map QName TypeScheme -> M (S.Set QName)
     getVars rib = do
-      schemes <- mapM unfoldTypeScheme (M.elems rib)
+      schemes <- concat <$> mapM (lookupInRib rib) (S.toList affectedNames)
       return $ S.unions (map typeSchemeFreeVariables schemes)
     getMetavars :: M.Map QName TypeScheme -> M (S.Set TypeMetavariable)
     getMetavars rib = do
-      schemes <- mapM unfoldTypeScheme (M.elems rib)
+      schemes <- concat <$> mapM (lookupInRib rib) (S.toList affectedNames)
       return $ S.unions (map typeSchemeMetavariables schemes)
+    lookupInRib :: M.Map QName TypeScheme -> QName -> M [TypeScheme]
+    lookupInRib rib name = do
+      case M.lookup name rib of
+        Nothing -> return []
+        Just ts -> do ts' <- unfoldTypeScheme ts
+                      return [ts']
     generalizeLocalBinding :: S.Set TypeMetavariable -> S.Set QName
                            -> QName -> TypeScheme -> M ()
     generalizeLocalBinding genMetavars genVars x scheme = do
@@ -838,43 +958,44 @@ unifyTypes t1 t2 = do
       cs <- getConstraintsForMetavar x
       mapM_ (\ (cls, plh) -> solveConstraint cls plh t) cs
 
-    solveConstraint :: QName -> PlaceholderId -> Type -> M ()
-    solveConstraint className plh (TMetavar metavar) = do
-      mq  <- getConstraintPlaceholder className metavar
+solveConstraint :: QName -> PlaceholderId -> Type -> M ()
+solveConstraint className plh (TMetavar metavar) = do
+  mq  <- getConstraintPlaceholder className metavar
+  pos <- currentPosition
+  case mq of
+    Just q  -> instantiatePlaceholder plh (EPlaceholder pos q)
+    Nothing -> setMetavarPlaceholder className metavar plh
+solveConstraint className plh typ =
+  case typeHead typ of
+    TVar typeConstructor -> do
       pos <- currentPosition
-      case mq of
-        Just q  -> instantiatePlaceholder plh (EPlaceholder pos q)
-        Nothing -> setMetavarPlaceholder className metavar plh
-    solveConstraint className plh typ =
-      case typeHead typ of
-        TVar typeConstructor -> do
-          pos <- currentPosition
-          inst <- lookupGlobalInstance className typeConstructor
-          -- Create placeholders plh1, ..., plhN, one per subgoal
-          plhs <- mapM (const freshPlaceholder)
-                       (globalInstanceConstraints inst)
-          -- Instantiate the main placeholder in
-          --   instance{className}{typeConstructor} plh1 ... plhN
-          instantiatePlaceholder plh
-              (foldl (EApp pos)
-                     (EVar pos (mangleInstanceName className typeConstructor))
-                     (map (EPlaceholder pos) plhs))
-          let typeArguments = typeArgs typ
-          let paramDict = M.fromList
-                            (zip (globalInstanceTypeParameters inst)
-                                 typeArguments)
-          -- Recursively solve subgoals
-          mapM_ (\ ((cls, param), plh) ->
-                  solveConstraint cls plh
-                    (M.findWithDefault undefined param paramDict)) 
-                (zip (globalInstanceConstraints inst) plhs)
-          return ()
-        _ -> error "(Head of constrained type must be a type variable)"
+      inst <- lookupGlobalInstance className typeConstructor
+      -- Create placeholders plh1, ..., plhN, one per subgoal
+      plhs <- mapM (const freshPlaceholder)
+                   (globalInstanceConstraints inst)
+      -- Instantiate the main placeholder in
+      --   instance{className}{typeConstructor} plh1 ... plhN
+      instantiatePlaceholder plh
+          (foldl (EApp pos)
+                 (EVar pos (mangleInstanceName className typeConstructor))
+                 (map (EPlaceholder pos) plhs))
+      let typeArguments = typeArgs typ
+      let paramDict = M.fromList
+                        (zip (globalInstanceTypeParameters inst)
+                             typeArguments)
+      -- Recursively solve subgoals
+      mapM_ (\ ((cls, param), plh) ->
+              solveConstraint cls plh
+                (M.findWithDefault undefined param paramDict)) 
+            (zip (globalInstanceConstraints inst) plhs)
+      return ()
+    _ -> error "(Head of constrained type must be a type variable)"
 
 type InferResult = (ConstrainedType, Expr)
 
 inferTypeExprM :: Expr -> M InferResult
 inferTypeExprM (EInt pos n)               = inferTypeEIntM pos n
+inferTypeExprM (EChar pos c)              = inferTypeECharM pos c
 inferTypeExprM (EVar pos x)               = inferTypeEVarM EVar pos x
 inferTypeExprM (EUnboundVar pos x)        = inferTypeEVarM EUnboundVar pos x
 inferTypeExprM (EApp pos e1 e2)           = inferTypeEAppM pos e1 e2
@@ -889,22 +1010,30 @@ inferTypeExprM (EPlaceholder _ _)         =
 inferTypeEIntM :: Position -> Integer -> M InferResult
 inferTypeEIntM pos n = return (ConstrainedType [] tInt, EInt pos n)
 
+-- Character constant (n)
+inferTypeECharM :: Position -> Char -> M InferResult
+inferTypeECharM pos n = return (ConstrainedType [] tChar, EChar pos n)
+
 -- Variable (x)
 inferTypeEVarM :: (Position -> QName -> Expr)
                -> Position -> QName -> M InferResult
 inferTypeEVarM eVar pos x = do
   setPosition pos
   -- Lookup the type scheme.
-  TypeScheme gvars constrainedType   <- lookupType x
+  TypeScheme gvars constrainedType <- lookupType x
   -- Instantiate all general variables into fresh metavariables.
   -- Each general variable affected by a class constraint
   -- produces a new placeholder for the instance.
-  (plhs, constrainedType') <- freshenVariables gvars constrainedType
+  (plhsMeta, ConstrainedType cs typ) <- freshenVariables gvars constrainedType
+  -- Solve the remaining constraints
+  plhsRigid <- mapM (const freshPlaceholder) cs
+  mapM_ (\ (TypeConstraint cls typ, plh) -> do
+           solveConstraint cls plh typ) (zip cs plhsRigid)
   -- Return the variable applied to all the placeholders.
-  return (constrainedType',
+  return (ConstrainedType cs typ,
           foldl (\ e p -> EApp pos e (EPlaceholder pos p))
                 (eVar pos x)
-                plhs)
+                (plhsMeta ++ plhsRigid))
 
 -- e1 e2
 inferTypeEAppM :: Position -> Expr -> Expr -> M InferResult
@@ -937,7 +1066,6 @@ inferTypeELetM pos decls body = do
   enterScopeM
   mapM_ collectSignaturesM decls
   decls' <- inferTypeDeclarationsM decls
-  generalizeLocalBindings
   (typeScheme, body') <- inferTypeExprM body
   exitScopeM
   return (typeScheme, ELet pos decls' body')

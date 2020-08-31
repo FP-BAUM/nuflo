@@ -7,7 +7,8 @@ import qualified Data.Map as M
 import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Error(Error(..), ErrorType(..))
 import Position(Position(..), unknownPosition)
-import Syntax.Name(QName, primitiveArrow, primitiveInt)
+import Syntax.Name(QName, primitiveArrow,
+                   primitiveInt, primitiveChar, primitiveList)
 import Syntax.AST(
          AnnProgram(..), Program,
          AnnDeclaration(..), Declaration,
@@ -145,7 +146,11 @@ inferKindProgramM (Program decls) = do
   bindKind primitiveArrow (KFun KType (KFun KType KType))
   addDataTypeM primitiveArrow
   bindKind primitiveInt KType
+  bindKind primitiveChar KType
+  bindKind primitiveList (KFun KType KType)
   addDataTypeM primitiveInt
+  addDataTypeM primitiveChar
+  addDataTypeM primitiveList
   -- Infer kinds of all declarations
   mapM_ declareTypeM decls
   mapM_ inferKindDeclarationM decls
@@ -247,6 +252,8 @@ inferKindDeclarationM (InstanceDeclaration pos className typ
                ("Argument \"" ++ show arg ++ "\" of type constructor " ++
                 "cannot be a datatype.")
        else return ()
+inferKindDeclarationM (MutualDeclaration pos decls) = do
+  mapM_ inferKindDeclarationM decls
 
 inferKindConstructorM :: Expr -> Signature -> M ()
 inferKindConstructorM dataType
@@ -299,6 +306,7 @@ inferKindExpressionM :: Expr -> M ()
 inferKindExpressionM (EVar _ _)           = return ()
 inferKindExpressionM (EUnboundVar _ _)    = return ()
 inferKindExpressionM (EInt _ _)           = return ()
+inferKindExpressionM (EChar _ _)          = return ()
 inferKindExpressionM (EApp _ f x)         = do inferKindExpressionM f
                                                inferKindExpressionM x
 inferKindExpressionM (ELambda _ x b)      = inferKindExpressionM b

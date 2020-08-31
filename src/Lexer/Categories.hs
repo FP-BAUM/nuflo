@@ -26,7 +26,6 @@ keywords = M.fromList [
   ("as", T_As),
   ("case", T_Case),
   ("class", T_Class),
-  (":", T_Colon),
   ("data", T_Data),
   ("fresh", T_Fresh),
   ("=", T_Eq),
@@ -40,6 +39,7 @@ keywords = M.fromList [
   ("λ", T_Lambda),
   ("let", T_Let),
   ("module", T_Module),
+  ("mutual", T_Mutual),
   ("type", T_Type),
   ("of", T_Of),
   ("where", T_Where)

@@ -1,13 +1,20 @@
 module Desugaring.Desugaring(desugarProgram) where
 
 import qualified Data.Set as S
+import qualified Data.Map as M
 import Data.Maybe(fromJust)
 
 import qualified Calculus.Terms as C
 import Error(Error(..), ErrorType(..))
 import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Position(Position(..), unknownPosition)
-import Syntax.Name(QName(..), primitiveTuple)
+import Syntax.Name(
+         QName(..),
+         primitiveAlternative, primitiveSequence, primitiveUnification,
+         primitiveFail, primitiveUnit, primitiveTuple,
+         primitiveMain, primitivePrint, primitiveUnderscore,
+         primitiveListNil, primitiveListCons
+       )
 import Syntax.GroupEquations(groupEquations)
 import Syntax.AST(
          AnnProgram(..), Program,
@@ -20,15 +27,24 @@ import Syntax.AST(
          exprFreeVariables,
          exprHeadVariable, exprHeadArguments
        )
+import Desugaring.Deps(Dependency(..), dependencySortL)
 
 desugarProgram :: Program -> Either Error C.Term
 desugarProgram program = evalFS (desugarProgramM program) initialState
   where initialState = DesugarState {
     statePosition     = unknownPosition,
-    stateConstructors = S.empty,
+    stateConstructors = S.fromList builtinConstructors,
     stateNextFresh    = 0,
     stateEnvironment  = [S.empty]
   }
+
+builtinConstructors :: [QName]
+builtinConstructors = [
+    primitiveAlternative,
+    primitiveTuple,
+    primitiveListNil,
+    primitiveListCons
+  ]
 
 data DesugarState = DesugarState {
     statePosition     :: Position,
@@ -97,6 +113,12 @@ getAllBoundVarsAndConstructors = do
   bs <- getAllBoundVars
   return (cs `S.union` bs)
 
+isBoundToConstructor :: QName -> M Bool
+isBoundToConstructor x = do
+  cs <- getConstructors
+  bs <- getAllBoundVars
+  return (S.member x cs && not (S.member x bs))
+
 ---------------------------------
 
 desugarProgramM :: Program -> M C.Term
@@ -106,7 +128,11 @@ desugarProgramM (Program decls) = do
                    Left msg ->
                      failM DesugaringErrorDuplicatedValueDefinition msg
                    Right equations -> return equations
-    desugarLetrec equations (EInt unknownPosition 0)
+    let pos = unknownPosition
+    desugarLetrec equations
+                  -- "main" is always applied to () by default
+                  (EApp pos (EVar pos primitiveMain)
+                            (EVar pos primitiveUnit))
 
 valueDeclaration :: Declaration -> [Equation]
 valueDeclaration (ValueDeclaration eq)  = [eq]
@@ -128,19 +154,49 @@ desugarLetrec equations body =
      rhss' <- mapM desugarExpr rhss
      body' <- desugarExpr body
      exitScope
+     termLetrec (reverse (zip vars rhss')) body'
+
+termLetrec :: [(QName, C.Term)] -> C.Term -> M C.Term
+termLetrec bindings body = rec (dependencySortL bindings) body
+  where
+    rec :: [Dependency (QName, C.Term)] -> C.Term -> M C.Term
+    rec [] body = return body
+    rec (DpAcyclic (x, t) : bindingList) body = do
+      body' <- rec bindingList body
+      return $ termLet x t body'
+    rec (DpFunctions bindings : bindingList) body = do
+      body' <- rec bindingList body
+      termLetrec' bindings body'
+
+termLetrec' :: [(QName, C.Term)] -> C.Term -> M C.Term
+termLetrec' bindings body = do
+   let n = fromIntegral (length bindings)
+   tuple <- freshVariable
+   iths  <- mapM (ith n tuple) [0 .. n - 1]
+   let (vars, values) = unzip bindings
+       subst = M.fromList (zipWith (\ x i -> (x, i)) vars iths)
+    in do
+     let body'   = C.applySubst subst body
+     let values' = map (C.applySubst subst) values
      return $
-       termLet rec (C.Fix rec
-                     (termFresh vars
-                       (C.Seq (C.Unif (C.Var rec)
-                                      (termTuple (map C.Var vars)))
-                              (termTuple rhss'))))
-                   body'
+       termLet tuple (C.Fix tuple
+                         (termFresh vars
+                           (termTuple values')))
+                     body'
+  where
+    ith :: Integer -> QName -> Integer -> M C.Term
+    ith n tuple i = do
+      xs <- mapM (const freshVariable) [0.. n - 1]
+      return $
+         termFresh xs
+           (C.Seq (C.Unif (C.Var tuple) (termTuple (map C.Var xs)))
+                  (C.Var (xs !! fromIntegral i)))
 
 termLet :: QName -> C.Term -> C.Term -> C.Term
 termLet var value body = C.App (C.Lam var (progSingleton body)) value
 
 termTuple :: [C.Term] -> C.Term
-termTuple terms = foldl C.App (C.Var primitiveTuple) terms
+termTuple terms = foldl C.App (C.Cons primitiveTuple) terms
 
 termFresh :: [QName] -> C.Term -> C.Term
 termFresh vars body = foldr C.Fresh body vars
@@ -149,10 +205,56 @@ progSingleton :: C.Term -> C.Program
 progSingleton t = C.Alt t C.Fail
 
 desugarExpr :: Expr ->  M C.Term
--- TODO: primitivas
-desugarExpr (EVar _ x)        = return $ C.Var x
+---- Begin: primitives
+-- Nullary
+desugarExpr (EVar pos x)
+  | x == primitiveUnit = return C.consOk
+  | x == primitiveFail = do
+    y <- freshVariable
+    return $ C.App (C.Lam y C.Fail) C.consOk
+  -- Eta expansions of binary operators
+  | x == primitiveAlternative = do
+    y <- freshVariable
+    z <- freshVariable
+    return $ C.lam y (C.Lam z (C.Alt (C.Var y) (C.Alt (C.Var z) C.Fail)))
+  | x == primitiveSequence = do
+    y <- freshVariable
+    z <- freshVariable
+    return $ C.lam y (C.lam z (C.Var z))
+  | x == primitiveUnification = do
+    y <- freshVariable
+    z <- freshVariable
+    return $ C.lam y (C.lam z (C.Unif (C.Var y) (C.Var z)))
+-- Unary
+desugarExpr (EApp _ (EVar _ x) e)
+  | x == primitivePrint = do
+    t <- desugarExpr e
+    return $ C.Command C.Print [t]
+-- Binary
+--   Note: these are not equivalent to their eta expansions.
+desugarExpr (EApp _ (EApp _ (EVar _ x) e1) e2)
+  | x == primitiveAlternative = do
+    t1 <- desugarExpr e1
+    t2 <- desugarExpr e2
+    z <- freshVariable
+    return $ C.App (C.Lam z (C.Alt t1 (C.Alt t2 C.Fail))) C.consOk
+  | x == primitiveSequence = do
+    t1 <- desugarExpr e1
+    t2 <- desugarExpr e2
+    return $ C.Seq t1 t2
+---- End: primitives
+desugarExpr (EVar _ x)
+  | x == primitiveUnderscore = do
+    x' <- freshVariable
+    return $ C.Fresh x' (C.Var x')
+  | otherwise                = do
+    b <- isBoundToConstructor x
+    return $ if b
+              then C.Cons x
+              else C.Var x
 desugarExpr (EUnboundVar _ x) = return $ C.Var x
-desugarExpr (EInt _ x)        = return $ C.Num x
+desugarExpr (EInt _ x)        = return $ C.ConstInt x
+desugarExpr (EChar _ x)       = return $ C.ConstChar x
 desugarExpr (EApp _ e1 e2)    = do t1 <- desugarExpr e1
                                    t2 <- desugarExpr e2
                                    return $ C.App t1 t2
@@ -176,7 +278,7 @@ desugarExpr (ELet pos decls body) = do
   desugarLetrec equations body
 desugarExpr (ECase pos guard branches) = do
   setPosition pos
-  x  <- freshVariable
+  x <- freshVariable
   guard' <- desugarExpr guard
   branches' <- mapM (desugarBranch x) branches
   let program = foldr C.Alt C.Fail branches'
@@ -199,4 +301,6 @@ desugarExpr (EFresh pos name exp) = do
   exp' <- desugarExpr exp
   exitScope
   return $ C.Fresh name exp'
-desugarExpr (EPlaceholder _ _) = error "(Impossible: desugaring placeholder of an instance placeholder)"
+desugarExpr (EPlaceholder _ _) =
+  error "(Impossible: desugaring placeholder of an instance placeholder)"
+

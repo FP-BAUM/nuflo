@@ -1,16 +1,22 @@
-module Parser.Parser(parse) where
+module Parser.Parser(parse, parseAndGetNamespace) where
 
 import qualified Data.Set as S
 import Data.List(isPrefixOf)
 
 import Error(Error(..), ErrorType(..), ErrorMessage)
 import Position(Position(..), unknownPosition)
-import FailState(FailState, getFS, modifyFS, putFS, evalFS, failFS)
+import FailState(FailState, getFS, modifyFS, putFS, evalFS, runFS, failFS)
 import Syntax.Name(
          QName(..), readName, qualify, moduleNameFromQName,
          isWellFormedOperatorName, unqualifiedName, splitParts,
          allNameParts,
-         modulePRIM, moduleMain, arrowSymbol, primitiveArrow, primitiveInt
+         modulePRIM, moduleMain, arrowSymbol, colonSymbol,
+         primitiveMain, primitivePrint, primitiveFail,
+         primitiveArrow, primitiveUnit,
+         primitiveInt, primitiveChar,
+         primitiveList, primitiveListNil, primitiveListCons,
+         primitiveAlternative, primitiveSequence, primitiveUnification,
+         primitiveUnderscore
        )
 import Syntax.AST(
          AnnProgram(..), Program,
@@ -24,6 +30,7 @@ import Syntax.AST(
        )
 import Lexer.Token(Token(..), TokenType(..))
 
+import ModuleSystem.Namespace(Namespace, makeNamespace)
 import ModuleSystem.Module(
          Module,
            emptyModule, addSubmodule, exportAllNamesFromModule, exportNames,
@@ -39,20 +46,31 @@ import ModuleSystem.PrecedenceTable(
          PrecedenceTable(..), Associativity(..),
          PrecedenceLevel, Precedence, precedenceTableLevels,
          emptyPrecedenceTable, declareOperator, isOperator, isOperatorPart,
-         operatorFixity
+         operatorAssociativity
        )
 
 parse :: [Token] -> Either Error Program
-parse tokens = evalFS parseM initialState
-  where initialState =
-          ParserState {
-            stateInput           = tokens,
-            statePosition        = tokensPosition tokens unknownPosition,
-            stateRootModule      = emptyModule,
-            stateNameContext     = error "Empty name context.",
-            statePrecedenceTable = emptyPrecedenceTable,
-            stateScopeLevel      = 0 
-          }
+parse tokens = evalFS parseM (initialState tokens)
+
+parseAndGetNamespace :: [Token] -> Either Error (Program, Namespace)
+parseAndGetNamespace tokens =
+  case runFS parseM (initialState tokens) of
+    Left err -> Left err
+    Right (program, state) ->
+      Right (program, makeNamespace (stateRootModule state)
+                                    (stateNameContext state)
+                                    (statePrecedenceTable state))
+
+initialState :: [Token] -> ParserState
+initialState tokens =
+  ParserState {
+    stateInput           = tokens,
+    statePosition        = tokensPosition tokens unknownPosition,
+    stateRootModule      = emptyModule,
+    stateNameContext     = error "Empty name context.",
+    statePrecedenceTable = emptyPrecedenceTable,
+    stateScopeLevel      = 0 
+  }
 
 ---- Some constants
 
@@ -211,7 +229,8 @@ declareQNameM qname = do
   if isTop
    then do moduleName <- getCurrentModuleName
            let uname = unqualifiedName qname in
-             if qname == qualify moduleName uname
+             if qname == qualify moduleName uname ||
+                qname == primitiveMain
               then do -- Declare name in current module
                       modifyRootModule (declareName qname)
                       -- If it is an undeclared operator, declare it
@@ -265,13 +284,13 @@ isOperatorPartM qname = do
 isLeftAssocM :: QName -> M Bool
 isLeftAssocM op = do
   table <- getPrecedenceTable
-  case operatorFixity op table of
+  case operatorAssociativity op table of
     LeftAssoc -> return True
     _         -> return False
 
 isRightAssoc :: QName -> PrecedenceTable -> Bool
 isRightAssoc op table =
-  case operatorFixity op table of
+  case operatorAssociativity op table of
     RightAssoc -> True
     _          -> False
 
@@ -296,7 +315,20 @@ parseM = do
   enterModule modulePRIM
   exportAllNamesFromModuleM modulePRIM
   declareQNameM primitiveInt
+  declareQNameM primitiveChar
+  declareQNameM primitiveUnderscore
+  declareQNameM primitiveMain
+  declareQNameM primitivePrint
+  declareQNameM primitiveFail
+  declareQNameM primitiveList
+  declareQNameM primitiveListNil
+  declareQNameM primitiveListCons
+
   declareOperatorM RightAssoc 50 primitiveArrow
+  declareOperatorM RightAssoc 60 primitiveAlternative
+  declareOperatorM RightAssoc 70 primitiveSequence
+  declareOperatorM RightAssoc 80 primitiveUnification
+  declareOperatorM RightAssoc 90 primitiveListCons
 
   -- Parse
   decls <- parseModules 
@@ -467,6 +499,8 @@ parseToplevelDeclaration = do
                      return [d]
     T_Instance -> do d <- parseInstanceDeclaration
                      return [d]
+    T_Mutual   -> do d <- parseMutualDeclaration
+                     return [d]
     _          -> do d <- parseTypeSignatureOrValueDeclaration
                      return [d]
 
@@ -548,16 +582,12 @@ parseSignatures = parseSuite parseSignature
 parseSignature :: M Signature
 parseSignature = do
   pos  <- currentPosition
-  expr <- parseExpr
-  case expr of
-    EVar _ name -> do
-      declareQNameM name
-      match T_Colon
-      typ <- parseExpr
-      constraints <- parseOptionalConstraints
-      return $ Signature pos name typ constraints
-    _ -> failM ParseErrorExpectedNameForSignature
-                ("Expected a name. Got: " ++ show expr)
+  name <- parseAndResolveQName
+  declareQNameM name
+  matchColon
+  typ <- parseExpr
+  constraints <- parseOptionalConstraints
+  return $ Signature pos name typ constraints
 
 parseInstanceDeclaration :: M Declaration
 parseInstanceDeclaration = do
@@ -627,6 +657,17 @@ parseFixityDeclaration assoc = do
   currentModule <- getCurrentModuleName 
   declareOperatorM assoc precedence (qualify currentModule operatorName)
 
+parseMutualDeclaration :: M Declaration
+parseMutualDeclaration = do
+  match T_Mutual
+  pos          <- currentPosition
+  match T_LBrace
+  enterScopeM
+  declarations <- parseDeclarations
+  exitScopeM
+  match T_RBrace
+  return $ MutualDeclaration pos declarations
+
 parseTypeSignatureOrValueDeclaration :: M Declaration
 parseTypeSignatureOrValueDeclaration = do
   t <- peekType
@@ -636,8 +677,8 @@ parseTypeSignatureOrValueDeclaration = do
                  t' <- peekType
                  putFS state
                  case t' of
-                   T_Colon -> parseTypeSignature
-                   _       -> parseValueDeclaration
+                   T_Id c | c == colonSymbol -> parseTypeSignature
+                   _                         -> parseValueDeclaration
     _ -> parseValueDeclaration
 
 parseTypeSignature :: M Declaration
@@ -690,6 +731,9 @@ parseQNames = parseSequence (peekIsAny [T_Semicolon, T_RBrace])
 matchArrow :: M ()
 matchArrow = match (T_Id arrowSymbol)
 
+matchColon :: M ()
+matchColon = match (T_Id colonSymbol)
+
 checkArrow :: M Bool
 checkArrow = do
   t <- peekType
@@ -740,7 +784,6 @@ isEndOfExpression = do
     T_Semicolon -> True
     T_Eq        -> True
     T_Of        -> True
-    T_Colon     -> True
     T_Where     -> True
     _           -> False
 
@@ -980,10 +1023,18 @@ parseAtom = do
     T_Int n  -> do pos <- currentPosition
                    getToken
                    return $ EInt pos n
-    T_LParen -> do match T_LParen
-                   expr <- parseExpr
-                   match T_RParen
-                   return expr
+    T_Char c -> do pos <- currentPosition
+                   getToken
+                   return $ EChar pos c
+    T_LParen -> do pos <- currentPosition
+                   match T_LParen
+                   t <- peekType
+                   case t of
+                     T_RParen -> do match T_RParen
+                                    return $ EVar pos primitiveUnit
+                     _        -> do expr <- parseExpr
+                                    match T_RParen
+                                    return expr
     _      -> failM ParseErrorExpectedExpression
                      ("Expected an expression.\n" ++
                       "Got: " ++ show t ++ ".")

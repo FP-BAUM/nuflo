@@ -7,7 +7,7 @@ import Error(Error(..), ErrorType(..))
 import Lexer.Lexer(tokenize)
 import Parser.Parser(parse)
 import Infer.KindInference(inferKinds)
-import Infer.TypeInference(inferTypes)
+import Infer.TypeInference(inferTypeWithoutMain)
 
 testProgram :: String -> String -> Either ErrorType () -> Test
 testProgram description source expected =
@@ -16,7 +16,7 @@ testProgram description source expected =
              (do tokens <- tokenize "test" source
                  ast    <- parse tokens
                  inferKinds ast
-                 inferTypes ast))
+                 inferTypeWithoutMain ast))
            expected
   where 
     normalizeResult (Left  e) = Left (errorType e)
@@ -34,25 +34,30 @@ testProgramError description source expected =
 tests :: Test
 tests = TestSuite "TYPE INFERENCE" [
 
-  TestSuite "Int" [
+  TestSuite "Constants" [
 
-    testProgramOK "Simple integer" (unlines [
-      "main : Int",
-      "main = 1"
+    testProgramOK "Integers" (unlines [
+      "start : Int",
+      "start = 1"
+    ]),
+
+    testProgramOK "Characters" (unlines [
+      "start : Char",
+      "start = 'a'"
     ]),
 
     testProgramError "Reject non-int declared as int" (unlines [
       "data Bool where",
       "  true : Bool",
-      "main : Int",
-      "main = true"
+      "start : Int",
+      "start = true"
     ]) TypeErrorUnificationClash,
 
     testProgramError "Reject int declared as non-int" (unlines [
       "data Bool where",
       "  true : Bool",
-      "main : Bool",
-      "main = 1"
+      "start : Bool",
+      "start = 1"
     ]) TypeErrorUnificationClash
   ],
 
@@ -82,27 +87,27 @@ tests = TestSuite "TYPE INFERENCE" [
     testProgramOK "Simple application" (unlines [
       "x = x",
       "f = f",
-      "main = f x"
+      "start = f x"
     ]),
 
     testProgramOK "Nested application" (unlines [
       "x = x",
       "f = f",
       "g = g",
-      "main = f (f x)"
+      "start = f (f x)"
     ]),
 
-    testProgramError "Occurs check failure" (unlines [
+    testProgramOK "Self application of polymorphic function" (unlines [
       "f = f",
-      "main = f f"
-    ]) TypeErrorUnificationOccursCheck,
+      "start = f f"
+    ]),
 
     testProgramOK "Application with type declaration" (unlines [
       "data Bool where",
       "  True : Bool",
       "f : Bool -> Bool",
       "f = f",
-      "main = f (f True)"
+      "start = f (f True)"
     ]),
 
     testProgramError "Application with type declaration - clash" (unlines [
@@ -112,7 +117,7 @@ tests = TestSuite "TYPE INFERENCE" [
       "  True : Bool",
       "f : Bool -> Unit",
       "f = f",
-      "main = f (f True)"
+      "start = f (f True)"
     ]) TypeErrorUnificationClash
 
   ],
@@ -120,42 +125,42 @@ tests = TestSuite "TYPE INFERENCE" [
   TestSuite "Lambda" [
 
     testProgramOK "Simple Lambda" (unlines [
-      "main = \\ x -> x"
+      "start = \\ x -> x"
     ]),
 
     testProgramOK "Pattern matching - constant constructor" (unlines [
       "data Bool where { True : Bool }",
-      "main = (\\ True -> True) True"
+      "start = (\\ True -> True) True"
     ]),
 
     testProgramOK "Pattern matching - binding" (unlines [
       "data Bool where",
       " true : Bool",
-      "data List a where",
-      " nil  : List a",
-      " cons : a -> List a -> List a",
-      "main : Bool",
-      "main = (\\ (cons x xs) -> x) (cons true nil)"
+      "data LST a where",
+      " nil  : LST a",
+      " cons : a -> LST a -> LST a",
+      "start : Bool",
+      "start = (\\ (cons x xs) -> x) (cons true nil)"
     ]),
 
     testProgramError "Match type with arrow" (unlines [
       "data Bool where",
       " true : Bool",
-      "data List a where",
-      " nil  : List a",
-      " cons : a -> List a -> List a",
-      "main : List Bool",
-      "main = (\\ (cons x xs) -> x) (cons true nil)"
+      "data LST a where",
+      " nil  : LST a",
+      " cons : a -> LST a -> LST a",
+      "start : LST Bool",
+      "start = (\\ (cons x xs) -> x) (cons true nil)"
     ]) TypeErrorUnificationClash,
 
     testProgramError "Match type of argument" (unlines [
       "data Bool where { True : Bool }",
       "data Unit where { unit : Unit }",
-      "main = (\\ unit -> True) True"
+      "start = (\\ unit -> True) True"
     ]) TypeErrorUnificationClash,
 
     testProgramError "Reject unbound variable" (unlines [
-      "main = \\ x -> y"
+      "start = \\ x -> y"
     ]) TypeErrorUnboundVariable
   ],
 
@@ -163,65 +168,65 @@ tests = TestSuite "TYPE INFERENCE" [
     testProgramOK "Simple let" (unlines [
       "data Bool where",
       " true : Bool",
-      "main = let x = true in x"
+      "start = let x = true in x"
     ]),
 
     testProgramOK "Allow many definitions" (unlines [
       "data Bool where",
       " true : Bool",
       " false : Bool",
-      "main : Bool",
-      "main = let x = true ; y = false in x"
+      "start : Bool",
+      "start = let x = true ; y = false in x"
     ]),
 
     testProgramOK "Allow function definitions" (unlines [
       "data Bool where",
       " true : Bool",
       " false : Bool",
-      "main : Bool",
-      "main = let f x = x ; x = true in f x"
+      "start : Bool",
+      "start = let f (.x) = x ; x = true in f x"
     ]),
 
     testProgramOK "Explicit polymorphic declaration" (unlines [
       "data Bool where true : Bool",
       "data Unit where unit : Unit",
-      "main = let f : a -> Bool",
-      "           f x = true",
-      "        in f (f unit)"
+      "start = let f : a -> Bool",
+      "            f x = true",
+      "         in f (f unit)"
     ]),
 
     testProgramOK "Implicit polymorphic declaration" (unlines [
       "data Bool where true : Bool",
       "data Unit where unit : Unit",
-      "main = let f x = true",
-      "        in f (f unit)"
+      "start = let f x = true",
+      "         in f (f unit)"
     ]),
 
     testProgramError "Disallow instantiation of rigid variable" (unlines [
-      "main = let f : a -> a",
-      "           f 1 = 2",
-      "        in 3"
+      "start = let f : a -> a",
+      "            f 1 = 2",
+      "         in 3"
     ]) TypeErrorUnificationClash,
 
     testProgramError "Exit scope after let" (unlines [
-      "main = (let f x = x in f) f"
+      "start = (let f x = x in f) f"
     ]) TypeErrorUnboundVariable
   ],
 
   TestSuite "Case" [
     testProgramOK "Empty case" (unlines [
-      "main x = case x of"
+      "start x = case x of"
     ]),
 
     testProgramOK "Simple case" (unlines [
-      "main x = case x of x -> x"
+      "start x = case x of x -> x"
     ]),
 
     testProgramOK "Non-binding pattern matching" (unlines [
       "data Bool where",
       " true : Bool",
       " false : Bool",
-      "main x = case x of",
+      "start x = case x of",
       " false -> true",
       " a     -> a"
     ]),
@@ -230,10 +235,10 @@ tests = TestSuite "TYPE INFERENCE" [
       "data Bool where",
       " true : Bool",
       " false : Bool",
-      "data List a where",
-      " nil  : List a",
-      " cons : a -> List a -> List a",
-      "main x = case x of",
+      "data LST a where",
+      " nil  : LST a",
+      " cons : a -> LST a -> LST a",
+      "start x = case x of",
       " (cons y ys) -> false",
       " nil         -> true"
     ]),
@@ -242,10 +247,10 @@ tests = TestSuite "TYPE INFERENCE" [
       "data Bool where",
       " true : Bool",
       " false : Bool",
-      "data List a where",
-      " nil  : List a",
-      " cons : a -> List a -> List a",
-      "main x = case x of",
+      "data LST a where",
+      " nil  : LST a",
+      " cons : a -> LST a -> LST a",
+      "start x = case x of",
       " (cons y ys) -> false",
       " true        -> true"
     ]) TypeErrorUnificationClash,
@@ -254,10 +259,10 @@ tests = TestSuite "TYPE INFERENCE" [
       "data Bool where",
       " true : Bool",
       " false : Bool",
-      "data List a where",
-      " nil  : List a",
-      " cons : a -> List a -> List a",
-      "main x = case x of",
+      "data LST a where",
+      " nil  : LST a",
+      " cons : a -> LST a -> LST a",
+      "start x = case x of",
       " (cons y ys) -> nil",
       " nil         -> true"
     ]) TypeErrorUnificationClash
@@ -265,22 +270,22 @@ tests = TestSuite "TYPE INFERENCE" [
 
   TestSuite "Fresh" [
     testProgramOK "Simple fresh variable" (unlines [
-      "main = fresh x in x"
+      "start = fresh x in x"
     ]),
 
     testProgramOK "Fresh function" (unlines [
       "data Pair a b where { pair : a -> b -> Pair a b }",
-      "main = fresh f in pair (f 1) (f 2)"
+      "start = fresh f in pair (f 1) (f 2)"
     ]),
 
     testProgramError "Reject fresh variable (occurs check)" (unlines [
-      "main = fresh x in x x"
+      "start = fresh x in x x"
     ]) TypeErrorUnificationOccursCheck,
 
     testProgramError "Reject fresh variable (clashing types)" (unlines [
       "data Bool where { true : Bool }",
       "data Pair a b where { pair : a -> b -> Pair a b }",
-      "main = fresh f in pair (f 1) (f true)"
+      "start = fresh f in pair (f 1) (f true)"
     ]) TypeErrorUnificationClash
   ],
 
@@ -289,29 +294,29 @@ tests = TestSuite "TYPE INFERENCE" [
     testProgramError "Lambda does not bind already bound variable" (unlines [
       "data Bool where",
       "  true : Bool",
-      "main : Bool -> Bool",
-      "main x = (\\ x -> true) 1"
+      "start : Bool -> Bool",
+      "start x = (\\ x -> true) 1"
     ]) TypeErrorUnificationClash,
 
     testProgramOK "Lambda binds explicitly unbound variable" (unlines [
       "data Bool where",
       "  true : Bool",
-      "main : Bool -> Bool",
-      "main x = (\\ .x -> true) 1"
+      "start : Bool -> Bool",
+      "start x = (\\ .x -> true) 1"
     ]),
 
     testProgramError "Case does not bind already bound variable" (unlines [
       "data Bool where",
       "  true : Bool",
-      "main : Bool -> Bool",
-      "main x = case 1 of { x -> true }"
+      "start : Bool -> Bool",
+      "start x = case 1 of { x -> true }"
     ]) TypeErrorUnificationClash,
 
     testProgramOK "Case binds explicitly unbound variable" (unlines [
       "data Bool where",
       "  true : Bool",
-      "main : Bool -> Bool",
-      "main x = case 1 of { .x -> true }"
+      "start : Bool -> Bool",
+      "start x = case 1 of { .x -> true }"
     ])
 
   ],
@@ -349,41 +354,41 @@ tests = TestSuite "TYPE INFERENCE" [
     ]),
 
     testProgramOK "Partially applied type synonym" (unlines [
-      "data List a where { nil : List a ; cons : a -> List a -> List a }",
+      "data LST a where { nil : LST a ; cons : a -> LST a -> LST a }",
       "data Bool where { true : Bool }",
       "type FF f a b = f b -> f a",
-      "f : FF List Int Bool",
+      "f : FF LST Int Bool",
       "f (cons true nil) = cons 1 nil"
     ]),
 
     testProgramError "Partially applied type synonym - fail" (unlines [
-      "data List a where { nil : List a ; cons : a -> List a -> List a }",
+      "data LST a where { nil : LST a ; cons : a -> LST a -> LST a }",
       "data Bool where { true : Bool }",
       "type FF f a b = f b -> f a",
-      "f : FF List Int Bool",
+      "f : FF LST Int Bool",
       "f (cons 1 nil) = cons 1 nil"
     ]) TypeErrorUnificationClash,
 
     TestSuite "Reject loops" [
       testProgramError "Reject simple loop" (unlines [
         "type A = A",
-        "main : A",
-        "main = 1"
+        "start : A",
+        "start = 1"
       ]) TypeErrorSynonymLoop,
 
       testProgramError "Reject indirect loop" (unlines [
         "type A = B",
         "type B = C",
         "type C = A",
-        "main : B",
-        "main = 1"
+        "start : B",
+        "start = 1"
       ]) TypeErrorSynonymLoop,
 
       testProgramError "Reject loop in functions" (unlines [
         "type F a b = G a",
         "type G a = F a a",
-        "main : F Int Int",
-        "main = 1"
+        "start : F Int Int",
+        "start = 1"
       ]) TypeErrorSynonymLoop
     ]
 
@@ -404,13 +409,13 @@ tests = TestSuite "TYPE INFERENCE" [
     testProgramOK "Use class method" (unlines [
       "class F a where",
       " f : a -> a",
-      "main : a -> a  {F a}",
-      "main x = f x"
+      "start : a -> a  {F a}",
+      "start x = f x"
     ]),
 
     testProgramOK "Use class method before declaration" (unlines [
-      "main : a -> a  {F a}",
-      "main x = f x",
+      "start : a -> a  {F a}",
+      "start x = f x",
       "class F a where",
       " f : a -> a"
     ])
@@ -459,14 +464,14 @@ tests = TestSuite "TYPE INFERENCE" [
       "data Bool where",
       "  True  : Bool",
       "  False : Bool",
-      "data List a where",
-      "  Nil   : List a",
-      "  Cons  : a -> List a -> List a",
+      "data LST a where",
+      "  Nil   : LST a",
+      "  Cons  : a -> LST a -> LST a",
       "class Eq a where",
       "  == : a -> a -> Bool",
       "instance Eq Bool where",
       "  == x y = True",
-      "instance Eq (List a) where",
+      "instance Eq (LST a) where",
       "  == Nil         Nil         = True",
       "  == (Cons x xs) (Cons y ys) = True"
     ]),
@@ -517,22 +522,22 @@ tests = TestSuite "TYPE INFERENCE" [
       (unlines [
         "class F a where",
         "  f : a -> a -> Bool",
-        "main : a -> Bool {F a}",
-        "main y = (let x : a {F a}",
-        "              x = x",
-        "           in f x) y"
+        "start : a -> Bool {F a}",
+        "start y = (let x : a {F a}",
+        "               x = x",
+        "            in f x) y"
       ]),
 
     testProgramError "Fail upon unresolved instance placeholder" (unlines [
       "class F a where",
       " f : a -> a",
-      "main = f"
+      "start = f"
     ]) ConstraintErrorUnresolvedPlaceholder,
 
     testProgramError "Unsolvable constraint (undeclared instance)" (unlines [
       "class F a where",
       "  f : a -> a",
-      "main = f 1"
+      "start = f 1"
     ]) ConstraintErrorUndeclaredInstance
 
   ],

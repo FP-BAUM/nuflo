@@ -4,7 +4,7 @@ module TestParser(tests) where
 import Test(Test(..))
 
 import Error(Error(..), ErrorType(..))
-import Syntax.Name(QName(..))
+import Syntax.Name(QName(..), primitiveUnderscore)
 import Syntax.AST(AnnProgram(..), AnnDeclaration(..),
                   AnnSignature(..), Signature,
                   AnnEquation(..), Equation,
@@ -104,12 +104,12 @@ tests = TestSuite "PARSER" [
 
       testProgramOK "Type declaration"
          (unlines [
-           "type Ages = List Integer"
+           "type Ages = LST Integer"
          ])
          (Program [
            TypeDeclaration ()
              (evar "Ages")
-             (eapp (evar "List") [evar "Integer"])
+             (eapp (evar "LST") [evar "Integer"])
          ]),
 
       testProgramError "Invalid type declaration with no head variable"
@@ -259,13 +259,13 @@ tests = TestSuite "PARSER" [
 
       testProgramOK "Instance declaration with constraints"
          (unlines [
-           "instance Eq (List a) {Eq a} where",
+           "instance Eq (LST a) {Eq a} where",
            "  c = d"
          ])
          (Program [
            InstanceDeclaration ()
              (qmain "Eq")
-             (eapp (evar "List") [evar "a"])
+             (eapp (evar "LST") [evar "a"])
              [
                Constraint () (qmain "Eq") (qmain "a")
              ]
@@ -293,7 +293,7 @@ tests = TestSuite "PARSER" [
            "data Bool where",
            "10 : Bool"
          ])
-         ParseErrorEquationHasNoHead
+         ModuleSystemError
 
     ],
 
@@ -319,7 +319,7 @@ tests = TestSuite "PARSER" [
 
       testExprOK "Variable (underscore)"
          "x = _" 
-         (evar "_")
+         (EVar () primitiveUnderscore)
 
     ],
 
@@ -327,7 +327,11 @@ tests = TestSuite "PARSER" [
 
       testExprOK "Integer constant"
          "x = 42" 
-         (EInt () 42)
+         (EInt () 42),
+
+      testExprOK "Character constant"
+         "x = 'a'" 
+         (EChar () 'a')
 
     ],
 
@@ -654,19 +658,19 @@ tests = TestSuite "PARSER" [
       testExprOK "One branch"
         (unlines [
           "x = case a of",
-          "      [] -> True"
+          "      NIL -> True"
         ])
-        (ECase () (evar "a") [CaseBranch () (evar "[]") (evar "True")]),
+        (ECase () (evar "a") [CaseBranch () (evar "NIL") (evar "True")]),
 
       testExprOK "Two branches"
         (unlines [
           "infix 20 _::_",
           "x = case list of",
-          "      []        -> True",
+          "      NIL       -> True",
           "      (x :: xs) -> False"
         ])
         (ECase () (evar "list") [
-          CaseBranch () (evar "[]") (evar "True"), 
+          CaseBranch () (evar "NIL") (evar "True"), 
           CaseBranch () (eapp (evar "_::_") [
             (evar "x"), (evar "xs")
           ]) (evar "False")])
@@ -795,28 +799,28 @@ tests = TestSuite "PARSER" [
       "" 
       (Program []),
 
-    testProgramOK "Example: List concatenation"
+    testProgramOK "Example: list concatenation"
        (unlines [
-         "data List a where",
-         "  []   : List a",
-         "  _::_ : a -> List a -> List a",
-         "_++_ : List a -> List a -> List a",
-         "[]        ++ ys = ys",
+         "data LST a where",
+         "  NIL  : LST a",
+         "  _::_ : a -> LST a -> LST a",
+         "_++_ : LST a -> LST a -> LST a",
+         "NIL       ++ ys = ys",
          "(x :: xs) ++ ys = x :: (xs ++ ys)"
        ])
        (Program [
          DataDeclaration ()
-           (eapp (evar "List") [evar "a"])
+           (eapp (evar "LST") [evar "a"])
            [
-             Signature () (qmain "[]")
-                          (eapp (evar "List") [evar "a"])
+             Signature () (qmain "NIL")
+                          (eapp (evar "LST") [evar "a"])
                           [],
              Signature () (qmain "_::_")
                           (eapp (primvar "_→_") [
                             evar "a",
                             eapp (primvar "_→_") [
-                              eapp (evar "List") [evar "a"],
-                              eapp (evar "List") [evar "a"]
+                              eapp (evar "LST") [evar "a"],
+                              eapp (evar "LST") [evar "a"]
                             ]
                           ])
                           []
@@ -824,15 +828,15 @@ tests = TestSuite "PARSER" [
          TypeSignature (Signature ()
                           (qmain "_++_")
                           (eapp (primvar "_→_") [
-                            eapp (evar "List") [evar "a"],
+                            eapp (evar "LST") [evar "a"],
                             eapp (primvar "_→_") [
-                              eapp (evar "List") [evar "a"],
-                              eapp (evar "List") [evar "a"]
+                              eapp (evar "LST") [evar "a"],
+                              eapp (evar "LST") [evar "a"]
                             ]
                           ])
                           []),
          ValueDeclaration (Equation ()
-                            (eapp (evar "_++_") [evar "[]", evar "ys"])
+                            (eapp (evar "_++_") [evar "NIL", evar "ys"])
                             (evar "ys")),
          ValueDeclaration (Equation ()
                             (eapp (evar "_++_") [

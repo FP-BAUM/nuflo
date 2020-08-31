@@ -2,7 +2,7 @@ module ModuleSystem.Context(
          Context,
            emptyContext, contextCurrentModuleName,
            importAllNamesFromModule, importNames,
-           declareModuleAlias, resolveName
+           declareModuleAlias, resolveName, unresolveName
        ) where
 
 import qualified Data.Set as S
@@ -117,7 +117,6 @@ resolveName m c (Name id) =
          qualifiedName <- [qualify submoduleName id],
          nameIsExported qualifiedName m
       ]
-
 resolveName m c qname =
   if null candidates
    then Left ("Name: \"" ++ show qname ++ "\" does not exist.")
@@ -150,4 +149,11 @@ resolveName m c qname =
                 nameIsExported qualifiedName m
               ]
             _ -> S.empty
+
+unresolveName :: Module -> Context -> QName -> QName
+unresolveName m c qname =
+    let barename = Name (unqualifiedName qname) in
+      case resolveName m c barename of
+        Right qname' | qname == qname' -> barename
+        _ -> qname
 
