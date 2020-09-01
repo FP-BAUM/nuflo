@@ -7,9 +7,11 @@ data Simpson where
 
 padre : Simpson -> Simpson                  -- Trivial, usando pattern matching
 padre Homero = Abe
-padre _      = Homero
+padre Bart   = Homero
+padre Lisa   = Homero
+padre Maggie = Homero
 
-_∘_ = f g x = f (g x)                       -- Composición de funciones como un operador infijo
+_∘_ f g x = f (g x)                         -- Composición de funciones como un operador infijo
 
 hijo (padre x) = x                          -- Definición de hijo haciendo pattern matching en la función padre
 
