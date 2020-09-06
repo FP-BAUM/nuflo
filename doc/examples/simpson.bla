@@ -10,6 +10,7 @@ padre Homero = Abe
 padre Bart   = Homero
 padre Lisa   = Homero
 padre Maggie = Homero
+-- padre (Bart | Lisa | Maggie) = Homero    -- Opcional, usando pattern matching de la alternativa
 
 _∘_ f g x = f (g x)                         -- Composición de funciones como un operador infijo
 
