@@ -19,6 +19,7 @@ data ErrorType =
   | LexerErrorUnclosedComment
   | LexerErrorInvalidEscapeSequence
   | LexerErrorInvalidCharacterConstant
+  | LexerErrorUnterminatedString
   | ReaderErrorCyclicDependencies
   | ReaderErrorModuleNameMismatch
   | ReaderErrorMissingFile

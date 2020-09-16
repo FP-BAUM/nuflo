@@ -42,6 +42,12 @@ currentPosition :: M Position
 currentPosition = do state <- getFS
                      return (statePosition state)
 
+---- Constants
+escapeChars = [
+  ('\\', '\\'), ('\'', '\''), ('\"', '\"'), ('a', '\a'), ('b', '\b'),
+  ('f', '\f'), ('n', '\n'), ('r', '\r'), ('t', '\t'), ('v', '\v')
+ ]
+
 ---- Tokenizer
 
 tokenizeM :: String -> M [Token]
@@ -50,6 +56,7 @@ tokenizeM cs@(c : _) | isWhitespace c  = ignoreWhitespace cs
 tokenizeM cs@('-' : '-' : _)           = ignoreSingleLineComment cs
 tokenizeM cs@('{' : '-' : _)           = ignoreMultiLineComment cs
 tokenizeM cs@('\'' : _)                = readChar cs
+tokenizeM cs@('"' : _)                 = readString cs
 tokenizeM cs@(c : _) | isPunctuation c = readPunctuation cs
 tokenizeM cs@(c : _) | isIdent c       = readName cs
 tokenizeM (c : _)                      =
@@ -101,11 +108,6 @@ readChar ('\'' : '\\' : c : '\'' : cs) =
       return (t : ts)
     Nothing -> failM LexerErrorInvalidEscapeSequence
                      ("Invalid escape sequence: " ++ [c])
-  where
-    escapeChars = [
-      ('\\', '\\'), ('\'', '\''), ('\"', '\"'), ('a', '\a'), ('b', '\b'),
-      ('f', '\f'), ('n', '\n'), ('r', '\r'), ('t', '\t'), ('v', '\v')
-     ]
 readChar ('\'' : c : '\'' : cs) = do
   start <- currentPosition
   consumeString ['\'', c, '\'']
@@ -115,6 +117,36 @@ readChar ('\'' : c : '\'' : cs) = do
   return (t : ts)
 readChar _ = failM LexerErrorInvalidCharacterConstant
                    "Invalid character constant."
+
+-- TODO: update the grammar with strings
+readString :: String -> M [Token]
+readString ( '"' : cs) = do
+  start <- currentPosition
+  consumeString "\""
+  (string, pending) <- rec cs
+  end <- currentPosition
+  tokens <- tokenizeM pending
+  return (Token start end (T_String string) : tokens)
+  where rec []               = failM LexerErrorUnterminatedString
+                                  "Unterminated string literal, missing '\"'."
+        rec ('"' : xs)       = do 
+          consumeString "\""
+          return ("", xs)
+        rec ( '\\' : [])     = failM LexerErrorUnterminatedString
+                                  "Unterminated escape in a string literal, missing '\"'."
+        rec ( '\\' : x : xs) = 
+            case lookup x escapeChars of
+              Just x' -> do
+                consumeString ['\\', x]
+                (string, pending) <- rec xs
+                return (x' : string, pending)
+              Nothing -> failM LexerErrorInvalidEscapeSequence
+                     ("Invalid escape sequence: " ++ [x])
+        rec (x : xs) = do
+          consumeString [x]
+          (string, pending) <- rec xs
+          return (x : string, pending)
+readString _ = error "Invalid string"
 
 readPunctuation :: String -> M [Token]
 readPunctuation []       = error "No punctuation."
