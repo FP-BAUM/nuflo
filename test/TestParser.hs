@@ -4,7 +4,7 @@ module TestParser(tests) where
 import Test(Test(..))
 
 import Error(Error(..), ErrorType(..))
-import Syntax.Name(QName(..), primitiveUnderscore)
+import Syntax.Name(QName(..), primitiveUnderscore, primitiveListNil, primitiveListCons)
 import Syntax.AST(AnnProgram(..), AnnDeclaration(..),
                   AnnSignature(..), Signature,
                   AnnEquation(..), Equation,
@@ -331,8 +331,14 @@ tests = TestSuite "PARSER" [
 
       testExprOK "Character constant"
          "x = 'a'" 
-         (EChar () 'a')
+         (EChar () 'a'),
 
+      testExprOK "String constant"
+         "x = \"abc\""
+         (EApp () (EApp () (EVar () primitiveListCons) (EChar () 'a')) (
+           (EApp () (EApp () (EVar () primitiveListCons) (EChar () 'b')) (
+              (EApp () (EApp () (EVar () primitiveListCons) (EChar () 'c')) (
+                (EVar () primitiveListNil)))))))
     ],
 
     TestSuite "Mixfix operators" [
