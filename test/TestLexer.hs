@@ -82,14 +82,13 @@ tests = TestSuite "LEXER" [
 
   -- Character constants
   testOK "Characters"
-    "'a' 'b' '\\\\' '\\\'' '\\\"'"
- -- '\\a' '\\b' '\\f' '\\n' '\\r' '\\t' '\\v'
+    "'a' 'b' '\\\\' '\\\'' '\\\"' '\\a' '\\b' '\\f' '\\n' '\\r' '\\t' '\\v'"
     [
       T_LBrace,
       T_Char 'a', T_Char 'b', T_Char '\\', T_Char '\'',
       T_Char '\"',
-      -- T_Char '\a', T_Char '\b', T_Char '\f', T_Char '\n',
-      -- T_Char '\r', T_Char '\t', T_Char '\v',
+      T_Char '\a', T_Char '\b', T_Char '\f', T_Char '\n',
+      T_Char '\r', T_Char '\t', T_Char '\v',
       T_RBrace
     ],
 
@@ -100,6 +99,29 @@ tests = TestSuite "LEXER" [
   testError "Invalid character constant"
     "'a"
     LexerErrorInvalidCharacterConstant,
+
+  -- Strings
+    testOK "Strings without escapes"
+    " \"a\"\"hello\"\"\" "
+    [
+      T_LBrace,
+      T_String "a",
+      T_String "hello",
+      T_String "",
+      T_RBrace
+    ],
+
+    testError "Unterminated String"
+    " \" sarasa "
+    LexerErrorUnterminatedString,
+
+    testOK "Strings with escapes"
+    "\" \\\\ \\' \\\" \\a \\b \\f \\n \\r \\t \\v \""
+    [
+      T_LBrace,
+      T_String " \\ ' \" \a \b \f \n \r \t \v ",
+      T_RBrace
+    ],
 
   -- Identifiers
   testOK "Identifiers"

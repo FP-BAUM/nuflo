@@ -1008,34 +1008,39 @@ parseAtom :: M Expr
 parseAtom = do
   t <- peekType
   case t of
-    T_Id _   -> do pos   <- currentPosition
-                   qname <- parseAndResolveQName
-                   isOp  <- isOperatorPartM qname 
-                   if isOp
-                    then failM ParseErrorOperatorPartUsedAsVariable
-                               ("Operator part: " ++ show qname ++
-                                " cannot be used as a variable.")
-                    else return $ EVar pos qname
-    T_Dot    -> do pos   <- currentPosition
-                   match T_Dot
-                   qname <- parseAndResolveId
-                   return $ EUnboundVar pos qname
-    T_Int n  -> do pos <- currentPosition
-                   getToken
-                   return $ EInt pos n
-    T_Char c -> do pos <- currentPosition
-                   getToken
-                   return $ EChar pos c
-    T_LParen -> do pos <- currentPosition
-                   match T_LParen
-                   t <- peekType
-                   case t of
-                     T_RParen -> do match T_RParen
-                                    return $ EVar pos primitiveUnit
-                     _        -> do expr <- parseExpr
-                                    match T_RParen
-                                    return expr
-    _      -> failM ParseErrorExpectedExpression
-                     ("Expected an expression.\n" ++
-                      "Got: " ++ show t ++ ".")
+    T_Id _      -> do pos   <- currentPosition
+                      qname <- parseAndResolveQName
+                      isOp  <- isOperatorPartM qname 
+                      if isOp
+                        then failM ParseErrorOperatorPartUsedAsVariable
+                                  ("Operator part: " ++ show qname ++
+                                    " cannot be used as a variable.")
+                        else return $ EVar pos qname
+    T_Dot       -> do pos   <- currentPosition
+                      match T_Dot
+                      qname <- parseAndResolveId
+                      return $ EUnboundVar pos qname
+    T_Int n     -> do pos <- currentPosition
+                      getToken
+                      return $ EInt pos n
+    T_Char c    -> do pos <- currentPosition
+                      getToken
+                      return $ EChar pos c
+    T_String s  -> do pos <- currentPosition
+                      getToken
+                      return $ foldr
+                        (\ c r -> EApp pos (EApp pos (EVar pos primitiveListCons) (EChar pos c)) r)
+                        (EVar pos primitiveListNil) s
+    T_LParen    -> do pos <- currentPosition
+                      match T_LParen
+                      t <- peekType
+                      case t of
+                        T_RParen  -> do match T_RParen
+                                        return $ EVar pos primitiveUnit
+                        _         -> do expr <- parseExpr
+                                        match T_RParen
+                                        return expr
+    _           -> failM ParseErrorExpectedExpression
+                        ("Expected an expression.\n" ++
+                          "Got: " ++ show t ++ ".")
 
