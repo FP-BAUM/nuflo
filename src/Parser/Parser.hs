@@ -11,7 +11,9 @@ import Syntax.Name(
          isWellFormedOperatorName, unqualifiedName, splitParts,
          allNameParts,
          modulePRIM, moduleMain, arrowSymbol, colonSymbol,
-         primitiveMain, primitivePrint, primitiveFail,
+         primitiveMain,
+         primitivePrint, primitivePut, primitiveRead,
+         primitiveFail,
          primitiveArrow, primitiveUnit,
          primitiveInt, primitiveChar,
          primitiveList, primitiveListNil, primitiveListCons,
@@ -319,6 +321,8 @@ parseM = do
   declareQNameM primitiveUnderscore
   declareQNameM primitiveMain
   declareQNameM primitivePrint
+  declareQNameM primitivePut
+  declareQNameM primitiveRead
   declareQNameM primitiveFail
   declareQNameM primitiveList
   declareQNameM primitiveListNil

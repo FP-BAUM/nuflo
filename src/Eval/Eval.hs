@@ -5,7 +5,7 @@ import System.Exit(die)
 import qualified Data.Map as M
 
 import qualified Calculus.Terms as C
-import Syntax.Name(QName(..))
+import Syntax.Name(QName(..), primitiveListNil, primitiveListCons)
 import ModuleSystem.Namespace(Namespace, emptyNamespace)
 import Eval.EvalMonad(EvalMonad, failEM, getEM, putEM, modifyEM, logEM,
                       putStrLnEM,
@@ -67,7 +67,7 @@ evalInNamespace namespace term = rec initialState
       result <- runEM step state
       case result of
         Left err -> do
-          die ("Runtime error:\n" ++ show err)
+          runtimeError (show err)
         Right (normalForms, state') -> do
           {- Show final result -}
           mapM_ (runNormalForm namespace) normalForms
@@ -251,6 +251,19 @@ applyPrimitiveFunction f args =
 runNormalForm :: Namespace -> C.Term -> IO ()
 runNormalForm namespace (C.Command C.Print [t]) = do
   putStrLn (pprintInNamespace namespace t)
+runNormalForm namespace (C.Command C.Put [t]) =
+    case asStr t of
+      Nothing -> runtimeError ("put: Term is not a string\n  " ++
+                               pprintInNamespace namespace t)
+      Just s  -> putStrLn s
+  where
+    asStr (C.Cons c)
+      | c == primitiveListNil = return ""
+    asStr (C.App (C.App (C.Cons c) (C.ConstChar x)) chrs)
+      | c == primitiveListCons = do
+          xs <- asStr chrs
+          return (x : xs)
+    asStr _ = Nothing
 runNormalForm _ (C.Command f args) =
   error ("Unimplemented primitive command " ++ show f
          ++ " with arity " ++ show (length args))
@@ -348,4 +361,7 @@ applySubstG subst (Goal t1 t2) = do
 
 renameVar :: C.Term -> QName -> QName -> M C.Term
 renameVar t x y = applySubst (singletonSubst x (C.Var y)) t
+
+runtimeError :: String -> IO ()
+runtimeError msg = die ("--- Runtime error ---\n" ++ msg)
 

@@ -12,7 +12,8 @@ import Syntax.Name(
          QName(..),
          primitiveAlternative, primitiveSequence, primitiveUnification,
          primitiveFail, primitiveUnit, primitiveTuple,
-         primitiveMain, primitivePrint, primitiveUnderscore,
+         primitiveMain, primitivePrint, primitivePut,
+         primitiveUnderscore,
          primitiveListNil, primitiveListCons
        )
 import Syntax.GroupEquations(groupEquations)
@@ -230,6 +231,9 @@ desugarExpr (EApp _ (EVar _ x) e)
   | x == primitivePrint = do
     t <- desugarExpr e
     return $ C.Command C.Print [t]
+  | x == primitivePut = do
+    t <- desugarExpr e
+    return $ C.Command C.Put [t]
 -- Binary
 --   Note: these are not equivalent to their eta expansions.
 desugarExpr (EApp _ (EApp _ (EVar _ x) e1) e2)

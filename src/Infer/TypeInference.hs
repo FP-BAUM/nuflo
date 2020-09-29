@@ -16,7 +16,8 @@ import Syntax.Name(
          unqualifiedName,
          primitiveUnit,
          primitiveAlternative, primitiveSequence, primitiveUnification,
-         primitivePrint, primitiveMain, primitiveUnderscore, primitiveFail,
+         primitivePrint, primitivePut, primitiveRead,
+         primitiveMain, primitiveUnderscore, primitiveFail,
          primitiveList, primitiveListNil, primitiveListCons
        )
 import Syntax.AST(
@@ -41,7 +42,8 @@ import Calculus.Types(
          substituteType,
          typeSchemeMetavariables, typeSchemeFreeVariables,
          constrainedTypeFreeVariables,
-         tFun, tInt, tChar, typeHead, typeArgs, unTVar
+         tFun, tInt, tChar, tList, tString, tUnit,
+         typeHead, typeArgs, unTVar
        )
 import Syntax.GroupEquations(groupEquations)
 
@@ -553,24 +555,27 @@ inferTypeProgramM (Program decls) = do
               (tFun (TVar tA) (tFun (TVar tB) (TVar tB)))))
   bindType primitiveUnification
            (TypeScheme [tA] (ConstrainedType []
-              (tFun (TVar tA) (tFun (TVar tA) (TVar primitiveUnit)))))
+              (tFun (TVar tA) (tFun (TVar tA) tUnit))))
   bindType primitiveUnit
-           (TypeScheme [] (ConstrainedType [] (TVar primitiveUnit)))
+           (TypeScheme [] (ConstrainedType [] tUnit))
   bindType primitivePrint
            (TypeScheme [tA] (ConstrainedType []
-              (tFun (TVar tA) (TVar primitiveUnit))))
+              (tFun (TVar tA) tUnit)))
+  bindType primitivePut
+           (TypeScheme [] (ConstrainedType []
+              (tFun tString tUnit)))
   bindType primitiveUnderscore
            (TypeScheme [tA] (ConstrainedType [] (TVar tA)))
   bindType primitiveFail
            (TypeScheme [tA] (ConstrainedType [] (TVar tA)))
   bindType primitiveListNil
            (TypeScheme [tA] (ConstrainedType []
-             (TApp (TVar primitiveList) (TVar tA))))
+             (tList (TVar tA))))
   bindType primitiveListCons
            (TypeScheme [tA] (ConstrainedType []
              (tFun (TVar tA)
-               (tFun (TApp (TVar primitiveList) (TVar tA))
-                     (TApp (TVar primitiveList) (TVar tA))))))
+               (tFun (tList (TVar tA))
+                     (tList (TVar tA))))))
   enterScopeM
   -- Infer
   mapM_ collectTypeDeclarationM decls
