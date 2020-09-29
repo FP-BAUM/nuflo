@@ -13,6 +13,7 @@ import Syntax.Name(
          primitiveAlternative, primitiveSequence, primitiveUnification,
          primitiveFail, primitiveUnit, primitiveTuple,
          primitiveMain, primitivePrint, primitivePut,
+         primitiveGet, primitiveGetChar, primitiveGetLine,
          primitiveUnderscore,
          primitiveListNil, primitiveListCons
        )
@@ -234,6 +235,15 @@ desugarExpr (EApp _ (EVar _ x) e)
   | x == primitivePut = do
     t <- desugarExpr e
     return $ C.Command C.Put [t]
+  | x == primitiveGet = do
+    t <- desugarExpr e
+    return $ C.Function C.Get [t]
+  | x == primitiveGetChar = do
+    t <- desugarExpr e
+    return $ C.Function C.GetChar [t]
+  | x == primitiveGetLine = do
+    t <- desugarExpr e
+    return $ C.Function C.GetLine [t]
 -- Binary
 --   Note: these are not equivalent to their eta expansions.
 desugarExpr (EApp _ (EApp _ (EVar _ x) e1) e2)

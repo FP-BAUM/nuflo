@@ -9,7 +9,8 @@ module Syntax.Name(
          primitiveAlternative, primitiveSequence, primitiveUnification, 
          primitiveTuple, primitiveUnderscore,
          primitiveMain,
-         primitivePrint, primitivePut, primitiveRead,
+         primitivePrint, primitivePut,
+         primitiveGet, primitiveGetChar, primitiveGetLine,
          primitiveFail, primitiveOk,
          primitiveList, primitiveListNil, primitiveListCons
        ) where
@@ -138,8 +139,14 @@ primitivePrint = qualify modulePRIM "print"
 primitivePut :: QName
 primitivePut = qualify modulePRIM "put"
 
-primitiveRead :: QName
-primitiveRead = qualify modulePRIM "read"
+primitiveGet :: QName
+primitiveGet = qualify modulePRIM "get"
+
+primitiveGetChar :: QName
+primitiveGetChar = qualify modulePRIM "getChar"
+
+primitiveGetLine :: QName
+primitiveGetLine = qualify modulePRIM "getLine"
 
 primitiveFail :: QName
 primitiveFail = qualify modulePRIM "fail"

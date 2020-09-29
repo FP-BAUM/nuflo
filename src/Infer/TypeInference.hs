@@ -16,7 +16,8 @@ import Syntax.Name(
          unqualifiedName,
          primitiveUnit,
          primitiveAlternative, primitiveSequence, primitiveUnification,
-         primitivePrint, primitivePut, primitiveRead,
+         primitivePrint, primitivePut,
+         primitiveGet, primitiveGetChar, primitiveGetLine,
          primitiveMain, primitiveUnderscore, primitiveFail,
          primitiveList, primitiveListNil, primitiveListCons
        )
@@ -564,6 +565,15 @@ inferTypeProgramM (Program decls) = do
   bindType primitivePut
            (TypeScheme [] (ConstrainedType []
               (tFun tString tUnit)))
+  bindType primitiveGet
+           (TypeScheme [] (ConstrainedType []
+              (tFun tUnit tString)))
+  bindType primitiveGetChar
+           (TypeScheme [] (ConstrainedType []
+              (tFun tUnit tChar)))
+  bindType primitiveGetLine
+           (TypeScheme [] (ConstrainedType []
+              (tFun tUnit tString)))
   bindType primitiveUnderscore
            (TypeScheme [tA] (ConstrainedType [] (TVar tA)))
   bindType primitiveFail

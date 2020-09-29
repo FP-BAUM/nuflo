@@ -8,7 +8,7 @@ import qualified Calculus.Terms as C
 import Syntax.Name(QName(..), primitiveListNil, primitiveListCons)
 import ModuleSystem.Namespace(Namespace, emptyNamespace)
 import Eval.EvalMonad(EvalMonad, failEM, getEM, putEM, modifyEM, logEM,
-                      putStrLnEM,
+                      putStrLnEM, getEM, getCharEM, getLineEM,
                       runEM, execEM, evalEM)
 import Calculus.Pprint(pprintInNamespace)
 
@@ -241,9 +241,12 @@ stepThread' (C.Command f ts) = do
 applyPrimitiveFunction :: C.PrimitiveFunction -> [C.Term] -> M [C.Term]
 applyPrimitiveFunction C.IntAdd [C.ConstInt x, C.ConstInt y] = do
   return [C.ConstInt (x + y)]
---applyPrimitiveFunction C.Print [v] = do
---  putStrLnEM (show v)
---  return [C.consOk]
+applyPrimitiveFunction C.GetChar [_] = do
+  chr <- getCharEM
+  return [C.ConstChar chr]
+applyPrimitiveFunction C.GetLine [_] = do
+  str <- getLineEM
+  return [strAsTerm str]
 applyPrimitiveFunction f args =
   error ("Unimplemented primitive function " ++ show f
          ++ " with arity " ++ show (length args))
@@ -252,18 +255,10 @@ runNormalForm :: Namespace -> C.Term -> IO ()
 runNormalForm namespace (C.Command C.Print [t]) = do
   putStrLn (pprintInNamespace namespace t)
 runNormalForm namespace (C.Command C.Put [t]) =
-    case asStr t of
+    case termAsStr t of
       Nothing -> runtimeError ("put: Term is not a string\n  " ++
                                pprintInNamespace namespace t)
       Just s  -> putStrLn s
-  where
-    asStr (C.Cons c)
-      | c == primitiveListNil = return ""
-    asStr (C.App (C.App (C.Cons c) (C.ConstChar x)) chrs)
-      | c == primitiveListCons = do
-          xs <- asStr chrs
-          return (x : xs)
-    asStr _ = Nothing
 runNormalForm _ (C.Command f args) =
   error ("Unimplemented primitive command " ++ show f
          ++ " with arity " ++ show (length args))
@@ -364,4 +359,18 @@ renameVar t x y = applySubst (singletonSubst x (C.Var y)) t
 
 runtimeError :: String -> IO ()
 runtimeError msg = die ("--- Runtime error ---\n" ++ msg)
+
+termAsStr :: C.Term -> Maybe String
+termAsStr (C.Cons c)
+  | c == primitiveListNil = return ""
+termAsStr (C.App (C.App (C.Cons c) (C.ConstChar x)) chrs)
+  | c == primitiveListCons = do
+      xs <- termAsStr chrs
+      return (x : xs)
+termAsStr _ = Nothing
+
+strAsTerm :: String -> C.Term
+strAsTerm []       = C.Cons primitiveListNil
+strAsTerm (c : cs) = C.App (C.App (C.Cons primitiveListCons) (C.ConstChar c))
+                           (strAsTerm cs)
 

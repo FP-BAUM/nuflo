@@ -12,7 +12,8 @@ import Syntax.Name(
          allNameParts,
          modulePRIM, moduleMain, arrowSymbol, colonSymbol,
          primitiveMain,
-         primitivePrint, primitivePut, primitiveRead,
+         primitivePrint, primitivePut,
+         primitiveGet, primitiveGetChar, primitiveGetLine,
          primitiveFail,
          primitiveArrow, primitiveUnit,
          primitiveInt, primitiveChar,
@@ -322,7 +323,9 @@ parseM = do
   declareQNameM primitiveMain
   declareQNameM primitivePrint
   declareQNameM primitivePut
-  declareQNameM primitiveRead
+  declareQNameM primitiveGet
+  declareQNameM primitiveGetChar
+  declareQNameM primitiveGetLine
   declareQNameM primitiveFail
   declareQNameM primitiveList
   declareQNameM primitiveListNil
