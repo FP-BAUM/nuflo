@@ -1,6 +1,7 @@
 module Main where
 
-import System.IO(hPutStrLn, stderr)
+import System.IO(hPutStrLn, stderr, hSetBuffering,
+                 stdin, stdout, BufferMode(..))
 import System.Environment(getArgs)
 
 import Error(Error(..))
@@ -17,6 +18,8 @@ import TestMain(runAllTests)
 
 main :: IO ()
 main = do
+  hSetBuffering stdin NoBuffering
+  hSetBuffering stdout NoBuffering
   args <- getArgs
   run args
 

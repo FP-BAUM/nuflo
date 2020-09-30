@@ -5,12 +5,13 @@ module Calculus.Types(
          substituteConstrainedType, substituteType,
          constrainedTypeFreeVariables,
          typeSchemeMetavariables, typeSchemeFreeVariables,
-         tFun, tInt, tChar, tList, tString, tUnit,
+         tFun, tInt, tChar, tList, tString, tUnit, tIO,
          typeHead, typeArgs, unTVar
        ) where
 
 import Syntax.Name(QName(..), primitiveArrow,
-                   primitiveInt, primitiveChar, primitiveList, primitiveUnit)
+                   primitiveInt, primitiveChar, primitiveList,
+                   primitiveIO, primitiveUnit)
 import qualified Data.Set as S
 import qualified Data.Map as M
 
@@ -110,6 +111,9 @@ tString = tList tChar
 
 tUnit :: Type 
 tUnit = TVar primitiveUnit
+
+tIO :: Type 
+tIO = TVar primitiveIO
 
 ----
 

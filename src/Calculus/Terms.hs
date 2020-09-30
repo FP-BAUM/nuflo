@@ -11,13 +11,14 @@ import qualified Data.Set as S
 import Syntax.Name(QName(..), primitiveOk)
 
 data PrimitiveFunction = IntAdd
-                       | Get
-                       | GetChar
-                       | GetLine
   deriving Show
 
 data PrimitiveCommand = Print
                       | Put
+                      | Get
+                      | GetChar
+                      | GetLine
+                      | End
   deriving Show
 
 data Term = Var QName

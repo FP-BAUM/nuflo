@@ -1,7 +1,6 @@
 module Eval.EvalMonad(
          EvalMonad, failEM, getEM, putEM, modifyEM, logEM,
-         putStrLnEM, getContentsEM, getCharEM, getLineEM,
-         runEM, execEM, evalEM
+         putStrLnEM, runEM, execEM, evalEM
        ) where
 
 import Debug.Trace(trace)
@@ -64,15 +63,6 @@ putStrEM str = liftIO_EM (putStr str)
 
 putStrLnEM :: String -> EvalMonad state ()
 putStrLnEM str = liftIO_EM (putStrLn str)
-
-getContentsEM :: EvalMonad state String
-getContentsEM = liftIO_EM getContents
-
-getCharEM :: EvalMonad state Char
-getCharEM = liftIO_EM getChar
-
-getLineEM :: EvalMonad state String
-getLineEM = liftIO_EM getLine
 
 runEM :: EvalMonad state a -> state -> IO (Either Error (a, state))
 runEM (EM a) s0 = a s0
