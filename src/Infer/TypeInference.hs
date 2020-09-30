@@ -13,7 +13,7 @@ import FailState(FailState, getFS, putFS, modifyFS, evalFS, failFS, logFS)
 import Position(Position(..), unknownPosition)
 import Syntax.Name(
          QName(..), primitiveArrow, primitiveInt, primitiveChar,
-         primitiveIO,
+         primitiveString, primitiveIO,
          unqualifiedName,
          primitiveUnit,
          primitiveAlternative, primitiveSequence, primitiveUnification,
@@ -545,8 +545,11 @@ inferTypeProgramM (Program decls) = do
   addTypeConstant primitiveUnit
   addTypeConstant primitiveInt
   addTypeConstant primitiveChar
+  addTypeConstant primitiveString
   addTypeConstant primitiveList
   addTypeConstant primitiveIO
+  -- Declare type synonyms
+  defineTypeSynonym primitiveString [] tString
   -- Declare types of built-in functions
   let tA = Name "{a}"
   let tB = Name "{b}"

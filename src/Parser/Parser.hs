@@ -17,7 +17,7 @@ import Syntax.Name(
          primitiveGet, primitiveGetChar, primitiveGetLine,
          primitiveFail,
          primitiveArrow, primitiveUnit,
-         primitiveInt, primitiveChar, primitiveIO,
+         primitiveInt, primitiveChar, primitiveString, primitiveIO,
          primitiveList, primitiveListNil, primitiveListCons,
          primitiveAlternative, primitiveSequence, primitiveUnification,
          primitiveUnderscore
@@ -320,6 +320,7 @@ parseM = do
   exportAllNamesFromModuleM modulePRIM
   declareQNameM primitiveInt
   declareQNameM primitiveChar
+  declareQNameM primitiveString
   declareQNameM primitiveIO
   declareQNameM primitiveUnderscore
   declareQNameM primitiveMain

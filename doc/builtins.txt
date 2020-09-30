@@ -25,12 +25,14 @@ data List a where
   []  : List a
   _:_ : a -> List a -> List a
 
+type String = List Char
+
 =====================================
 
 print   : () -> IO -> IO
-put     : List Char -> IO -> IO
-get     : (List Char -> IO) -> IO
+put     : String -> IO -> IO
+get     : (String -> IO) -> IO
 getChar : (Char -> IO) -> IO
-getLine : (List Char -> IO) -> IO
+getLine : (String -> IO) -> IO
 end     : IO
 
