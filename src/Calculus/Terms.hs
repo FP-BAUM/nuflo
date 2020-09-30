@@ -14,6 +14,11 @@ data PrimitiveFunction = IntAdd
   deriving Show
 
 data PrimitiveCommand = Print
+                      | Put
+                      | Get
+                      | GetChar
+                      | GetLine
+                      | End
   deriving Show
 
 data Term = Var QName

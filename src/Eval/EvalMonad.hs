@@ -1,7 +1,6 @@
 module Eval.EvalMonad(
          EvalMonad, failEM, getEM, putEM, modifyEM, logEM,
-         putStrLnEM,
-         runEM, execEM, evalEM
+         putStrLnEM, runEM, execEM, evalEM
        ) where
 
 import Debug.Trace(trace)

@@ -12,7 +12,9 @@ import Syntax.Name(
          QName(..),
          primitiveAlternative, primitiveSequence, primitiveUnification,
          primitiveFail, primitiveUnit, primitiveTuple,
-         primitiveMain, primitivePrint, primitiveUnderscore,
+         primitiveMain, primitivePrint, primitiveEnd, primitivePut,
+         primitiveGet, primitiveGetChar, primitiveGetLine,
+         primitiveUnderscore,
          primitiveListNil, primitiveListCons
        )
 import Syntax.GroupEquations(groupEquations)
@@ -208,6 +210,7 @@ desugarExpr :: Expr ->  M C.Term
 ---- Begin: primitives
 -- Nullary
 desugarExpr (EVar pos x)
+  | x == primitiveEnd  = return $ C.Command C.End []
   | x == primitiveUnit = return C.consOk
   | x == primitiveFail = do
     y <- freshVariable
@@ -227,12 +230,26 @@ desugarExpr (EVar pos x)
     return $ C.lam y (C.lam z (C.Unif (C.Var y) (C.Var z)))
 -- Unary
 desugarExpr (EApp _ (EVar _ x) e)
-  | x == primitivePrint = do
+  | x == primitiveGet = do
     t <- desugarExpr e
-    return $ C.Command C.Print [t]
+    return $ C.Command C.Get [t]
+  | x == primitiveGetChar = do
+    t <- desugarExpr e
+    return $ C.Command C.GetChar [t]
+  | x == primitiveGetLine = do
+    t <- desugarExpr e
+    return $ C.Command C.GetLine [t]
 -- Binary
 --   Note: these are not equivalent to their eta expansions.
 desugarExpr (EApp _ (EApp _ (EVar _ x) e1) e2)
+  | x == primitivePrint = do
+    t1 <- desugarExpr e1
+    t2 <- desugarExpr e2
+    return $ C.Command C.Print [t1, t2]
+  | x == primitivePut = do
+    t1 <- desugarExpr e1
+    t2 <- desugarExpr e2
+    return $ C.Command C.Put [t1, t2]
   | x == primitiveAlternative = do
     t1 <- desugarExpr e1
     t2 <- desugarExpr e2

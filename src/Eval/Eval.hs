@@ -1,15 +1,15 @@
 
 module Eval.Eval(eval, evalInNamespace) where
 
-import System.Exit(die)
+import System.IO(hFlush, stdout)
+import System.Exit(exitSuccess, die)
 import qualified Data.Map as M
 
 import qualified Calculus.Terms as C
-import Syntax.Name(QName(..))
+import Syntax.Name(QName(..), primitiveListNil, primitiveListCons)
 import ModuleSystem.Namespace(Namespace, emptyNamespace)
 import Eval.EvalMonad(EvalMonad, failEM, getEM, putEM, modifyEM, logEM,
-                      putStrLnEM,
-                      runEM, execEM, evalEM)
+                      putStrLnEM, runEM, execEM, evalEM)
 import Calculus.Pprint(pprintInNamespace)
 
 data Result = End (IO ())
@@ -67,7 +67,7 @@ evalInNamespace namespace term = rec initialState
       result <- runEM step state
       case result of
         Left err -> do
-          die ("Runtime error:\n" ++ show err)
+          runtimeError (show err)
         Right (normalForms, state') -> do
           {- Show final result -}
           mapM_ (runNormalForm namespace) normalForms
@@ -241,16 +241,31 @@ stepThread' (C.Command f ts) = do
 applyPrimitiveFunction :: C.PrimitiveFunction -> [C.Term] -> M [C.Term]
 applyPrimitiveFunction C.IntAdd [C.ConstInt x, C.ConstInt y] = do
   return [C.ConstInt (x + y)]
---applyPrimitiveFunction C.Print [v] = do
---  putStrLnEM (show v)
---  return [C.consOk]
 applyPrimitiveFunction f args =
   error ("Unimplemented primitive function " ++ show f
          ++ " with arity " ++ show (length args))
 
 runNormalForm :: Namespace -> C.Term -> IO ()
-runNormalForm namespace (C.Command C.Print [t]) = do
-  putStrLn (pprintInNamespace namespace t)
+runNormalForm namespace (C.Command C.End []) = exitSuccess
+runNormalForm namespace (C.Command C.Print [t1, t2]) = do
+  putStrLn (pprintInNamespace namespace t1)
+  runNormalForm namespace t2
+runNormalForm namespace (C.Command C.Put [t1, t2]) =
+    case termAsStr t1 of
+      Nothing -> runtimeError ("put: Term is not a string\n  " ++
+                               pprintInNamespace namespace t1)
+      Just s  -> do putStr s
+                    hFlush stdout
+                    runNormalForm namespace t2
+runNormalForm namespace (C.Command C.Get [t]) = do
+  str <- getContents
+  evalInNamespace namespace (C.App t (strAsTerm str))
+runNormalForm namespace (C.Command C.GetChar [t]) = do
+  chr <- getChar
+  evalInNamespace namespace (C.App t (C.ConstChar chr))
+runNormalForm namespace (C.Command C.GetLine [t]) = do
+  str <- getLine
+  evalInNamespace namespace (C.App t (strAsTerm str))
 runNormalForm _ (C.Command f args) =
   error ("Unimplemented primitive command " ++ show f
          ++ " with arity " ++ show (length args))
@@ -348,4 +363,21 @@ applySubstG subst (Goal t1 t2) = do
 
 renameVar :: C.Term -> QName -> QName -> M C.Term
 renameVar t x y = applySubst (singletonSubst x (C.Var y)) t
+
+runtimeError :: String -> IO ()
+runtimeError msg = die ("--- Runtime error ---\n" ++ msg)
+
+termAsStr :: C.Term -> Maybe String
+termAsStr (C.Cons c)
+  | c == primitiveListNil = return ""
+termAsStr (C.App (C.App (C.Cons c) (C.ConstChar x)) chrs)
+  | c == primitiveListCons = do
+      xs <- termAsStr chrs
+      return (x : xs)
+termAsStr _ = Nothing
+
+strAsTerm :: String -> C.Term
+strAsTerm []       = C.Cons primitiveListNil
+strAsTerm (c : cs) = C.App (C.App (C.Cons primitiveListCons) (C.ConstChar c))
+                           (strAsTerm cs)
 

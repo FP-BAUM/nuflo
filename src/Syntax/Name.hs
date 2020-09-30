@@ -5,10 +5,14 @@ module Syntax.Name(
          QName(..), readName, qualify, moduleNameFromQName, unqualifiedName,
          modulePRIM, moduleMain, arrowSymbol, colonSymbol,
          primitiveArrow, primitiveUnit,
-         primitiveInt, primitiveChar,
+         primitiveInt, primitiveChar, primitiveString,
          primitiveAlternative, primitiveSequence, primitiveUnification, 
          primitiveTuple, primitiveUnderscore,
-         primitiveMain, primitivePrint, primitiveFail, primitiveOk,
+         primitiveMain,
+         primitivePrint,
+         primitiveIO, primitiveEnd,
+         primitivePut, primitiveGet, primitiveGetChar, primitiveGetLine,
+         primitiveFail, primitiveOk,
          primitiveList, primitiveListNil, primitiveListCons
        ) where
 
@@ -112,6 +116,9 @@ primitiveInt = qualify modulePRIM "Int"
 primitiveChar :: QName
 primitiveChar = qualify modulePRIM "Char"
 
+primitiveString :: QName
+primitiveString = qualify modulePRIM "String"
+
 primitiveAlternative :: QName
 primitiveAlternative = qualify modulePRIM ("_|_")
 
@@ -132,6 +139,24 @@ primitiveMain = qualify modulePRIM "main"
 
 primitivePrint :: QName
 primitivePrint = qualify modulePRIM "print"
+
+primitiveIO :: QName
+primitiveIO = qualify modulePRIM "IO"
+
+primitiveEnd :: QName
+primitiveEnd = qualify modulePRIM "end"
+
+primitivePut :: QName
+primitivePut = qualify modulePRIM "put"
+
+primitiveGet :: QName
+primitiveGet = qualify modulePRIM "get"
+
+primitiveGetChar :: QName
+primitiveGetChar = qualify modulePRIM "getChar"
+
+primitiveGetLine :: QName
+primitiveGetLine = qualify modulePRIM "getLine"
 
 primitiveFail :: QName
 primitiveFail = qualify modulePRIM "fail"
