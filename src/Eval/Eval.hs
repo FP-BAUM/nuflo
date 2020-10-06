@@ -2,7 +2,7 @@
 module Eval.Eval(eval, evalInNamespace) where
 
 import System.IO(hFlush, stdout)
-import System.Exit(exitSuccess, die)
+import System.Exit(die)
 import qualified Data.Map as M
 
 import qualified Calculus.Terms as C
@@ -246,7 +246,7 @@ applyPrimitiveFunction f args =
          ++ " with arity " ++ show (length args))
 
 runNormalForm :: Namespace -> C.Term -> IO ()
-runNormalForm namespace (C.Command C.End []) = exitSuccess
+runNormalForm namespace (C.Command C.End []) = return ()
 runNormalForm namespace (C.Command C.Print [t1, t2]) = do
   putStrLn (pprintInNamespace namespace t1)
   runNormalForm namespace t2
