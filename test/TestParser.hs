@@ -99,7 +99,7 @@ tests = TestSuite "PARSER" [
          (Program [
            TypeDeclaration ()
              (evar "Name")
-             (evar "String")
+             (EVar () (qprim "String"))
          ]),
 
       testProgramOK "Type declaration"

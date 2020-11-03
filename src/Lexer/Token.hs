@@ -22,7 +22,6 @@ data TokenType =
   | T_As
   | T_Case
   | T_Class
-  | T_Colon
   | T_Data
   | T_Eq
   | T_Fresh
