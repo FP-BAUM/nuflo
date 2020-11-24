@@ -129,13 +129,13 @@ usage :: IO ()
 usage = do
   putStrLn "Usage:"
   putStrLn "  la -T              Run tests."
-  putStrLn "  la -t foo.la       Tokenize file."
-  putStrLn "  la -r foo.la       Tokenize file (including dependencies)."
-  putStrLn "  la -p foo.la       Parse file."
-  putStrLn "  la -k foo.la       Infer kinds."
-  putStrLn "  la -i foo.la       Infer types."
-  putStrLn "  la -d foo.la       Desugar program."
-  putStrLn "  la foo.la          Eval program."
+  putStrLn "  la -t foo.nu       Tokenize file."
+  putStrLn "  la -r foo.nu       Tokenize file (including dependencies)."
+  putStrLn "  la -p foo.nu       Parse file."
+  putStrLn "  la -k foo.nu       Infer kinds."
+  putStrLn "  la -i foo.nu       Infer types."
+  putStrLn "  la -d foo.nu       Desugar program."
+  putStrLn "  la foo.nu          Eval program."
 
 die :: Error -> IO ()
 die e = do

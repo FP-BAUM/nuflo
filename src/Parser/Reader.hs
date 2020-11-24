@@ -65,8 +65,11 @@ readDeps codependencies visited0 (q : qs) = do
         Left e                  -> return $ Left e
         Right (visited2, toks2) -> return $ Right (visited2, toks1 ++ toks2)
 
+nufloExtension :: String
+nufloExtension = "nu"
+
 qnameToFilename :: QName -> FilePath
-qnameToFilename (Name id)          = id ++ ".la"
+qnameToFilename (Name id)          = id ++ "." ++ nufloExtension
 qnameToFilename (Qualified q name) = q ++ "/" ++ qnameToFilename name
 
 checkModuleNameMatches :: Maybe QName -> FilePath -> [Token]
