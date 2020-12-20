@@ -1,7 +1,7 @@
 
 .PHONY : build test clean
 
-BINARY=lambda-unif
+BINARY=nuflo
 
 GHCOPTS=-fwarn-incomplete-patterns
 
