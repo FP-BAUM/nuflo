@@ -1,7 +1,10 @@
-![logo](./logo.png)
-# Ñuflo language (~)
+<p align="center">
+  <img width="100" height="100" src='./logo.png'>
+</p>
 
 [![Build Status](https://travis-ci.org/FP-BAUM/nuflo.svg?branch=master)](https://travis-ci.org/FP-BAUM/nuflo)
+
+# Ñuflo language (~)
 
 ## Introduction
 
