@@ -9,7 +9,7 @@
 
 **Ñuflo** (~) is an interpreted functional-logic programming language build as part of a research work to study the properties of languages combine features from the logic and functional paradigms. **Ñuflo** is based on the **λU-Calculus**, a calculus extends the well know **λ-Calculus** with terms from the logic paradigm, like `non determisnistic choice`, `unificacion` and `fresh variable introduction`.
 
-To deepen more about **λU-Calculus** you can read our [paper](https://) where we introduce the **λU-Calculus** terms, his current small step semantic, a small type system and current research of denotational semantic.
+To deepen more about **λU-Calculus** you can read our [paper](./doc/paper-ictac2020.pdf) where we introduce the **λU-Calculus** terms, his current small step semantic, a small type system and current research of denotational semantic.
 
 ## Overview
 
@@ -109,16 +109,173 @@ where we define the function `last` doing pattern matching over the function `co
 
 ## Type system
 
-<!-- TODO -->
+The type system of **Ñuflo** is a version of the Hindley–Milner type system extended with polymorfism and typeclasses, inspired on the Haskell type system.
+
+Before to defined the mixfix operators, was used the kind type annotation:
+
+```(Haskell)
+f : * -> * -> *
+```
+that allow us specify the type of the types.
+
+For other hand, is possible to define any type definition:
+```(Haskell)
+
+_++_ : List a -> List a -> List a    -- Simple function signature
+
+type Id = String                     -- Type alias signature
+
+data Bool where                      -- Data type signature
+  True : Bool
+  False : Bool
+
+class Eq a where                     -- Class type signature
+  == : a -> a -> Bool
+
+instance Eq Bool where               -- Instance type signature
+  == True True   = True
+  == False False = True
+  == a b         = False
+ 
+```
 
 ## IO types
 
-<!-- TODO -->
+To execute programs in **Ñuflo** is necessary to return a type IO, the type IO is build as follow:
+
+```(Haskell)
+data IO where
+  end : IO                        -- Ends the IO function call
+  print : a -> IO -> IO           -- Shows an output value on the screen with his respective type format
+  put : String -> IO -> IO        -- Shows an output string on the screen
+  get : (String -> IO) -> IO      -- Waits for an IO input string value
+  getChar : (Char -> IO) -> IO    -- Waits for an IO input char value
+  getLine : (String -> IO) -> IO  -- Waits for an IO input string line value
+```
+
+For example, the next expression get an string input, captures the input and print the value on the screen:
+
+```(Haskell)
+put “Ingress a string”
+  get (\ str -> put str end)
+end
+```
 
 ## Examples
 
-<!-- TODO -->
+To see other examples, you can go to the folder `./doc/examples/`.
+### Some Nat operations
+```
+data Nat where
+  Z : Nat
+  S  : Nat -> Nat
 
+_+_ : Nat -> Nat -> Nat
+Z + n = n
+S n + m = S (n + m)
+
+_-_ : Nat -> Nat -> Nat
+x - y = fresh z in
+              (y + z) ~ x
+              & z
+
+coin : () -> Nat
+coin () = S Z | S (S Z)
+
+main () = print (coin () + coin ()) end
+```
+
+### Some List operations
+
+```(Haskell)
+_++_ : List a -> List a -> List a
+[] ++ ys       = ys
+(x : xs) ++ ys = x : (xs ++ ys)
+
+prefix : List a -> List a
+prefix (xs ++ ys) = xs
+
+last : List a -> a
+last (_ ++ (x : [])) = x
+
+foldr : (a -> b -> b) -> b -> List a -> b
+foldr _ z []       = z
+foldr f z (x : xs) = f x (foldr f z xs)
+
+inter : a -> List a -> List a
+inter x []       = x : []
+inter x (y : ys) = x : (y : ys)
+inter x (y : ys) = y : inter x ys
+
+perm : List a -> List a
+perm xs = foldr inter [] xs
+
+main () = print (perm (1 : 2 : 3 : 4 : [])) end
+```
+
+### Relational examples
+```(Haskell)
+data Simpson where
+  Abe    : Simpson
+  Homero : Simpson
+  Bart   : Simpson
+  Lisa   : Simpson
+  Maggie : Simpson
+
+father : Simpson -> Simpson                      -- Pattern matching
+father Homero = Abe
+father Bart   = Homero
+father Lisa   = Homero
+father Maggie = Homero
+-- father (Bart | Lisa | Maggie) = Homero        -- Optional
+
+_∘_ f g x = f (g x)                              -- Functions composition
+
+child (father x) = x                             -- Funtioncal pattern matching
+
+inv : (a -> b) -> b -> a                         -- Inverse function
+inv f (f x) = x                                  -- Using pattern matching
+
+main () = print (inv (father ∘ father) Abe) end  -- Print each grandchild of Abe
+```
+
+### Simple type inference system
+```(Haskell)
+data Id where
+  Z : Id
+  S  : Id -> Id
+
+data Type where
+  BOOL : Type
+  _=>_ : Type -> Type -> Type
+
+data Ctx where
+  Ec : Ctx
+  _,_ : Ctx -> Type -> Ctx
+
+data Term where
+  var : Id -> Term
+  lam : Term -> Term
+  app : Term -> Term -> Term
+
+_Ê_::_ : Ctx -> Id -> Type -> ()
+(gamma , A) Ê Z   :: A = ()
+(gamma , A) Ê S x :: B = gamma Ê x :: B
+
+_|-_::_ : Ctx -> Term -> Type -> ()
+gamma |- var x   :: A = gamma Ê x :: A
+gamma |- lam t   :: (A => B) = (gamma , A) |- t :: B
+gamma |- app t s :: B = fresh A in
+                          gamma |- t :: (A => B)
+                        & gamma |- s :: A
+
+main () = print (
+                fresh A in
+                  (Ec |- lam (var Z) :: A)
+                & A
+                ) end
+
+```
 
 ## Setup
 First you need have `ghc` installed:
