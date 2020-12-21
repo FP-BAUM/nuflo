@@ -304,10 +304,6 @@ To remove auxiliary and binary files:
 make clean
 ```
 
-## Other commands
-
-<!-- TODO -->
-
 ## Development guide
 
 ### Add new test cases:
