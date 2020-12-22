@@ -7,7 +7,7 @@
 
 ## Introduction
 
-**Ñuflo** (~) is an interpreted functional-logic programming language build as part of a research work to study the properties of languages combine features from the logic and functional paradigms. **Ñuflo** is based on the **λU-Calculus**, a calculus extends the well know **λ-Calculus** with terms from the logic paradigm, like `non determisnistic choice`, `unificacion` and `fresh variable introduction`.
+**Ñuflo** (~) is an interpreted functional-logic programming language build as part of a research work to study the properties of languages combine features from the logic and functional paradigms. **Ñuflo** is based on the **λU-Calculus**, a calculus extends the well know **λ-Calculus** with terms from the logic paradigm, like `non deterministic choice`, `unificacion` and `fresh variable introduction`.
 
 To deepen more about **λU-Calculus** you can read our [paper](./doc/paper-ictac2020.pdf) where we introduce the **λU-Calculus** terms, his current small step semantic, a small type system and current research of denotational semantic.
 
