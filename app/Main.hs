@@ -4,6 +4,8 @@ import System.IO(hPutStrLn, stderr, hSetBuffering,
                  stdin, stdout, BufferMode(..))
 import System.Environment(getArgs)
 
+import Control.Monad.Except
+
 import Error(Error(..))
 import Position(positionRegion)
 import Lexer.Lexer(tokenize)
@@ -34,96 +36,72 @@ run ["-d", input] = runDesugaring input
 run [input]       = runEvaluator input
 run _             = usage
 
+runComputationThen c k = 
+  do r <- runExceptT c
+     either die k r
+
 runTokenizer :: String -> IO ()
-runTokenizer filename = do
-  source <- readFile filename
-  case tokenize filename source of
-    Left  e      -> die e
-    Right tokens -> mapM_ (putStrLn . show) tokens
+runTokenizer filename = 
+  runComputationThen
+   (do source <- ExceptT (readFile filename >>= (return . Right))
+       tokens <- ExceptT $ return $ tokenize filename source
+       return tokens)
+   (mapM_ (putStrLn . show))
 
 runReader :: String -> IO ()
-runReader filename = do
-  res <- readSource filename
-  case res of
-    Left  e      -> die e
-    Right tokens -> mapM_ (putStrLn . show) tokens
+runReader filename = 
+  runComputationThen
+   (do tokens <- ExceptT $ readSource filename
+       return tokens)
+   (\tokens -> mapM_ (putStrLn . show) tokens)
 
 runParser :: String -> IO ()
-runParser filename = do
-  res <- readSource filename
-  case res of
-    Left  e      -> die e
-    Right tokens -> do
-      case parse tokens of
-        Left e        -> die e
-        Right program -> putStrLn (show program)
+runParser filename = 
+  runComputationThen
+   (do tokens  <- ExceptT $ readSource filename
+       program <- ExceptT $ return $ parse tokens
+       return program)
+   (\program -> putStrLn $ show program)
 
 runKindInference :: String -> IO ()
-runKindInference filename = do
-  res <- readSource filename
-  case res of
-    Left  e      -> die e
-    Right tokens -> do
-      case parse tokens of
-        Left e        -> die e
-        Right program -> do
-          case inferKinds program of
-            Left e    -> die e
-            Right ()  -> putStrLn "OK"
+runKindInference filename = 
+  runComputationThen
+   (do tokens  <- ExceptT $ readSource filename
+       program <- ExceptT $ return $ parse tokens 
+       ExceptT $ return $ inferKinds program)
+   (\_ -> putStrLn "OK")
 
 runTypeInference :: String -> IO ()
-runTypeInference filename = do
-  res <- readSource filename
-  case res of
-    Left  e      -> die e
-    Right tokens -> do
-      case parse tokens of
-        Left e        -> die e
-        Right program -> do
-          case inferKinds program of
-            Left e    -> die e
-            Right () -> do
-              case inferTypeWithMain program of
-                Left e -> die e
-                Right program' -> putStrLn (show program')
+runTypeInference filename = 
+  runComputationThen
+   (do tokens   <- ExceptT $ readSource filename
+       program  <- ExceptT $ return $ parse tokens
+       ExceptT $ return $ inferKinds program 
+       program' <- ExceptT $ return $ inferTypeWithMain program
+       return program')
+   (\program' -> putStrLn $ show program')
 
 runDesugaring :: String -> IO ()
-runDesugaring filename = do
-  res <- readSource filename
-  case res of
-    Left  e      -> die e
-    Right tokens -> do
-      case parse tokens of
-        Left e        -> die e
-        Right program -> do
-          case inferKinds program of
-            Left e    -> die e
-            Right () -> do
-              case inferTypeWithMain program of
-                Left e -> die e
-                Right program' -> do
-                  case desugarProgram program' of
-                    Left e -> die e
-                    Right termC -> putStrLn (show termC)
+runDesugaring filename = 
+  runComputationThen
+   (do tokens   <- ExceptT $ readSource filename
+       program  <- ExceptT $ return $ parse tokens
+       ExceptT $ return $ inferKinds program
+       program' <- ExceptT $ return $ inferTypeWithMain program
+       termC    <- ExceptT $ return $ desugarProgram program'
+       return termC)
+   (\termC -> putStrLn $ show termC)
 
 runEvaluator :: String -> IO ()
-runEvaluator filename = do
-  res <- readSource filename
-  case res of
-    Left  e      -> die e
-    Right tokens -> do
-      case parseAndGetNamespace tokens of
-        Left e        -> die e
-        Right (program, namespace) -> do
-          case inferKinds program of
-            Left e    -> die e
-            Right () -> do
-              case inferTypeWithMain program of
-                Left e -> die e
-                Right program' -> do
-                  case desugarProgram program' of
-                    Left e -> die e
-                    Right termC -> evalInNamespace namespace termC
+runEvaluator filename = 
+  runComputationThen
+   (do tokens               <- ExceptT $ readSource filename
+       (program, namespace) <- ExceptT $ return $ parseAndGetNamespace tokens 
+       ExceptT $ return $ inferKinds program
+       program'             <- ExceptT $ return $ inferTypeWithMain program
+       termC                <- ExceptT $ return $ desugarProgram program'
+       return (namespace, termC))
+   (\(namespace, termC) -> evalInNamespace namespace termC)
 
 usage :: IO ()
 usage = do
