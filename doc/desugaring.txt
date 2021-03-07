@@ -22,36 +22,36 @@ f = \ x1 ... xM ->
 
 --------------------------- Desugar mutual recursive let algorithm ---------------------------
 
-1) Let de variable no recursivo.
+1) Let with non recursive variable.
 
    let x = A in B
    ===>
    (\x.B)A
 
       
-2) Lambda cuyos parámetros son patrones.
+2) Lambda where his param are patterns.
 
-   -- Con un solo patrón:
+   -- with only a pattern:
    \ p . A
    ===>
    \ x . fresh y1...ym. (x ~ p), A
 
 
-   -- Con varios patrones:
+   -- with some patterns:
    \ p1 ... pn . A
    ===>
    \ x1 ... xn . fresh y1...ym. (x1 ~ p1) & ... & (xn ~ pn) & A
    
-   x1,...,xn son variables frescas
-   y1,...,ym son las variables libres de p1...pn
+   x1,...,xn are fresh variables
+   y1,...,ym are the free variables from p1...pn
    
-3) Let de función no recursiva.
+3) Let of non recursive function.
 
    let f p1 ... pn = A in B
    ===>
-   let f = (\p1...pn.A) in B   (se reduce al caso 1)
+   let f = (\p1...pn.A) in B (reduces to case 1)
 
- 4) Let de varias funciones mutuamente recursivas  
+ 4) Let with some mutually recursive functions
 
     let f1 = A1
         ...
@@ -61,10 +61,10 @@ f = \ x1 ... xM ->
     let T = fix(T. {Tuple} A1* ... An*) in
       B*
 
-    donde X*
-    denota el resultado
-    de reemplazar en X las ocurrencias de f_i por pi_i(T).
-    Además:
+    where X*
+    is the result of
+    replace in X whole ocurrences of f_i by pi_i(T).
+    Also:
       pi_i(T) = fresh x1, ..., xn in 
                   (T == {Tuple} x1 ... xn) &
                   xi

@@ -5,18 +5,21 @@ data Simpson where
   Lisa   : Simpson
   Maggie : Simpson
 
-padre : Simpson -> Simpson                     -- Trivial, usando pattern matching
-padre Homero = Abe
-padre Bart   = Homero
-padre Lisa   = Homero
-padre Maggie = Homero
--- padre (Bart | Lisa | Maggie) = Homero       -- Opcional, usando pattern matching de la alternativa
+father : Simpson -> Simpson                    -- Using pattern matching
+father Homero = Abe
+father Bart   = Homero
+father Lisa   = Homero
+father Maggie = Homero
+-- father (Bart | Lisa | Maggie) = Homero      -- Optional, using pattern matching (internal unificacion mechanism) of the alternative operator
 
-_∘_ f g x = f (g x)                            -- Composición de funciones como un operador infijo
+_∘_ f g x = f (g x)                            -- Function composition as an infix operator
 
-hijo (padre x) = x                             -- Definición de hijo haciendo pattern matching en la función padre
+child (father x) = x                           -- Child using pattern matching about father relation
 
-inv : (a -> b) -> b -> a                       -- Definición de función inversa
-inv f (f x) = x                                -- Es definida haciendo pattern matching en la aplicación de la función f
+inv : (a -> b) -> b -> a                       -- Inverse function
+inv f (f x) = x                                -- Doing pattern matching about the application of the function f
 
-main () = print (inv (padre ∘ padre) Abe) end  -- Imprime todos los nietos de Abe
+grandparent = father ∘ father
+grandson = inv grandparent
+
+main () = print (grandson Abe) end           -- Print all of Abe's grandchildren

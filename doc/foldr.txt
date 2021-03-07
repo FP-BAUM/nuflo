@@ -29,14 +29,14 @@ main () = print (prefijo [])
 
 --------------------------
 
-El motivo es que la regla beta es call-by-value y esto
-traba los redexes clash.
+The reason why the beta rule is call-by-value and locks
+the clash redexes.
 
 Ej.:
 
   (\x.c)Omega ~ d
 
-no clashea.
+no clash.
 
 --------------------------
 F = \ x r ys -> x : r ys

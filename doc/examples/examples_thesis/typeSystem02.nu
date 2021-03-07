@@ -1,4 +1,4 @@
--- Inferidor de tipos para el calculo lambda simplemente tipado
+-- Type infer for simply typed lambda calculus
 
 data Id where
   Z : Id

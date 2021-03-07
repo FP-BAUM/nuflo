@@ -8,5 +8,4 @@ prefijo (xs ++ ys) = xs
 last : List a -> a
 last (_ ++ (x : [])) = x
 
-
 main () = print (last (1 : 2 : 3 : [])) end
