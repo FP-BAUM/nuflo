@@ -11,7 +11,18 @@ First you need have `ghc` installed:
 ### Mac OS
 ```bash
 brew install ghc
-``` 
+```
+
+### Windows
+
+- Install `chocolatey` using `powershell`
+
+- Install `ghc` and `make` using `chocolatey`
+
+- Change the default output encoding to `utf8`:
+```bash
+& "$env:windir\system32\chcp.com" 65001
+```
 
 ## Build
 To generates a binary `nuflo`:
