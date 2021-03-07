@@ -6,5 +6,5 @@ nat : Nat
 nat = Zero
 nat = Suc nat
 
-main () = print nat
--- main () = print (fresh x in x ~ nat & x)
+main () = print nat end
+--main () = print (fresh x in x ~ nat & x) end
